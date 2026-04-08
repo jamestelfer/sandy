@@ -1,0 +1,13 @@
+#!/bin/sh
+#
+# Sandy VM entrypoint: compile TypeScript then invoke compiled script.
+# Usage: entrypoint <compiled-script-path> [args...]
+
+set -eu
+
+SCRIPT="$1"
+shift
+
+cd /workspace
+pnpm run -s tsc
+pnpm run -s invoke -- "$SCRIPT" "$@"
