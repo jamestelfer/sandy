@@ -137,6 +137,19 @@ describe("ShuruBackend.run", () => {
     expect(cmd).toContain("--foo")
     expect(cmd).toContain("bar")
   })
+
+  test("forwards [-->-prefixed stdout lines as progress, not normal output", async () => {
+    const { factory } = makeSandboxFactory({
+      stdoutLines: ["[-->  compiling...", "normal output line"],
+    })
+    const backend = new ShuruBackend(undefined, factory)
+
+    const progress: string[] = []
+    await backend.run(baseRunOpts, (msg) => progress.push(msg))
+
+    expect(progress).toContain("compiling...")
+    expect(progress.join("\n")).not.toContain("normal output line")
+  })
 })
 
 describe("ShuruBackend.imageCreate", () => {
