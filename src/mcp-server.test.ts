@@ -59,6 +59,26 @@ describe("session management", () => {
   })
 })
 
+describe("sandy_image", () => {
+  let backend: DummyBackend
+  let server: SandyMcpServer
+
+  beforeEach(() => {
+    backend = new DummyBackend()
+    server = new SandyMcpServer(backend)
+  })
+
+  test("create dispatches to backend.imageCreate()", async () => {
+    await server.handleSandyImage("create")
+    expect(backend.calls).toContainEqual({ method: "imageCreate" })
+  })
+
+  test("delete dispatches to backend.imageDelete()", async () => {
+    await server.handleSandyImage("delete")
+    expect(backend.calls).toContainEqual({ method: "imageDelete" })
+  })
+})
+
 describe("progress", () => {
   let backend: DummyBackend
   let server: SandyMcpServer

@@ -23,6 +23,14 @@ export class SandyMcpServer {
 
   constructor(private backend: Backend) {}
 
+  async handleSandyImage(action: "create" | "delete"): Promise<void> {
+    if (action === "create") {
+      await this.backend.imageCreate()
+    } else {
+      await this.backend.imageDelete()
+    }
+  }
+
   handleResumeSession(sessionName: string): void {
     this.activeSessionName = sessionName
     // Dir will be created lazily on next sandy_run
