@@ -15,48 +15,48 @@ AI agents that query AWS need SDK access but shouldn't get unrestricted shell ac
 
 ## How It Fits Together
 
-Sandy creates layered security boundaries between the Claude Code agent and AWS. The agent never touches AWS credentials directly -- it delegates script execution to Sandy, which runs inside a Shuru microVM, and credentials are served by the imds-broker MCP on the host.
+The agent hosts both the sandy skill and the imds-broker MCP outside its own sandbox. To run a query, the agent starts an IMDS server via the MCP, then passes the server port and script path to the sandy skill. Sandy launches a Shuru VM with the script mounted, and the VM's AWS SDK fetches credentials from the IMDS server to talk to AWS.
 
 ```mermaid
-graph TB
-    subgraph host["Host (macOS)"]
-        subgraph sandbox["Claude Code Sandbox"]
-            agent["Claude Code Agent"]
-            agent -- "writes" --> script["TypeScript script"]
-        end
-
-        subgraph unsandboxed["Outside Sandbox"]
-            sandy["sandy skill script"]
-            imds["imds-broker MCP<br/>(jamestelfer/imds-broker)"]
-        end
-
-        sandy -- "shuru run" --> vm
-
-        subgraph vm["Shuru MicroVM (ephemeral)"]
-            tsc["tsc type-check"]
-            node["node --permission"]
-            sdk["AWS SDK v3"]
-
-            tsc --> node --> sdk
-        end
-
-        sdk -- "credentials via IMDS<br/>http://10.0.0.1:port" --> imds
-        sdk -- "API calls<br/>*.amazonaws.com only" --> aws["AWS Services"]
-        agent -- "sandy run<br/>(excluded command)" --> sandy
-        imds -- "assumes role" --> aws
+sequenceDiagram
+    box Sandbox
+        participant A as Agent
     end
 
-    style sandbox fill:#e8f4fd,stroke:#2196F3
-    style vm fill:#fff3e0,stroke:#FF9800
-    style unsandboxed fill:#f3e5f5,stroke:#9C27B0
-    style host fill:#f5f5f5,stroke:#9E9E9E
+    box Host
+        participant M as imds-broker
+        participant S as sandy
+    end
+
+    box MicroVM
+        participant V as node
+    end
+
+    participant W as AWS
+
+    A->>M: start_server
+    M-->>A: port
+
+    A->>A: write script
+
+    A->>S: sandy run
+
+    S->>V: shuru run
+
+    V->>M: GET credentials
+    M-->>V: temp creds
+
+    V->>W: SDK calls
+    W-->>V: responses
+
+    V-->>S: output
+    S-->>A: results
 ```
 
 **Boundaries:**
-- The **Claude Code sandbox** restricts the agent's filesystem access, network egress, and command execution. The agent can write scripts but cannot access `~/.aws` or make arbitrary network calls.
-- The **`sandy` script runs outside the sandbox** as an excluded command, giving it access to Shuru and the host filesystem for mounting directories into the VM.
-- The **imds-broker MCP** runs on the host and serves temporary AWS credentials via IMDS. The VM can reach it at `http://10.0.0.1:<port>`, but only the AWS SDK uses this -- no credentials are written to disk or environment variables.
-- The **Shuru microVM** is the innermost boundary. Network is restricted to AWS endpoints, `child_process` is blocked, and the VM is discarded after each run.
+- The **agent sandbox** restricts filesystem access, network egress, and command execution. The agent can write scripts and read results but cannot access `~/.aws` or call AWS directly.
+- The **sandy skill and imds-broker MCP** are hosted by the agent but run **outside the sandbox**. Sandy needs host access to invoke Shuru; the MCP serves credentials via IMDS on localhost.
+- The **Shuru microVM** is ephemeral and isolated. Network is restricted to AWS endpoints, `child_process` is blocked by Node's permission model, and the VM is discarded after each run. Credentials are fetched via IMDS and never written to disk.
 
 ## Prerequisites
 
