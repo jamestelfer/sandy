@@ -104,18 +104,18 @@ describe("ShuruBackend.run", () => {
     await backend.run({ ...baseRunOpts, imdsPort: 9001, region: "ap-southeast-2" }, () => {})
 
     const env = spawnCalls[0]?.env ?? {}
-    expect(env["AWS_EC2_METADATA_SERVICE_ENDPOINT"]).toBe("http://10.0.0.1:9001")
-    expect(env["AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE"]).toBe("IPv4")
-    expect(env["AWS_EC2_METADATA_V1_DISABLED"]).toBe("true")
-    expect(env["AWS_REGION"]).toBe("ap-southeast-2")
-    expect(env["SANDY_OUTPUT"]).toBe("/workspace/output")
+    expect(env.AWS_EC2_METADATA_SERVICE_ENDPOINT).toBe("http://10.0.0.1:9001")
+    expect(env.AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE).toBe("IPv4")
+    expect(env.AWS_EC2_METADATA_V1_DISABLED).toBe("true")
+    expect(env.AWS_REGION).toBe("ap-southeast-2")
+    expect(env.SANDY_OUTPUT).toBe("/workspace/output")
   })
 
   test("defaults to us-west-2 when region is not provided", async () => {
     const { factory, spawnCalls } = makeSandboxFactory()
     const backend = new ShuruBackend(undefined, factory)
     await backend.run({ ...baseRunOpts, region: undefined }, () => {})
-    expect(spawnCalls[0]?.env?.["AWS_REGION"]).toBe("us-west-2")
+    expect(spawnCalls[0]?.env?.AWS_REGION).toBe("us-west-2")
   })
 
   test("spawns entrypoint with compiled script path derived from scriptPath basename", async () => {

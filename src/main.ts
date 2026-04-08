@@ -5,6 +5,7 @@ import { runCheck } from "./cli/check"
 import { runRun } from "./cli/run"
 import { runMcp } from "./cli/mcp"
 import { DummyBackend } from "./dummy-backend"
+import { ShuruBackend } from "./shuru-backend"
 import type { Backend } from "./backend"
 
 function usage(): void {
@@ -21,10 +22,11 @@ Commands:
 
 async function createBackend(): Promise<Backend> {
   const config = await readConfig()
-  // Phase 1: DummyBackend for both; real backends added in Phase 3/5
   switch (config.backend) {
     case "shuru":
+      return new ShuruBackend()
     case "docker":
+      // Phase 5: DockerBackend
       return new DummyBackend()
   }
 }
