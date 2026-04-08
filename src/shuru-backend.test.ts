@@ -73,6 +73,17 @@ describe("ShuruBackend.run", () => {
     await backend.run(baseRunOpts, () => {})
     expect(startOptsCalls[0]?.from).toBe("sandy")
   })
+
+  test("mounts script dir read-only and session dir read-write", async () => {
+    const { factory, startOptsCalls } = makeSandboxFactory()
+    const backend = new ShuruBackend(undefined, factory)
+    await backend.run(baseRunOpts, () => {})
+
+    const mounts = startOptsCalls[0]?.mounts ?? {}
+    // scriptPath /home/user/scripts/hello.ts → scriptDir /home/user/scripts
+    expect(mounts["/home/user/scripts"]).toBe("/workspace/scripts")
+    expect(mounts["/home/user/.sandy/test-session"]).toBe("/workspace/output:rw")
+  })
 })
 
 describe("ShuruBackend.imageCreate", () => {
