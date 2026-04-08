@@ -48,4 +48,13 @@ describe("session management", () => {
     expect(runs[0].opts.session).toBe(runs[1].opts.session)
     expect(runs[0].opts.sessionDir).toBe(runs[1].opts.sessionDir)
   })
+
+  test("sandy_resume_session sets active session name without validation", async () => {
+    server.handleResumeSession("my-custom-session")
+    const result = await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 })
+
+    expect(result.sessionName).toBe("my-custom-session")
+    const run = backend.calls.find((c): c is RunCall => c.method === "run")
+    expect(run!.opts.session).toBe("my-custom-session")
+  })
 })

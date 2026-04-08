@@ -23,9 +23,15 @@ export class SandyMcpServer {
 
   constructor(private backend: Backend) {}
 
+  handleResumeSession(sessionName: string): void {
+    this.activeSessionName = sessionName
+    // Dir will be created lazily on next sandy_run
+    this.activeSessionDir = null
+  }
+
   async handleSandyRun(params: SandyRunParams): Promise<SandyRunResult> {
-    if (!this.activeSessionName || !this.activeSessionDir) {
-      const session = await createSession()
+    if (!this.activeSessionDir) {
+      const session = await createSession(this.activeSessionName ?? undefined)
       this.activeSessionName = session.name
       this.activeSessionDir = session.dir
     }
