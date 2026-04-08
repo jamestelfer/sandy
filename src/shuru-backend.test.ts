@@ -84,6 +84,19 @@ describe("ShuruBackend.run", () => {
     expect(mounts["/home/user/scripts"]).toBe("/workspace/scripts")
     expect(mounts["/home/user/.sandy/test-session"]).toBe("/workspace/output:rw")
   })
+
+  test("exposes IMDS port and restricts network to AWS domains", async () => {
+    const { factory, startOptsCalls } = makeSandboxFactory()
+    const backend = new ShuruBackend(undefined, factory)
+    await backend.run({ ...baseRunOpts, imdsPort: 9001 }, () => {})
+
+    const opts = startOptsCalls[0]
+    expect(opts?.exposeHost).toContain("9001")
+    expect(opts?.network?.allow).toContain("*.amazonaws.com")
+    expect(opts?.network?.allow).toContain("*.aws.amazon.com")
+    expect(opts?.allowNet).toBe(true)
+    expect(opts?.allowHostWrites).toBe(true)
+  })
 })
 
 describe("ShuruBackend.imageCreate", () => {
