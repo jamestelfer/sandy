@@ -59,6 +59,36 @@ describe("session management", () => {
   })
 })
 
+describe("resources", () => {
+  let server: SandyMcpServer
+
+  beforeEach(() => {
+    server = new SandyMcpServer(new DummyBackend())
+  })
+
+  test("scripting-guide resource returns embedded content", () => {
+    const content = server.handleScriptingGuideResource()
+    expect(content).toContain("async function*")
+    expect(content).toContain("SANDY_OUTPUT")
+  })
+
+  test("examples resource returns ec2_describe content", () => {
+    const content = server.handleExampleResource("ec2_describe")
+    expect(content).toContain("EC2Client")
+    expect(content).toContain("DescribeInstancesCommand")
+  })
+
+  test("examples resource returns ecs_services content", () => {
+    const content = server.handleExampleResource("ecs_services")
+    expect(content).toContain("ECSClient")
+    expect(content).toContain("ListServicesCommand")
+  })
+
+  test("examples resource throws for unknown name", () => {
+    expect(() => server.handleExampleResource("unknown")).toThrow()
+  })
+})
+
 describe("sandy_check", () => {
   let backend: DummyBackend
   let server: SandyMcpServer
