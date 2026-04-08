@@ -1,7 +1,22 @@
 import * as path from "node:path"
 import * as fs from "node:fs/promises"
+import type { StartOptions } from "@superhq/shuru"
+import { Sandbox } from "@superhq/shuru"
 import type { Backend } from "./backend"
 import type { RunOptions, RunResult } from "./types"
+import {
+  DEFAULT_REGION,
+  ENV_ENDPOINT,
+  ENV_ENDPOINT_MODE,
+  ENV_ENDPOINT_MODE_VALUE,
+  ENV_REGION,
+  ENV_SANDY_OUTPUT,
+  ENV_V1_DISABLED,
+  ENV_V1_DISABLED_VALUE,
+  VM_OUTPUT_DIR,
+  VM_SCRIPTS_DIR,
+} from "./types"
+import { parseProgressLine } from "./progress"
 
 // Bootstrap file embeds — bundled into binary by Bun
 import initShPath from "./bootstrap/init.sh" with { type: "file" }
@@ -15,7 +30,22 @@ export type ShellExecutor = (
   opts?: { cwd?: string },
 ) => Promise<{ stdout: string; stderr: string; exitCode: number }>
 
-export type SandboxFactory = (opts: object) => Promise<unknown>
+export interface SandboxLike {
+  spawn(
+    cmd: string[],
+    opts?: { env?: Record<string, string> },
+  ): Promise<SpawnHandleLike>
+  stop(): Promise<void>
+}
+
+export interface SpawnHandleLike {
+  on(event: "stdout" | "stderr", handler: (data: Buffer) => void): this
+  exited: Promise<number>
+}
+
+export type SandboxFactory = (opts: StartOptions) => Promise<SandboxLike>
+
+const defaultSandboxFactory: SandboxFactory = async (opts) => Sandbox.start(opts)
 
 const CHECKPOINT_NAME = "sandy"
 const NETSKOPE_CERT_PATH =
@@ -23,10 +53,20 @@ const NETSKOPE_CERT_PATH =
 const VM_BOOTSTRAP = "/tmp/bootstrap"
 const STAGING_DIR = ".sandy/bootstrap"
 
+const defaultExecutor: ShellExecutor = async (cmd, opts) => {
+  const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe", cwd: opts?.cwd })
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ])
+  return { stdout, stderr, exitCode }
+}
+
 export class ShuruBackend implements Backend {
   constructor(
-    private executor: ShellExecutor = async () => ({ stdout: "", stderr: "", exitCode: 0 }),
-    private sandboxFactory: SandboxFactory = async () => ({}),
+    private executor: ShellExecutor = defaultExecutor,
+    private sandboxFactory: SandboxFactory = defaultSandboxFactory,
   ) {}
 
   async imageExists(): Promise<boolean> {
@@ -76,7 +116,74 @@ export class ShuruBackend implements Backend {
     ])
   }
 
-  async run(_opts: RunOptions, _onProgress: (message: string) => void): Promise<RunResult> {
-    throw new Error("not implemented")
+  async run(opts: RunOptions, onProgress: (message: string) => void): Promise<RunResult> {
+    const scriptDir = path.dirname(path.resolve(opts.scriptPath))
+    const scriptName = path.basename(opts.scriptPath, ".ts")
+    const compiledPath = `/workspace/dist/scripts/${scriptName}.js`
+    const imdsEndpoint = `http://10.0.0.1:${opts.imdsPort}`
+
+    const startOpts: StartOptions = {
+      from: CHECKPOINT_NAME,
+      allowNet: true,
+      allowHostWrites: true,
+      exposeHost: [String(opts.imdsPort)],
+      mounts: {
+        [scriptDir]: VM_SCRIPTS_DIR,
+        [opts.sessionDir]: `${VM_OUTPUT_DIR}:rw`,
+      },
+      network: {
+        allow: ["*.amazonaws.com", "*.aws.amazon.com"],
+      },
+    }
+
+    const sb = await this.sandboxFactory(startOpts)
+
+    const spawnEnv: Record<string, string> = {
+      [ENV_ENDPOINT]: imdsEndpoint,
+      [ENV_ENDPOINT_MODE]: ENV_ENDPOINT_MODE_VALUE,
+      [ENV_V1_DISABLED]: ENV_V1_DISABLED_VALUE,
+      [ENV_REGION]: opts.region ?? DEFAULT_REGION,
+      [ENV_SANDY_OUTPUT]: VM_OUTPUT_DIR,
+    }
+
+    const spawnCmd = [
+      "sh",
+      "-l",
+      "/workspace/entrypoint",
+      compiledPath,
+      ...(opts.scriptArgs ?? []),
+    ]
+
+    try {
+      const proc = await sb.spawn(spawnCmd, { env: spawnEnv })
+
+      let stdoutBuf = ""
+      let stderrBuf = ""
+
+      proc.on("stdout", (data) => {
+        const text = data.toString()
+        stdoutBuf += text
+        for (const raw of text.split("\n")) {
+          const line = raw.trimEnd()
+          if (!line) {
+            continue
+          }
+          const parsed = parseProgressLine(line)
+          if (parsed.isProgress) {
+            onProgress(parsed.message)
+          }
+        }
+      })
+
+      proc.on("stderr", (data) => {
+        stderrBuf += data.toString()
+      })
+
+      const exitCode = await proc.exited
+
+      return { exitCode, stdout: stdoutBuf, stderr: stderrBuf, outputFiles: [] }
+    } finally {
+      await sb.stop()
+    }
   }
 }
