@@ -1,0 +1,15 @@
+{
+  "name": "sandy",
+  "owner": {
+    "name": "James Telfer"
+  },
+  "metadata": {
+    "description": "Sandy: sandboxed TypeScript execution for AWS queries using ephemeral microVMs"
+  },
+  "plugins": [
+    {
+      "name": "isolate",
+      "source": "./isolate"
+    }
+  ]
+}
