@@ -13,6 +13,15 @@ function makeExecutor(
   return { executor, calls }
 }
 
+describe("ShuruBackend.imageDelete", () => {
+  test("calls shuru checkpoint delete sandy", async () => {
+    const { executor, calls } = makeExecutor()
+    const backend = new ShuruBackend(executor)
+    await backend.imageDelete()
+    expect(calls[0]).toEqual(["shuru", "checkpoint", "delete", "sandy"])
+  })
+})
+
 describe("ShuruBackend.imageExists", () => {
   test("does not match a checkpoint that contains sandy only as a substring", async () => {
     const { executor } = makeExecutor({

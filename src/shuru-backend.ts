@@ -24,7 +24,7 @@ export class ShuruBackend implements Backend {
   }
 
   async imageDelete(): Promise<void> {
-    throw new Error("not implemented")
+    await this.executor(["shuru", "checkpoint", "delete", CHECKPOINT_NAME])
   }
 
   async imageCreate(): Promise<void> {
