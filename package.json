@@ -1,0 +1,22 @@
+{
+  "name": "sandy",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "sandy": "./dist/sandy"
+  },
+  "scripts": {
+    "build": "bun build --compile --minify --target=bun src/main.ts --outfile dist/sandy",
+    "test": "bun test",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --fix .",
+    "format": "biome format .",
+    "format:fix": "biome format --write .",
+    "agent": "bun run lint:fix && bun run format:fix && bun run build && bun run test"
+  },
+  "dependencies": {
+    "@biomejs/biome": "^2.4.10",
+    "@superhq/shuru": "^0.4.2",
+    "human-id": "^4.0.0"
+  }
+}

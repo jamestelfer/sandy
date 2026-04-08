@@ -1,0 +1,36 @@
+import type { Backend } from "./backend"
+import type { RunOptions, RunResult } from "./types"
+
+type BackendCall =
+  | { method: "imageCreate" }
+  | { method: "imageDelete" }
+  | { method: "imageExists" }
+  | { method: "run"; opts: RunOptions }
+
+export class DummyBackend implements Backend {
+  calls: BackendCall[] = []
+  imageExistsResult = false
+  runResult: RunResult = { exitCode: 0, stdout: "", stderr: "", outputFiles: [] }
+  progressLines: string[] = []
+
+  async imageCreate(): Promise<void> {
+    this.calls.push({ method: "imageCreate" })
+  }
+
+  async imageDelete(): Promise<void> {
+    this.calls.push({ method: "imageDelete" })
+  }
+
+  async imageExists(): Promise<boolean> {
+    this.calls.push({ method: "imageExists" })
+    return this.imageExistsResult
+  }
+
+  async run(opts: RunOptions, onProgress: (message: string) => void): Promise<RunResult> {
+    this.calls.push({ method: "run", opts })
+    for (const line of this.progressLines) {
+      onProgress(line)
+    }
+    return { ...this.runResult }
+  }
+}
