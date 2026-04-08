@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@biomejs/biome": "^2.4.10",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@superhq/shuru": "^0.4.2",
     "human-id": "^4.0.0"
   }

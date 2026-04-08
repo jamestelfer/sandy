@@ -205,10 +205,9 @@ describe("CLI run", () => {
 })
 
 describe("CLI mcp", () => {
-  it("exits non-zero with not-implemented message", async () => {
-    const errors: string[] = []
-    const exitCode = await runMcp((e) => errors.push(e))
-    expect(exitCode).toBe(1)
-    expect(errors.some((e) => e.includes("not yet implemented"))).toBe(true)
+  it("starts MCP server and returns 0", async () => {
+    const backend = new DummyBackend()
+    const exitCode = await runMcp(backend)
+    expect(exitCode).toBe(0)
   })
 })
