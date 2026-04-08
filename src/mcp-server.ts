@@ -1,0 +1,51 @@
+import type { Backend } from "./backend"
+import { createSession } from "./session"
+import type { RunOptions } from "./types"
+import { DEFAULT_REGION } from "./types"
+
+export interface SandyRunParams {
+  script: string
+  imdsPort: number
+  region?: string
+  args?: string[]
+}
+
+export interface SandyRunResult {
+  exitCode: number
+  stdout: string
+  stderr: string
+  sessionName: string
+}
+
+export class SandyMcpServer {
+  private activeSessionName: string | null = null
+  private activeSessionDir: string | null = null
+
+  constructor(private backend: Backend) {}
+
+  async handleSandyRun(params: SandyRunParams): Promise<SandyRunResult> {
+    if (!this.activeSessionName || !this.activeSessionDir) {
+      const session = await createSession()
+      this.activeSessionName = session.name
+      this.activeSessionDir = session.dir
+    }
+
+    const opts: RunOptions = {
+      scriptPath: params.script,
+      imdsPort: params.imdsPort,
+      region: params.region ?? DEFAULT_REGION,
+      session: this.activeSessionName,
+      sessionDir: this.activeSessionDir,
+      scriptArgs: params.args,
+    }
+
+    const result = await this.backend.run(opts, () => {})
+
+    return {
+      exitCode: result.exitCode,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      sessionName: this.activeSessionName,
+    }
+  }
+}
