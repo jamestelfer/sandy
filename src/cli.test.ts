@@ -110,6 +110,19 @@ describe("CLI check", () => {
     expect(exitCode).toBe(1)
     expect(errors.some((e) => e.includes("--imds-port"))).toBe(true)
   })
+
+  it("connect with non-numeric --imds-port exits non-zero", async () => {
+    const backend = new DummyBackend()
+    const errors: string[] = []
+    const exitCode = await runCheck(
+      ["connect", "--imds-port", "notaport"],
+      backend,
+      () => {},
+      (e) => errors.push(e),
+    )
+    expect(exitCode).toBe(1)
+    expect(errors.some((e) => e.includes("--imds-port"))).toBe(true)
+  })
 })
 
 describe("CLI run", () => {
@@ -160,6 +173,19 @@ describe("CLI run", () => {
     const errors: string[] = []
     const exitCode = await runRun(
       ["--script", "foo.ts"],
+      backend,
+      () => {},
+      (e) => errors.push(e),
+    )
+    expect(exitCode).toBe(1)
+    expect(errors.some((e) => e.includes("--imds-port"))).toBe(true)
+  })
+
+  it("exits non-zero when --imds-port is not a number", async () => {
+    const backend = new DummyBackend()
+    const errors: string[] = []
+    const exitCode = await runRun(
+      ["--script", "foo.ts", "--imds-port", "notaport"],
       backend,
       () => {},
       (e) => errors.push(e),

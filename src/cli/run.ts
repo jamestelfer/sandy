@@ -23,7 +23,12 @@ export async function runRun(
       scriptPath = args[i + 1]
       i++
     } else if (arg === "--imds-port" && args[i + 1]) {
-      imdsPort = Number(args[i + 1])
+      const parsed = Number(args[i + 1])
+      if (Number.isNaN(parsed)) {
+        printErr(`sandy run: --imds-port must be a number, got: ${args[i + 1]}`)
+        return 1
+      }
+      imdsPort = parsed
       i++
     } else if (arg === "--region" && args[i + 1]) {
       region = args[i + 1] as string

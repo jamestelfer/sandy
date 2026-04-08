@@ -54,7 +54,12 @@ async function runConnect(
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--imds-port" && args[i + 1]) {
-      imdsPort = Number(args[i + 1])
+      const parsed = Number(args[i + 1])
+      if (Number.isNaN(parsed)) {
+        printErr(`sandy check connect: --imds-port must be a number, got: ${args[i + 1]}`)
+        return 1
+      }
+      imdsPort = parsed
       i++
     } else if (args[i] === "--region" && args[i + 1]) {
       region = args[i + 1] as string

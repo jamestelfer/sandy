@@ -17,7 +17,7 @@ src/
   dummy-backend.ts     DummyBackend: records calls, returns configurable results
   config.ts            Read/write $XDG_CONFIG_HOME/sandy/config.json
   session.ts           Session management (human-id names, .sandy/<name>/ dirs)
-  progress.ts          Progress line parser ([-> prefix detection)
+  progress.ts          Progress line parser ([-->  prefix detection)
   types.ts             Shared types (RunOptions, RunResult, env var constants)
   cli/
     config.ts          sandy config [--docker|--shuru]
