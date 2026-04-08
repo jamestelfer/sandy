@@ -14,6 +14,13 @@ function makeExecutor(
 }
 
 describe("ShuruBackend.imageCreate", () => {
+  test("does not throw when Netskope cert is absent", async () => {
+    const { executor } = makeExecutor()
+    const backend = new ShuruBackend(executor)
+    // Cert file doesn't exist — must not throw, just skip
+    await expect(backend.imageCreate()).resolves.toBeUndefined()
+  })
+
   test("calls shuru checkpoint create sandy with --allow-net and bootstrap mount", async () => {
     const { executor, calls } = makeExecutor()
     const backend = new ShuruBackend(executor)
