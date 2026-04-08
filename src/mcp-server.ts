@@ -23,6 +23,30 @@ export class SandyMcpServer {
 
   constructor(private backend: Backend) {}
 
+  async handleSandyCheck(action: "baseline" | "connect", imdsPort?: number): Promise<SandyRunResult> {
+    const scriptPath = action === "baseline" ? "__baseline__" : "__connect__"
+    const port = imdsPort ?? 0
+    if (!this.activeSessionDir) {
+      const session = await createSession(this.activeSessionName ?? undefined)
+      this.activeSessionName = session.name
+      this.activeSessionDir = session.dir
+    }
+    const opts: RunOptions = {
+      scriptPath,
+      imdsPort: port,
+      region: DEFAULT_REGION,
+      session: this.activeSessionName!,
+      sessionDir: this.activeSessionDir!,
+    }
+    const result = await this.backend.run(opts, () => {})
+    return {
+      exitCode: result.exitCode,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      sessionName: this.activeSessionName!,
+    }
+  }
+
   async handleSandyImage(action: "create" | "delete"): Promise<void> {
     if (action === "create") {
       await this.backend.imageCreate()

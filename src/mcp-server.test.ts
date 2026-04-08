@@ -59,6 +59,32 @@ describe("session management", () => {
   })
 })
 
+describe("sandy_check", () => {
+  let backend: DummyBackend
+  let server: SandyMcpServer
+
+  beforeEach(() => {
+    backend = new DummyBackend()
+    server = new SandyMcpServer(backend)
+  })
+
+  test("baseline dispatches run with __baseline__ scriptPath and imdsPort 0", async () => {
+    await server.handleSandyCheck("baseline")
+    const run = backend.calls.find((c): c is RunCall => c.method === "run")
+    expect(run).toBeDefined()
+    expect(run!.opts.scriptPath).toBe("__baseline__")
+    expect(run!.opts.imdsPort).toBe(0)
+  })
+
+  test("connect dispatches run with __connect__ scriptPath and given imdsPort", async () => {
+    await server.handleSandyCheck("connect", 9001)
+    const run = backend.calls.find((c): c is RunCall => c.method === "run")
+    expect(run).toBeDefined()
+    expect(run!.opts.scriptPath).toBe("__connect__")
+    expect(run!.opts.imdsPort).toBe(9001)
+  })
+})
+
 describe("sandy_image", () => {
   let backend: DummyBackend
   let server: SandyMcpServer
