@@ -13,6 +13,26 @@ function makeExecutor(
   return { executor, calls }
 }
 
+describe("ShuruBackend.imageCreate", () => {
+  test("calls shuru checkpoint create sandy with --allow-net and bootstrap mount", async () => {
+    const { executor, calls } = makeExecutor()
+    const backend = new ShuruBackend(executor)
+    await backend.imageCreate()
+
+    const cmd = calls[0]
+    expect(cmd.slice(0, 4)).toEqual(["shuru", "checkpoint", "create", "sandy"])
+    expect(cmd).toContain("--allow-net")
+
+    const mountIdx = cmd.indexOf("--mount")
+    expect(mountIdx).toBeGreaterThan(-1)
+    expect(cmd[mountIdx + 1]).toMatch(/^.+:\/tmp\/bootstrap$/)
+
+    const sepIdx = cmd.indexOf("--")
+    expect(sepIdx).toBeGreaterThan(-1)
+    expect(cmd.slice(sepIdx + 1).join(" ")).toContain("/tmp/bootstrap/init.sh")
+  })
+})
+
 describe("ShuruBackend.imageDelete", () => {
   test("calls shuru checkpoint delete sandy", async () => {
     const { executor, calls } = makeExecutor()
