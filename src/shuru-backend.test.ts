@@ -117,6 +117,26 @@ describe("ShuruBackend.run", () => {
     await backend.run({ ...baseRunOpts, region: undefined }, () => {})
     expect(spawnCalls[0]?.env?.["AWS_REGION"]).toBe("us-west-2")
   })
+
+  test("spawns entrypoint with compiled script path derived from scriptPath basename", async () => {
+    const { factory, spawnCalls } = makeSandboxFactory()
+    const backend = new ShuruBackend(undefined, factory)
+    await backend.run(baseRunOpts, () => {})
+
+    const cmd = spawnCalls[0]?.cmd ?? []
+    expect(cmd.join(" ")).toContain("/workspace/entrypoint")
+    expect(cmd.join(" ")).toContain("/workspace/dist/scripts/hello.js")
+  })
+
+  test("appends script args after the compiled path", async () => {
+    const { factory, spawnCalls } = makeSandboxFactory()
+    const backend = new ShuruBackend(undefined, factory)
+    await backend.run({ ...baseRunOpts, scriptArgs: ["--foo", "bar"] }, () => {})
+
+    const cmd = spawnCalls[0]?.cmd ?? []
+    expect(cmd).toContain("--foo")
+    expect(cmd).toContain("bar")
+  })
 })
 
 describe("ShuruBackend.imageCreate", () => {
