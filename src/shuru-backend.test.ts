@@ -14,6 +14,22 @@ function makeExecutor(
 }
 
 describe("ShuruBackend.imageExists", () => {
+  test("returns false when sandy is absent from the list", async () => {
+    const { executor } = makeExecutor({
+      "shuru checkpoint list": { stdout: "other-checkpoint 2024-01-02\n", stderr: "", exitCode: 0 },
+    })
+    const backend = new ShuruBackend(executor)
+    expect(await backend.imageExists()).toBe(false)
+  })
+
+  test("returns false when checkpoint list is empty", async () => {
+    const { executor } = makeExecutor({
+      "shuru checkpoint list": { stdout: "", stderr: "", exitCode: 0 },
+    })
+    const backend = new ShuruBackend(executor)
+    expect(await backend.imageExists()).toBe(false)
+  })
+
   test("calls shuru checkpoint list and returns true when sandy is present", async () => {
     const { executor, calls } = makeExecutor({
       "shuru checkpoint list": {
