@@ -29,7 +29,10 @@ export class SandyMcpServer {
     this.activeSessionDir = null
   }
 
-  async handleSandyRun(params: SandyRunParams): Promise<SandyRunResult> {
+  async handleSandyRun(
+    params: SandyRunParams,
+    onProgress?: (message: string) => void,
+  ): Promise<SandyRunResult> {
     if (!this.activeSessionDir) {
       const session = await createSession(this.activeSessionName ?? undefined)
       this.activeSessionName = session.name
@@ -45,7 +48,7 @@ export class SandyMcpServer {
       scriptArgs: params.args,
     }
 
-    const result = await this.backend.run(opts, () => {})
+    const result = await this.backend.run(opts, (msg) => onProgress?.(msg))
 
     return {
       exitCode: result.exitCode,

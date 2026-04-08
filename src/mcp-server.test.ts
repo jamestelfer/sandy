@@ -58,3 +58,22 @@ describe("session management", () => {
     expect(run!.opts.session).toBe("my-custom-session")
   })
 })
+
+describe("progress", () => {
+  let backend: DummyBackend
+  let server: SandyMcpServer
+
+  beforeEach(() => {
+    backend = new DummyBackend()
+    server = new SandyMcpServer(backend)
+  })
+
+  test("progress lines from backend are forwarded via onProgress callback", async () => {
+    backend.progressLines = ["loading resources", "querying ec2"]
+    const received: string[] = []
+
+    await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 }, (msg) => received.push(msg))
+
+    expect(received).toEqual(["loading resources", "querying ec2"])
+  })
+})
