@@ -1,79 +1,136 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with code in this repository.
 
 ## What is Sandy
 
-Sandy is a Claude Code skill that runs TypeScript scripts inside disposable Shuru microVMs with AWS SDK access via IMDS. It's designed for AI agents to safely execute read-only AWS queries without exposing credentials. The project is structured as a Claude plugin (`/.claude-plugin/marketplace.json`) containing a single skill at `isolate/skills/sandy/`.
+Sandy is a CLI tool and Claude Code skill that runs TypeScript scripts inside sandboxed environments (Shuru microVMs or Docker containers) with AWS SDK access via IMDS. It is designed for AI agents to safely execute read-only AWS queries without exposing credentials.
+
+This is a Bun TypeScript project currently in Phase 1 (scaffold + dummy backend + full CLI). Phases 3 and 5 will add the real Shuru and Docker backends. The original Bash implementation remains under `isolate/skills/sandy/` for reference only — do not modify it.
 
 ## Project Layout
 
-All source lives under `isolate/skills/sandy/`:
-
-- `scripts/sandy` — Bash orchestration script (entry point for all operations)
-- `scripts/bootstrap/` — VM initialization (`init.sh`, `package.json`, `tsconfig.json`)
-- `scripts/checks/` — Health check TypeScript files (`baseline.ts`, `connect.ts`)
-- `resources/examples/` — Reference script implementations
-- `SKILL.md` — Comprehensive skill documentation (the authoritative reference)
+```
+src/
+  main.ts              Entry point (bun build --compile target)
+  backend.ts           Backend interface definition
+  dummy-backend.ts     DummyBackend: records calls, returns configurable results
+  config.ts            Read/write $XDG_CONFIG_HOME/sandy/config.json
+  session.ts           Session management (human-id names, .sandy/<name>/ dirs)
+  progress.ts          Progress line parser ([-> prefix detection)
+  types.ts             Shared types (RunOptions, RunResult, env var constants)
+  cli/
+    config.ts          sandy config [--docker|--shuru]
+    image.ts           sandy image create|delete
+    check.ts           sandy check baseline|connect
+    run.ts             sandy run --script <path> --imds-port <n>
+    mcp.ts             sandy mcp (stub — Phase 4)
+  *.test.ts            Unit tests alongside source files
+isolate/skills/sandy/  Original Bash implementation (reference only)
+plans/                 Implementation phase plans
+dist/                  Built binary (gitignored)
+```
 
 ## Commands
 
-All commands run through the `sandy` Bash script. There is no Makefile, no npm workspace at the root, and no CI/CD pipeline.
-
 ```bash
-# One-time VM snapshot setup
-sandy snapshot create
-sandy snapshot list
-sandy snapshot delete
+# Development
+bun test              # Run unit tests
+bun run lint          # Biome lint check
+bun run lint:fix      # Biome lint with auto-fix
+bun run format        # Biome format check
+bun run format:fix    # Biome format with auto-fix
+bun run build         # Compile standalone binary to dist/sandy
+bun run agent         # lint:fix + format:fix + build + test (full CI cycle)
 
-# Health checks
-sandy check baseline                          # packages + file I/O (no AWS)
-sandy check connect --imds-port <port>        # AWS IMDS connectivity
-
-# Run a script
-sandy run --imds-port <port> --script <path> [--region <region>] [--session <id>] [-- args...]
+# CLI (built binary)
+sandy config                    # Show current backend (default: shuru)
+sandy config --docker           # Switch to Docker backend
+sandy config --shuru            # Switch to Shuru backend
+sandy image create              # Create sandbox image
+sandy image delete              # Delete sandbox image
+sandy check baseline            # Run baseline health check
+sandy check connect --imds-port <n>   # Run connectivity check
+sandy run --script <path> --imds-port <n> [--region <r>] [--session <s>] [-- args...]
+sandy mcp                       # Start MCP server (Phase 4 — not yet implemented)
 ```
 
-There is no linting or formatting tooling. The only code quality step is `tsc` (TypeScript type checking), which runs automatically as part of `sandy run` before script execution.
+## Biome Configuration
 
-There is no test framework. The `check baseline` and `check connect` commands serve as manual verification.
+Code style enforced by Biome (`biome.json`):
+- 2-space indent
+- No semicolons
+- Double quotes
+- Trailing commas
+- Mandatory curly braces (`useBlockStatements`)
+- Line width: 100
 
 ## Architecture
 
 ```
-Agent calls: sandy run --script user_script.ts --imds-port <port>
-  |
-  v
-sandy (Bash) — validates checkpoint exists, parses flags
-  |
-  v
-Shuru (ephemeral VM) — mounts scripts read-only, output dir read-write
-  |
-  v
-Inside VM:
-  1. tsc — type-checks all scripts; errors stop execution
-  2. node --permission — runs compiled JS (blocks child_process, restricts network)
-  3. AWS SDK resolves credentials via IMDS at http://10.0.0.1:<port>
+CLI entry (src/main.ts)
+  → reads config ($XDG_CONFIG_HOME/sandy/config.json)
+  → instantiates Backend (Phase 1: DummyBackend for both shuru/docker)
+  → dispatches to CLI handler (src/cli/*.ts)
+    → handler calls backend methods (imageCreate, imageDelete, run, etc.)
+    → backend onProgress callback streams [-->-prefixed lines
 ```
 
-Key constraints enforced by the VM:
-- **No child processes** — Node's `--permission` flag blocks `child_process`. Use SDK clients directly, not AWS CLI.
-- **Restricted network** — Only `*.amazonaws.com` and `*.aws.amazon.com` allowed.
-- **Ephemeral** — Each run gets a fresh VM from a snapshot. No state persists between runs.
-- **No static credentials** — AWS SDK resolves credentials via IMDS (IMDSv2 only).
+**Backend interface** (`src/backend.ts`):
+- `imageCreate()` — create/build the sandbox image
+- `imageDelete()` — delete the sandbox image
+- `imageExists()` → boolean
+- `run(opts: RunOptions, onProgress: (msg: string) => void)` → `RunResult`
 
-Output files go to `process.env.SANDY_OUTPUT` inside the VM, synced back to `.sandy/<session>/` on the host.
+**Progress protocol**: the real backend (Phase 3/5) reads stdout from the VM/container, parses lines with `parseProgressLine()`, and calls `onProgress(message)` for `[-->` prefixed lines. The CLI handler then formats and prints them. Normal stdout is captured in `RunResult.stdout`.
 
-## Scripting Conventions
+**Session**: a human-readable name (`human-id` format, e.g. `happy-fox-trail`) identifying an output directory at `.sandy/<name>/`. Auto-generated if not provided; `.sandy/.gitignore` with `*` is created on first use.
 
-**Mandatory: async generators for all AWS iteration.** Every paginated AWS call and batch-describe loop must be an `async function*` generator that yields results incrementally. Do not accumulate results into arrays. This ensures progress is visible immediately, partial results survive failures, and callers control iteration.
+**Config** (`$XDG_CONFIG_HOME/sandy/config.json` or `~/.config/sandy/config.json`):
+```json
+{ "backend": "shuru" }
+```
+Valid backends: `"shuru"` (default), `"docker"`.
 
-Other conventions (from SKILL.md):
-- Show terse progress to stdout so the user knows the script is alive
-- Wrap outer-loop iterations in try/catch to provide partial results on failure
-- Write JSON chunks to `SANDY_OUTPUT` as you go to preserve results before failures
-- Use `process.argv.slice(2)` for script arguments
+## Env var constants (`src/types.ts`)
+
+| Constant | Value |
+|----------|-------|
+| `ENV_ENDPOINT_MODE` | `AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE` |
+| `ENV_ENDPOINT_MODE_VALUE` | `IPv4` |
+| `ENV_V1_DISABLED` | `AWS_EC2_METADATA_V1_DISABLED` |
+| `ENV_V1_DISABLED_VALUE` | `true` |
+| `ENV_REGION` | `AWS_REGION` |
+| `ENV_SANDY_OUTPUT` | `SANDY_OUTPUT` |
+| `VM_SCRIPTS_DIR` | `/workspace/scripts` |
+| `VM_OUTPUT_DIR` | `/workspace/output` |
+| `DEFAULT_REGION` | `us-west-2` |
+
+## Testing
+
+Tests use `bun test` (no external test framework). Test files live alongside source as `*.test.ts`.
+
+**DummyBackend** (`src/dummy-backend.ts`) is the permanent test double for the Backend interface. It:
+- Records every call in `backend.calls: BackendCall[]`
+- Returns configurable results via `backend.runResult`, `backend.imageExistsResult`
+- Calls `onProgress` for each string in `backend.progressLines`
+
+Use DummyBackend in CLI and higher-level tests instead of mocking — this tests real dispatch paths.
+
+**Test isolation**: config tests set `process.env.XDG_CONFIG_HOME` to a temp dir; session tests `chdir` to a temp dir. Both clean up in `afterEach`.
+
+```bash
+# Run all tests
+bun test
+
+# Run a single test file
+bun test src/config.test.ts
+```
 
 ## Dependencies
 
-The VM snapshot includes ~150 AWS SDK v3 service clients (all `@aws-sdk/client-*` at `latest`) plus utility libraries: `arquero`, `asciichart`, `console-table-printer`, `@fast-csv/format`, `jmespath`. Full list in `scripts/bootstrap/package.json`. Runtime is Node.js 24 with pnpm.
+| Package | Purpose |
+|---------|---------|
+| `@biomejs/biome` | Lint + format |
+| `@superhq/shuru` | Shuru SDK (Phase 3) |
+| `human-id` | Generate readable session names |
