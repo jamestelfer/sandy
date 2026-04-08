@@ -150,6 +150,35 @@ describe("ShuruBackend.run", () => {
     expect(progress).toContain("compiling...")
     expect(progress.join("\n")).not.toContain("normal output line")
   })
+
+  test("collects all stdout into RunResult and captures exit code", async () => {
+    const { factory } = makeSandboxFactory({ exitCode: 2, stdoutLines: ["line one", "line two"] })
+    const backend = new ShuruBackend(undefined, factory)
+    const result = await backend.run(baseRunOpts, () => {})
+
+    expect(result.stdout).toContain("line one")
+    expect(result.stdout).toContain("line two")
+    expect(result.exitCode).toBe(2)
+  })
+
+  test("stops the sandbox after run completes", async () => {
+    let stopped = false
+    const factory: SandboxFactory = async () => ({
+      spawn: async () => {
+        const handle = {
+          on: (_: "stdout" | "stderr", __: (d: Buffer) => void) => handle,
+          exited: new Promise<number>((resolve) => setTimeout(() => resolve(0), 0)),
+        }
+        return handle
+      },
+      stop: async () => {
+        stopped = true
+      },
+    })
+    const backend = new ShuruBackend(undefined, factory)
+    await backend.run(baseRunOpts, () => {})
+    expect(stopped).toBe(true)
+  })
 })
 
 describe("ShuruBackend.imageCreate", () => {
