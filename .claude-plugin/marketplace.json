@@ -8,8 +8,8 @@
   },
   "plugins": [
     {
-      "name": "isolate",
-      "source": "./isolate"
+      "name": "sandy",
+      "source": "./plugin"
     }
   ]
 }
