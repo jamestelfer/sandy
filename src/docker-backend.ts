@@ -2,7 +2,8 @@ import * as path from "node:path"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import { spawn } from "node:child_process"
-import { Writable } from "node:stream"
+import { Readable, Writable } from "node:stream"
+import { makeTmpDir } from "./tmpdir"
 import type { Backend } from "./backend"
 import type { RunOptions, RunResult } from "./types"
 import {
@@ -68,9 +69,9 @@ ENTRYPOINT ["pnpm", "run", "-s", "entrypoint"]
 }
 
 export async function defaultBuildContextFactory(): Promise<NodeJS.ReadableStream> {
-  const stagingDir = await fs.mkdtemp(path.join(os.tmpdir(), "sandy-docker-build-"))
-  await fs.mkdir(`${stagingDir}/bootstrap`, { recursive: true })
-  await fs.mkdir(`${stagingDir}/bootstrap/certs`, { recursive: true })
+  await using staging = await makeTmpDir("sandy-docker-build-")
+  await fs.mkdir(`${staging.path}/bootstrap`, { recursive: true })
+  await fs.mkdir(`${staging.path}/bootstrap/certs`, { recursive: true })
 
   // Use Bun.file().arrayBuffer() instead of fs.copyFile() so this works when
   // the binary is compiled — embedded bunfs paths are not accessible to the OS.
@@ -80,26 +81,32 @@ export async function defaultBuildContextFactory(): Promise<NodeJS.ReadableStrea
   }
 
   await Promise.all([
-    copyEmbedded(initShPath, `${stagingDir}/bootstrap/init.sh`),
-    copyEmbedded(nodeCertsShPath, `${stagingDir}/bootstrap/node_certs.sh`),
-    copyEmbedded(bootstrapPackageJsonPath, `${stagingDir}/bootstrap/package.json`),
-    copyEmbedded(bootstrapTsconfigJsonPath, `${stagingDir}/bootstrap/tsconfig.json`),
-    copyEmbedded(entrypointPath, `${stagingDir}/bootstrap/entrypoint`),
-    fs.writeFile(`${stagingDir}/Dockerfile`, generateDockerfile()),
+    copyEmbedded(initShPath, `${staging.path}/bootstrap/init.sh`),
+    copyEmbedded(nodeCertsShPath, `${staging.path}/bootstrap/node_certs.sh`),
+    copyEmbedded(bootstrapPackageJsonPath, `${staging.path}/bootstrap/package.json`),
+    copyEmbedded(bootstrapTsconfigJsonPath, `${staging.path}/bootstrap/tsconfig.json`),
+    copyEmbedded(entrypointPath, `${staging.path}/bootstrap/entrypoint`),
+    fs.writeFile(`${staging.path}/Dockerfile`, generateDockerfile()),
   ])
 
   // Copy Netskope cert if present
   try {
-    await fs.copyFile(NETSKOPE_CERT_PATH, `${stagingDir}/bootstrap/certs/nscacert.pem`)
+    await fs.copyFile(NETSKOPE_CERT_PATH, `${staging.path}/bootstrap/certs/nscacert.pem`)
     process.stderr.write("sandy: Netskope certificate staged for installation\n")
   } catch {
     process.stderr.write("sandy: Netskope certificate not found, skipping\n")
   }
 
-  // node:child_process spawn gives a Node.js Readable directly — no conversion needed.
-  const proc = spawn("tar", ["-c", "."], { cwd: stagingDir })
+  // Buffer the tar output so the staging dir can be cleaned up before returning.
+  const proc = spawn("tar", ["-c", "."], { cwd: staging.path })
   if (!proc.stdout) { throw new Error("tar process has no stdout") }
-  return proc.stdout
+  const chunks: Buffer[] = []
+  await new Promise<void>((resolve, reject) => {
+    proc.stdout!.on("data", (chunk: Buffer) => chunks.push(chunk))
+    proc.stdout!.on("end", resolve)
+    proc.stdout!.on("error", reject)
+  })
+  return Readable.from(Buffer.concat(chunks))
 }
 
 export class DockerBackend implements Backend {
