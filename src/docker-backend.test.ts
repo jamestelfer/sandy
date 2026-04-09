@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Readable } from "node:stream"
-import { DockerBackend } from "./docker-backend"
+import { DockerBackend, generateDockerfile } from "./docker-backend"
 import type { BuildContextFactory, DockerClientLike, ImageLike, ContainerLike } from "./docker-backend"
 
 const fakeBuildContext: BuildContextFactory = async () => Readable.from([])
@@ -82,6 +82,23 @@ function makeContainerFake(config: {
   }
   return container
 }
+
+describe("generateDockerfile", () => {
+  test("COPYs bootstrap dir to /tmp/bootstrap", () => {
+    const df = generateDockerfile()
+    expect(df).toMatch(/COPY bootstrap\/ \/tmp\/bootstrap\//)
+  })
+
+  test("RUNs init.sh from /tmp/bootstrap", () => {
+    const df = generateDockerfile()
+    expect(df).toContain("sh /tmp/bootstrap/init.sh")
+  })
+
+  test("sets ENTRYPOINT to pnpm run -s entrypoint", () => {
+    const df = generateDockerfile()
+    expect(df).toContain('ENTRYPOINT ["pnpm", "run", "-s", "entrypoint"]')
+  })
+})
 
 describe("DockerBackend.imageCreate", () => {
   test("calls buildImage with tag sandy:latest", async () => {
