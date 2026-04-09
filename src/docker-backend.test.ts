@@ -171,6 +171,16 @@ describe("DockerBackend.run", () => {
     const env = (createContainerCalls[0]?.opts as ContainerOpts)?.Env ?? []
     expect(env).toContain("AWS_REGION=us-west-2")
   })
+
+  test("mounts script dir read-only and session dir read-write", async () => {
+    const { docker, createContainerCalls } = makeDockerFake()
+    const backend = new DockerBackend(docker, fakeBuildContext)
+    // scriptPath /home/user/scripts/hello.ts → scriptDir /home/user/scripts
+    await backend.run(baseRunOpts, () => {})
+    const binds = (createContainerCalls[0]?.opts as ContainerOpts)?.HostConfig?.Binds ?? []
+    expect(binds).toContain("/home/user/scripts:/workspace/scripts:ro")
+    expect(binds).toContain("/home/user/.sandy/test-session:/workspace/output:rw")
+  })
 })
 
 describe("DockerBackend.imageExists", () => {
