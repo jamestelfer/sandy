@@ -18,6 +18,10 @@
     "@biomejs/biome": "^2.4.10",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@superhq/shuru": "^0.4.2",
+    "dockerode": "^4.0.10",
     "human-id": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^4.0.1"
   }
 }
