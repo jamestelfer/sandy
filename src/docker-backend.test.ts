@@ -4,9 +4,9 @@ import type { DockerClientLike, ImageLike, ContainerLike } from "./docker-backen
 
 function makeImageFake(config: { inspectThrows?: boolean } = {}): {
   image: ImageLike
-  removeCalled: boolean
+  removeCalls: string[]
 } {
-  let removeCalled = false
+  const removeCalls: string[] = []
   const image: ImageLike = {
     inspect: async () => {
       if (config.inspectThrows) {
@@ -15,17 +15,17 @@ function makeImageFake(config: { inspectThrows?: boolean } = {}): {
       return {}
     },
     remove: async () => {
-      removeCalled = true
+      removeCalls.push("remove")
     },
   }
-  return { image, removeCalled: false, get removeCalled_() { return removeCalled } } as unknown as { image: ImageLike; removeCalled: boolean }
+  return { image, removeCalls }
 }
 
 function makeDockerFake(config: { imageConfig?: { inspectThrows?: boolean } } = {}): {
   docker: DockerClientLike
   buildImageCalls: Array<{ opts: object }>
   createContainerCalls: Array<{ opts: object }>
-  lastImage: () => ImageLike
+  imageFake: ReturnType<typeof makeImageFake>
 } {
   const buildImageCalls: Array<{ opts: object }> = []
   const createContainerCalls: Array<{ opts: object }> = []
@@ -58,7 +58,7 @@ function makeDockerFake(config: { imageConfig?: { inspectThrows?: boolean } } = 
     docker,
     buildImageCalls,
     createContainerCalls,
-    lastImage: () => imageFake.image,
+    imageFake,
   }
 }
 
@@ -79,6 +79,15 @@ function makeContainerFake(config: {
   }
   return container
 }
+
+describe("DockerBackend.imageDelete", () => {
+  test("calls remove on sandy:latest", async () => {
+    const { docker, imageFake } = makeDockerFake()
+    const backend = new DockerBackend(docker)
+    await backend.imageDelete()
+    expect(imageFake.removeCalls.length).toBe(1)
+  })
+})
 
 describe("DockerBackend.imageExists", () => {
   test("returns true when sandy:latest can be inspected", async () => {

@@ -42,7 +42,7 @@ export class DockerBackend implements Backend {
   }
 
   async imageDelete(): Promise<void> {
-    throw new Error("not implemented")
+    await this.docker.getImage(IMAGE_NAME).remove()
   }
 
   async imageCreate(): Promise<void> {
