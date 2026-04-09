@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "sandy": {
+      "command": "sandy",
+      "args": ["mcp"]
+    }
+  }
+}
