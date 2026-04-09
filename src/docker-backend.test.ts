@@ -24,7 +24,10 @@ function makeImageFake(config: { inspectThrows?: boolean } = {}): {
   return { image, removeCalls }
 }
 
-function makeDockerFake(config: { imageConfig?: { inspectThrows?: boolean } } = {}): {
+function makeDockerFake(config: {
+  imageConfig?: { inspectThrows?: boolean }
+  containerConfig?: { exitCode?: number; stdoutLines?: string[] }
+} = {}): {
   docker: DockerClientLike
   buildImageCalls: Array<{ opts: object }>
   createContainerCalls: Array<{ opts: object }>
@@ -46,7 +49,7 @@ function makeDockerFake(config: { imageConfig?: { inspectThrows?: boolean } } = 
     },
     createContainer: async (opts: object): Promise<ContainerLike> => {
       createContainerCalls.push({ opts })
-      return makeContainerFake()
+      return makeContainerFake(config.containerConfig)
     },
     modem: {
       // Fake demuxStream: pipe directly to stdout (no Docker multiplexing header in test)
@@ -180,6 +183,17 @@ describe("DockerBackend.run", () => {
     const binds = (createContainerCalls[0]?.opts as ContainerOpts)?.HostConfig?.Binds ?? []
     expect(binds).toContain("/home/user/scripts:/workspace/scripts:ro")
     expect(binds).toContain("/home/user/.sandy/test-session:/workspace/output:rw")
+  })
+
+  test("forwards [-->-prefixed stdout lines as progress", async () => {
+    const { docker } = makeDockerFake({
+      containerConfig: { stdoutLines: ["[-->  compiling...", "normal output line"] },
+    })
+    const backend = new DockerBackend(docker, fakeBuildContext)
+    const progress: string[] = []
+    await backend.run(baseRunOpts, (msg) => progress.push(msg))
+    expect(progress).toContain("compiling...")
+    expect(progress.join("\n")).not.toContain("normal output line")
   })
 })
 
