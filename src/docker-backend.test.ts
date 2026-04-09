@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test"
+import { Readable } from "node:stream"
 import { DockerBackend } from "./docker-backend"
-import type { DockerClientLike, ImageLike, ContainerLike } from "./docker-backend"
+import type { BuildContextFactory, DockerClientLike, ImageLike, ContainerLike } from "./docker-backend"
+
+const fakeBuildContext: BuildContextFactory = async () => Readable.from([])
 
 function makeImageFake(config: { inspectThrows?: boolean } = {}): {
   image: ImageLike
@@ -79,6 +82,16 @@ function makeContainerFake(config: {
   }
   return container
 }
+
+describe("DockerBackend.imageCreate", () => {
+  test("calls buildImage with tag sandy:latest", async () => {
+    const { docker, buildImageCalls } = makeDockerFake()
+    const backend = new DockerBackend(docker, fakeBuildContext)
+    await backend.imageCreate()
+    expect(buildImageCalls.length).toBe(1)
+    expect((buildImageCalls[0]?.opts as { t?: string })?.t).toBe("sandy:latest")
+  })
+})
 
 describe("DockerBackend.imageDelete", () => {
   test("calls remove on sandy:latest", async () => {
