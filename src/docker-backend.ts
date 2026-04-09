@@ -98,7 +98,7 @@ export async function defaultBuildContextFactory(): Promise<NodeJS.ReadableStrea
 
   // node:child_process spawn gives a Node.js Readable directly — no conversion needed.
   const proc = spawn("tar", ["-c", "."], { cwd: stagingDir })
-  if (!proc.stdout) throw new Error("tar process has no stdout")
+  if (!proc.stdout) { throw new Error("tar process has no stdout") }
   return proc.stdout
 }
 
@@ -124,9 +124,20 @@ export class DockerBackend implements Backend {
   async imageCreate(): Promise<void> {
     const context = await this.buildContext()
     const stream = await this.docker.buildImage(context, { t: IMAGE_NAME })
-    // Drain the build output stream to completion
+    // Parse build output JSON and surface Docker errors
     await new Promise<void>((resolve, reject) => {
-      stream.on("data", () => {})
+      stream.on("data", (chunk: Buffer) => {
+        for (const line of chunk.toString().split("\n")) {
+          if (!line.trim()) { continue }
+          try {
+            const msg = JSON.parse(line) as { stream?: string; error?: string }
+            if (msg.stream) { process.stderr.write(msg.stream) }
+            if (msg.error) { reject(new Error(`docker build: ${msg.error.trim()}`)) }
+          } catch {
+            // non-JSON line, ignore
+          }
+        }
+      })
       stream.on("end", resolve)
       stream.on("error", reject)
     })

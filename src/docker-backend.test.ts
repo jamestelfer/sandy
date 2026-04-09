@@ -116,7 +116,7 @@ describe("defaultBuildContextFactory", () => {
     const contextStream = await defaultBuildContextFactory()
 
     const tarList = spawn("tar", ["-t"])
-    if (!tarList.stdin) throw new Error("tar stdin is null")
+    if (!tarList.stdin) { throw new Error("tar stdin is null") }
     contextStream.pipe(tarList.stdin)
 
     const chunks: Buffer[] = []
