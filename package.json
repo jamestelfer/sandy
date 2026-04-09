@@ -7,6 +7,7 @@
   },
   "scripts": {
     "build": "bun build --compile --minify --target=bun src/main.ts --outfile dist/sandy",
+    "build:all": "bun build --compile --minify --target=bun-darwin-arm64 src/main.ts --outfile dist/sandy-darwin-arm64 && bun build --compile --minify --target=bun-darwin-x64 src/main.ts --outfile dist/sandy-darwin-x64 && bun build --compile --minify --target=bun-linux-arm64 src/main.ts --outfile dist/sandy-linux-arm64 && bun build --compile --minify --target=bun-linux-x64 src/main.ts --outfile dist/sandy-linux-x64",
     "test": "bun test",
     "lint": "biome lint .",
     "lint:fix": "biome lint --fix .",
