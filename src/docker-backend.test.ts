@@ -195,6 +195,17 @@ describe("DockerBackend.run", () => {
     expect(progress).toContain("compiling...")
     expect(progress.join("\n")).not.toContain("normal output line")
   })
+
+  test("collects stdout into RunResult and captures exit code", async () => {
+    const { docker } = makeDockerFake({
+      containerConfig: { exitCode: 2, stdoutLines: ["line one", "line two"] },
+    })
+    const backend = new DockerBackend(docker, fakeBuildContext)
+    const result = await backend.run(baseRunOpts, () => {})
+    expect(result.stdout).toContain("line one")
+    expect(result.stdout).toContain("line two")
+    expect(result.exitCode).toBe(2)
+  })
 })
 
 describe("DockerBackend.imageExists", () => {
