@@ -48,6 +48,10 @@ async function main(): Promise<void> {
 
   const backend = await createBackend()
 
+  if (command === "mcp") {
+    process.exit(await runMcp(backend))
+  }
+
   if (command === "image") {
     process.exit(await runImage(rest, backend))
   }
@@ -57,10 +61,6 @@ async function main(): Promise<void> {
   if (command === "run") {
     process.exit(await runRun(rest, backend))
   }
-  if (command === "mcp") {
-    process.exit(await runMcp())
-  }
-
   console.error(`sandy: unknown command: ${command}`)
   usage()
   process.exit(1)

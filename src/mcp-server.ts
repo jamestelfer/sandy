@@ -1,4 +1,6 @@
 import { readFileSync } from "node:fs"
+import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js"
+import { z } from "zod"
 import type { Backend } from "./backend"
 import { createSession } from "./session"
 import type { RunOptions } from "./types"
@@ -90,11 +92,18 @@ export interface SandyRunResult {
   sessionName: string
 }
 
+interface ActiveSession {
+  name: string
+  dir: string
+}
+
 export class SandyMcpServer {
-  private activeSessionName: string | null = null
-  private activeSessionDir: string | null = null
+  private activeSession: ActiveSession | null = null
+  private resumedName: string | null = null
 
   constructor(private backend: Backend) {}
+
+  // ── Resource handlers ────────────────────────────────────────────────────
 
   handleScriptingGuideResource(): string {
     return SCRIPTING_GUIDE
@@ -108,30 +117,28 @@ export class SandyMcpServer {
     return content
   }
 
+  // ── Tool handlers ────────────────────────────────────────────────────────
+
   async handleSandyCheck(
     action: "baseline" | "connect",
     imdsPort?: number,
   ): Promise<SandyRunResult> {
     const scriptPath = action === "baseline" ? "__baseline__" : "__connect__"
     const port = imdsPort ?? 0
-    if (!this.activeSessionDir) {
-      const session = await createSession(this.activeSessionName ?? undefined)
-      this.activeSessionName = session.name
-      this.activeSessionDir = session.dir
-    }
+    const session = await this.ensureSession()
     const opts: RunOptions = {
       scriptPath,
       imdsPort: port,
       region: DEFAULT_REGION,
-      session: this.activeSessionName!,
-      sessionDir: this.activeSessionDir!,
+      session: session.name,
+      sessionDir: session.dir,
     }
     const result = await this.backend.run(opts, () => {})
     return {
       exitCode: result.exitCode,
       stdout: result.stdout,
       stderr: result.stderr,
-      sessionName: this.activeSessionName!,
+      sessionName: session.name,
     }
   }
 
@@ -144,27 +151,23 @@ export class SandyMcpServer {
   }
 
   handleResumeSession(sessionName: string): void {
-    this.activeSessionName = sessionName
-    // Dir will be created lazily on next sandy_run
-    this.activeSessionDir = null
+    this.resumedName = sessionName
+    // Dir will be created lazily on next sandy_run or sandy_check
+    this.activeSession = null
   }
 
   async handleSandyRun(
     params: SandyRunParams,
     onProgress?: (message: string) => void,
   ): Promise<SandyRunResult> {
-    if (!this.activeSessionDir) {
-      const session = await createSession(this.activeSessionName ?? undefined)
-      this.activeSessionName = session.name
-      this.activeSessionDir = session.dir
-    }
+    const session = await this.ensureSession()
 
     const opts: RunOptions = {
       scriptPath: params.script,
       imdsPort: params.imdsPort,
       region: params.region ?? DEFAULT_REGION,
-      session: this.activeSessionName,
-      sessionDir: this.activeSessionDir,
+      session: session.name,
+      sessionDir: session.dir,
       scriptArgs: params.args,
     }
 
@@ -174,7 +177,145 @@ export class SandyMcpServer {
       exitCode: result.exitCode,
       stdout: result.stdout,
       stderr: result.stderr,
-      sessionName: this.activeSessionName,
+      sessionName: session.name,
     }
+  }
+
+  private async ensureSession(): Promise<ActiveSession> {
+    if (!this.activeSession) {
+      const session = await createSession(this.resumedName ?? undefined)
+      this.activeSession = session
+    }
+    return this.activeSession
+  }
+
+  // ── MCP SDK wiring ───────────────────────────────────────────────────────
+
+  createMcpServer(): McpServer {
+    const server = new McpServer({ name: "sandy", version: "0.1.0" })
+
+    server.registerTool(
+      "sandy_image",
+      {
+        description: "Create or delete the Sandy sandbox image",
+        inputSchema: z.object({
+          action: z.enum(["create", "delete"]).describe('"create" or "delete"'),
+        }),
+      },
+      async ({ action }) => {
+        await this.handleSandyImage(action)
+        return {
+          content: [{ type: "text" as const, text: `Image ${action} complete.` }],
+        }
+      },
+    )
+
+    server.registerTool(
+      "sandy_check",
+      {
+        description: "Run a health check (baseline or connect)",
+        inputSchema: z.object({
+          action: z.enum(["baseline", "connect"]).describe('"baseline" or "connect"'),
+          imdsPort: z.number().optional().describe("IMDS port (required for connect)"),
+        }),
+      },
+      async ({ action, imdsPort }) => {
+        const result = await this.handleSandyCheck(action, imdsPort)
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(result),
+            },
+          ],
+        }
+      },
+    )
+
+    server.registerTool(
+      "sandy_run",
+      {
+        description: "Run a TypeScript script in the Sandy sandbox",
+        inputSchema: z.object({
+          script: z.string().describe("Path to the TypeScript script"),
+          imdsPort: z.number().describe("IMDS server port on the host"),
+          region: z.string().optional().describe("AWS region (default: us-west-2)"),
+          args: z.array(z.string()).optional().describe("Arguments passed to the script"),
+        }),
+      },
+      async ({ script, imdsPort, region, args }, extra) => {
+        const progressToken = extra._meta?.progressToken
+        let progressCount = 0
+
+        const result = await this.handleSandyRun(
+          { script, imdsPort, region, args },
+          async (msg) => {
+            if (progressToken !== undefined) {
+              await extra.sendNotification({
+                method: "notifications/progress",
+                params: {
+                  progressToken,
+                  progress: ++progressCount,
+                  message: msg,
+                },
+              })
+            }
+          },
+        )
+
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        }
+      },
+    )
+
+    server.registerTool(
+      "sandy_resume_session",
+      {
+        description: "Set the active session name without validation",
+        inputSchema: z.object({
+          sessionName: z.string().describe("Session name to resume"),
+        }),
+      },
+      async ({ sessionName }) => {
+        this.handleResumeSession(sessionName)
+        return {
+          content: [{ type: "text" as const, text: `Active session set to: ${sessionName}` }],
+        }
+      },
+    )
+
+    server.registerResource(
+      "scripting-guide",
+      "sandy://scripting-guide",
+      { description: "Sandy scripting conventions and available packages" },
+      (_uri) => ({
+        contents: [
+          {
+            uri: "sandy://scripting-guide",
+            text: this.handleScriptingGuideResource(),
+            mimeType: "text/markdown",
+          },
+        ],
+      }),
+    )
+
+    const exampleTemplate = new ResourceTemplate("sandy://examples/{name}", { list: undefined })
+    server.registerResource(
+      "examples",
+      exampleTemplate,
+      { description: "Example Sandy scripts (ec2_describe, ecs_services)" },
+      (uri, { name }) => ({
+        contents: [
+          {
+            uri: uri.href,
+            text: this.handleExampleResource(name as string),
+            mimeType: "text/plain",
+          },
+        ],
+      }),
+    )
+
+    return server
   }
 }

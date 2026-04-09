@@ -5,6 +5,14 @@ import type { RunOptions } from "./types"
 
 type RunCall = { method: "run"; opts: RunOptions }
 
+function findRun(backend: DummyBackend): RunCall {
+  const call = backend.calls.find((c): c is RunCall => c.method === "run")
+  if (!call) {
+    throw new Error("No run call found")
+  }
+  return call
+}
+
 describe("sandy_run", () => {
   let backend: DummyBackend
   let server: SandyMcpServer
@@ -23,10 +31,9 @@ describe("sandy_run", () => {
     expect(result.stdout).toBe("hello")
     expect(result.stderr).toBe("warn")
     expect(result.sessionName).toBeTruthy()
-    const call = backend.calls.find((c) => c.method === "run") as RunCall | undefined
-    expect(call).toBeDefined()
-    expect(call!.opts.scriptPath).toBe("foo.ts")
-    expect(call!.opts.imdsPort).toBe(9001)
+    const call = findRun(backend)
+    expect(call.opts.scriptPath).toBe("foo.ts")
+    expect(call.opts.imdsPort).toBe(9001)
   })
 })
 
@@ -54,8 +61,8 @@ describe("session management", () => {
     const result = await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 })
 
     expect(result.sessionName).toBe("my-custom-session")
-    const run = backend.calls.find((c): c is RunCall => c.method === "run")
-    expect(run!.opts.session).toBe("my-custom-session")
+    const run = findRun(backend)
+    expect(run.opts.session).toBe("my-custom-session")
   })
 })
 
@@ -100,18 +107,16 @@ describe("sandy_check", () => {
 
   test("baseline dispatches run with __baseline__ scriptPath and imdsPort 0", async () => {
     await server.handleSandyCheck("baseline")
-    const run = backend.calls.find((c): c is RunCall => c.method === "run")
-    expect(run).toBeDefined()
-    expect(run!.opts.scriptPath).toBe("__baseline__")
-    expect(run!.opts.imdsPort).toBe(0)
+    const run = findRun(backend)
+    expect(run.opts.scriptPath).toBe("__baseline__")
+    expect(run.opts.imdsPort).toBe(0)
   })
 
   test("connect dispatches run with __connect__ scriptPath and given imdsPort", async () => {
     await server.handleSandyCheck("connect", 9001)
-    const run = backend.calls.find((c): c is RunCall => c.method === "run")
-    expect(run).toBeDefined()
-    expect(run!.opts.scriptPath).toBe("__connect__")
-    expect(run!.opts.imdsPort).toBe(9001)
+    const run = findRun(backend)
+    expect(run.opts.scriptPath).toBe("__connect__")
+    expect(run.opts.imdsPort).toBe(9001)
   })
 })
 
