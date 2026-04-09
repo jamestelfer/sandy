@@ -86,4 +86,10 @@ describe("DockerBackend.imageExists", () => {
     const backend = new DockerBackend(docker)
     expect(await backend.imageExists()).toBe(true)
   })
+
+  test("returns false when sandy:latest does not exist", async () => {
+    const { docker } = makeDockerFake({ imageConfig: { inspectThrows: true } })
+    const backend = new DockerBackend(docker)
+    expect(await backend.imageExists()).toBe(false)
+  })
 })
