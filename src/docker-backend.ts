@@ -1,5 +1,6 @@
 import * as path from "node:path"
 import * as fs from "node:fs/promises"
+import * as os from "node:os"
 import { Writable } from "node:stream"
 import type { Backend } from "./backend"
 import type { RunOptions, RunResult } from "./types"
@@ -53,7 +54,6 @@ export interface DockerClientLike {
 export type BuildContextFactory = () => Promise<NodeJS.ReadableStream>
 
 const IMAGE_NAME = "sandy:latest"
-const STAGING_DIR = ".sandy/bootstrap"
 const VM_BOOTSTRAP = "/tmp/bootstrap"
 const NETSKOPE_CERT_PATH = "/Library/Application Support/Netskope/STAgent/data/nscacert.pem"
 
@@ -67,29 +67,28 @@ ENTRYPOINT ["pnpm", "run", "-s", "entrypoint"]
 }
 
 async function defaultBuildContextFactory(): Promise<NodeJS.ReadableStream> {
-  await fs.mkdir(STAGING_DIR, { recursive: true })
-  await fs.mkdir(`${STAGING_DIR}/bootstrap`, { recursive: true })
-  await fs.mkdir(`${STAGING_DIR}/bootstrap/certs`, { recursive: true })
+  const stagingDir = await fs.mkdtemp(path.join(os.tmpdir(), "sandy-docker-build-"))
+  await fs.mkdir(`${stagingDir}/bootstrap`, { recursive: true })
+  await fs.mkdir(`${stagingDir}/bootstrap/certs`, { recursive: true })
 
   await Promise.all([
-    fs.copyFile(initShPath, `${STAGING_DIR}/bootstrap/init.sh`),
-    fs.copyFile(nodeCertsShPath, `${STAGING_DIR}/bootstrap/node_certs.sh`),
-    fs.copyFile(bootstrapPackageJsonPath, `${STAGING_DIR}/bootstrap/package.json`),
-    fs.copyFile(bootstrapTsconfigJsonPath, `${STAGING_DIR}/bootstrap/tsconfig.json`),
-    fs.copyFile(entrypointPath, `${STAGING_DIR}/bootstrap/entrypoint`),
-    fs.writeFile(`${STAGING_DIR}/Dockerfile`, generateDockerfile()),
+    fs.copyFile(initShPath, `${stagingDir}/bootstrap/init.sh`),
+    fs.copyFile(nodeCertsShPath, `${stagingDir}/bootstrap/node_certs.sh`),
+    fs.copyFile(bootstrapPackageJsonPath, `${stagingDir}/bootstrap/package.json`),
+    fs.copyFile(bootstrapTsconfigJsonPath, `${stagingDir}/bootstrap/tsconfig.json`),
+    fs.copyFile(entrypointPath, `${stagingDir}/bootstrap/entrypoint`),
+    fs.writeFile(`${stagingDir}/Dockerfile`, generateDockerfile()),
   ])
 
   // Copy Netskope cert if present
   try {
-    await fs.copyFile(NETSKOPE_CERT_PATH, `${STAGING_DIR}/bootstrap/certs/nscacert.pem`)
+    await fs.copyFile(NETSKOPE_CERT_PATH, `${stagingDir}/bootstrap/certs/nscacert.pem`)
     process.stderr.write("sandy: Netskope certificate staged for installation\n")
   } catch {
     process.stderr.write("sandy: Netskope certificate not found, skipping\n")
   }
 
-  const absDir = path.resolve(STAGING_DIR)
-  const proc = Bun.spawn(["tar", "-c", "."], { cwd: absDir, stdout: "pipe", stderr: "pipe" })
+  const proc = Bun.spawn(["tar", "-c", "."], { cwd: stagingDir, stdout: "pipe", stderr: "pipe" })
   return proc.stdout as unknown as NodeJS.ReadableStream
 }
 
@@ -143,6 +142,8 @@ export class DockerBackend implements Backend {
       Env: Object.entries(env).map(([k, v]) => `${k}=${v}`),
       HostConfig: {
         Binds: [`${scriptDir}:${VM_SCRIPTS_DIR}:ro`, `${opts.sessionDir}:${VM_OUTPUT_DIR}:rw`],
+        // host.docker.internal resolves on macOS/Windows by default; on Linux the
+        // host-gateway alias is required to make it resolve to the Docker bridge IP.
         ExtraHosts: ["host.docker.internal:host-gateway"],
       },
     })
