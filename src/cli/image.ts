@@ -10,15 +10,15 @@ export async function runImage(
   backend: Backend,
   print: (line: string) => void = console.log,
 ): Promise<void> {
-  if (argv.action === "create") {
-    await backend.imageCreate()
-    print("image created")
-    return
-  }
-  if (argv.action === "delete") {
-    await backend.imageDelete()
-    print("image deleted")
-    return
+  switch (argv.action) {
+    case "create":
+      await backend.imageCreate()
+      print("image created")
+      break
+    case "delete":
+      await backend.imageDelete()
+      print("image deleted")
+      break
   }
 }
 
