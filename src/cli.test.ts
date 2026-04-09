@@ -3,8 +3,7 @@ import { mkdirSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { runConfig } from "./cli/config"
 import { runImage } from "./cli/image"
-import { runSnapshot } from "./cli/snapshot"
-import { runCheck } from "./cli/check"
+import { runBaseline, runConnect } from "./cli/check"
 import { runRun } from "./cli/run"
 import { runMcp } from "./cli/mcp"
 import { DummyBackend } from "./dummy-backend"
@@ -26,28 +25,25 @@ afterEach(() => {
 describe("CLI config", () => {
   it("reads and returns the current backend (default shuru)", async () => {
     const output: string[] = []
-    const exitCode = await runConfig([], (line) => output.push(line))
-    expect(exitCode).toBe(0)
+    await runConfig({ docker: false, shuru: false }, (line) => output.push(line))
     expect(output.join("\n")).toContain("shuru")
   })
 
   it("--shuru flag writes shuru config", async () => {
     const output: string[] = []
-    const exitCode = await runConfig(["--shuru"], (line) => output.push(line))
-    expect(exitCode).toBe(0)
+    await runConfig({ docker: false, shuru: true }, (line) => output.push(line))
     expect(output.join("\n")).toContain("shuru")
     const verify: string[] = []
-    await runConfig([], (line) => verify.push(line))
+    await runConfig({ docker: false, shuru: false }, (line) => verify.push(line))
     expect(verify.join("\n")).toContain("shuru")
   })
 
   it("--docker flag writes docker config", async () => {
     const output: string[] = []
-    const exitCode = await runConfig(["--docker"], (line) => output.push(line))
-    expect(exitCode).toBe(0)
+    await runConfig({ docker: true, shuru: false }, (line) => output.push(line))
     expect(output.join("\n")).toContain("docker")
     const verify: string[] = []
-    await runConfig([], (line) => verify.push(line))
+    await runConfig({ docker: false, shuru: false }, (line) => verify.push(line))
     expect(verify.join("\n")).toContain("docker")
   })
 })
@@ -55,111 +51,38 @@ describe("CLI config", () => {
 describe("CLI image", () => {
   it("create dispatches to backend.imageCreate()", async () => {
     const backend = new DummyBackend()
-    const exitCode = await runImage(["create"], backend)
-    expect(exitCode).toBe(0)
+    await runImage({ action: "create" }, backend)
     expect(backend.calls).toEqual([{ method: "imageCreate" }])
   })
 
   it("delete dispatches to backend.imageDelete()", async () => {
     const backend = new DummyBackend()
-    const exitCode = await runImage(["delete"], backend)
-    expect(exitCode).toBe(0)
+    await runImage({ action: "delete" }, backend)
     expect(backend.calls).toEqual([{ method: "imageDelete" }])
-  })
-
-  it("unknown subcommand exits non-zero", async () => {
-    const backend = new DummyBackend()
-    const errors: string[] = []
-    const exitCode = await runImage(
-      ["unknown"],
-      backend,
-      () => {},
-      (e) => errors.push(e),
-    )
-    expect(exitCode).toBe(1)
-    expect(errors.length).toBeGreaterThan(0)
-  })
-})
-
-describe("CLI snapshot", () => {
-  it("create dispatches to backend.imageCreate()", async () => {
-    const backend = new DummyBackend()
-    const exitCode = await runSnapshot(["create"], backend)
-    expect(exitCode).toBe(0)
-    expect(backend.calls).toEqual([{ method: "imageCreate" }])
-  })
-
-  it("delete dispatches to backend.imageDelete()", async () => {
-    const backend = new DummyBackend()
-    const exitCode = await runSnapshot(["delete"], backend)
-    expect(exitCode).toBe(0)
-    expect(backend.calls).toEqual([{ method: "imageDelete" }])
-  })
-
-  it("unknown subcommand exits non-zero", async () => {
-    const backend = new DummyBackend()
-    const errors: string[] = []
-    const exitCode = await runSnapshot(
-      ["unknown"],
-      backend,
-      () => {},
-      (e) => errors.push(e),
-    )
-    expect(exitCode).toBe(1)
-    expect(errors.length).toBeGreaterThan(0)
   })
 })
 
 describe("CLI check", () => {
   it("baseline dispatches to backend.run()", async () => {
     const backend = new DummyBackend()
-    const exitCode = await runCheck(["baseline"], backend)
-    expect(exitCode).toBe(0)
+    await runBaseline(backend)
     expect(backend.calls[0]).toMatchObject({ method: "run", opts: { scriptPath: "__baseline__" } })
   })
 
   it("connect dispatches to backend.run() with imdsPort", async () => {
     const backend = new DummyBackend()
-    const exitCode = await runCheck(["connect", "--imds-port", "9001"], backend)
-    expect(exitCode).toBe(0)
+    await runConnect({ imdsPort: 9001, region: "us-west-2" }, backend)
     expect(backend.calls[0]).toMatchObject({
       method: "run",
       opts: { scriptPath: "__connect__", imdsPort: 9001 },
     })
-  })
-
-  it("connect without --imds-port exits non-zero", async () => {
-    const backend = new DummyBackend()
-    const errors: string[] = []
-    const exitCode = await runCheck(
-      ["connect"],
-      backend,
-      () => {},
-      (e) => errors.push(e),
-    )
-    expect(exitCode).toBe(1)
-    expect(errors.some((e) => e.includes("--imds-port"))).toBe(true)
-  })
-
-  it("connect with non-numeric --imds-port exits non-zero", async () => {
-    const backend = new DummyBackend()
-    const errors: string[] = []
-    const exitCode = await runCheck(
-      ["connect", "--imds-port", "notaport"],
-      backend,
-      () => {},
-      (e) => errors.push(e),
-    )
-    expect(exitCode).toBe(1)
-    expect(errors.some((e) => e.includes("--imds-port"))).toBe(true)
   })
 })
 
 describe("CLI run", () => {
   it("dispatches to backend.run() with correct RunOptions", async () => {
     const backend = new DummyBackend()
-    const exitCode = await runRun(["--script", "foo.ts", "--imds-port", "9001"], backend)
-    expect(exitCode).toBe(0)
+    await runRun({ script: "foo.ts", imdsPort: 9001, region: "us-west-2" }, backend)
     expect(backend.calls[0]).toMatchObject({
       method: "run",
       opts: { scriptPath: "foo.ts", imdsPort: 9001 },
@@ -168,7 +91,10 @@ describe("CLI run", () => {
 
   it("uses provided --session name", async () => {
     const backend = new DummyBackend()
-    await runRun(["--script", "foo.ts", "--imds-port", "9001", "--session", "my-session"], backend)
+    await runRun(
+      { script: "foo.ts", imdsPort: 9001, region: "us-west-2", session: "my-session" },
+      backend,
+    )
     expect(backend.calls[0]).toMatchObject({
       method: "run",
       opts: { session: "my-session" },
@@ -177,7 +103,7 @@ describe("CLI run", () => {
 
   it("auto-generates session when none provided", async () => {
     const backend = new DummyBackend()
-    await runRun(["--script", "foo.ts", "--imds-port", "9001"], backend)
+    await runRun({ script: "foo.ts", imdsPort: 9001, region: "us-west-2" }, backend)
     const call = backend.calls[0]
     expect(call).toBeDefined()
     if (call && call.method === "run") {
@@ -185,48 +111,12 @@ describe("CLI run", () => {
     }
   })
 
-  it("exits non-zero when --script is missing", async () => {
-    const backend = new DummyBackend()
-    const errors: string[] = []
-    const exitCode = await runRun(
-      ["--imds-port", "9001"],
-      backend,
-      () => {},
-      (e) => errors.push(e),
-    )
-    expect(exitCode).toBe(1)
-    expect(errors.some((e) => e.includes("--script"))).toBe(true)
-  })
-
-  it("exits non-zero when --imds-port is missing", async () => {
-    const backend = new DummyBackend()
-    const errors: string[] = []
-    const exitCode = await runRun(
-      ["--script", "foo.ts"],
-      backend,
-      () => {},
-      (e) => errors.push(e),
-    )
-    expect(exitCode).toBe(1)
-    expect(errors.some((e) => e.includes("--imds-port"))).toBe(true)
-  })
-
-  it("exits non-zero when --imds-port is not a number", async () => {
-    const backend = new DummyBackend()
-    const errors: string[] = []
-    const exitCode = await runRun(
-      ["--script", "foo.ts", "--imds-port", "notaport"],
-      backend,
-      () => {},
-      (e) => errors.push(e),
-    )
-    expect(exitCode).toBe(1)
-    expect(errors.some((e) => e.includes("--imds-port"))).toBe(true)
-  })
-
   it("passes script args after --", async () => {
     const backend = new DummyBackend()
-    await runRun(["--script", "foo.ts", "--imds-port", "9001", "--", "arg1", "arg2"], backend)
+    await runRun(
+      { script: "foo.ts", imdsPort: 9001, region: "us-west-2", "--": ["arg1", "arg2"] },
+      backend,
+    )
     expect(backend.calls[0]).toMatchObject({
       method: "run",
       opts: { scriptArgs: ["arg1", "arg2"] },
