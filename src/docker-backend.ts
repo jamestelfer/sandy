@@ -1,6 +1,5 @@
 import * as path from "node:path"
 import * as fs from "node:fs/promises"
-import * as os from "node:os"
 import { spawn } from "node:child_process"
 import { Writable } from "node:stream"
 import { makeTmpDir } from "./tmpdir"
@@ -68,7 +67,9 @@ ENTRYPOINT ["pnpm", "run", "-s", "entrypoint"]
 `
 }
 
-export async function defaultBuildContextFactory(): Promise<NodeJS.ReadableStream & AsyncDisposable> {
+export async function defaultBuildContextFactory(): Promise<
+  NodeJS.ReadableStream & AsyncDisposable
+> {
   const staging = await makeTmpDir("sandy-docker-build-")
   await fs.mkdir(`${staging.path}/bootstrap`, { recursive: true })
   await fs.mkdir(`${staging.path}/bootstrap/certs`, { recursive: true })
@@ -100,7 +101,9 @@ export async function defaultBuildContextFactory(): Promise<NodeJS.ReadableStrea
   // Attach staging dir cleanup to the stream so the caller can dispose after
   // Docker finishes reading — no need to buffer the tar in memory.
   const proc = spawn("tar", ["-c", "."], { cwd: staging.path })
-  if (!proc.stdout) { throw new Error("tar process has no stdout") }
+  if (!proc.stdout) {
+    throw new Error("tar process has no stdout")
+  }
   return Object.assign(proc.stdout, { [Symbol.asyncDispose]: () => staging[Symbol.asyncDispose]() })
 }
 
@@ -130,11 +133,17 @@ export class DockerBackend implements Backend {
     await new Promise<void>((resolve, reject) => {
       stream.on("data", (chunk: Buffer) => {
         for (const line of chunk.toString().split("\n")) {
-          if (!line.trim()) { continue }
+          if (!line.trim()) {
+            continue
+          }
           try {
             const msg = JSON.parse(line) as { stream?: string; error?: string }
-            if (msg.stream) { process.stderr.write(msg.stream) }
-            if (msg.error) { reject(new Error(`docker build: ${msg.error.trim()}`)) }
+            if (msg.stream) {
+              process.stderr.write(msg.stream)
+            }
+            if (msg.error) {
+              reject(new Error(`docker build: ${msg.error.trim()}`))
+            }
           } catch {
             // non-JSON line, ignore
           }
