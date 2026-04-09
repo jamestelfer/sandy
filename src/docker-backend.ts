@@ -2,7 +2,7 @@ import * as path from "node:path"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import { spawn } from "node:child_process"
-import { Readable, Writable } from "node:stream"
+import { Writable } from "node:stream"
 import { makeTmpDir } from "./tmpdir"
 import type { Backend } from "./backend"
 import type { RunOptions, RunResult } from "./types"
@@ -53,7 +53,7 @@ export interface DockerClientLike {
   }
 }
 
-export type BuildContextFactory = () => Promise<NodeJS.ReadableStream>
+export type BuildContextFactory = () => Promise<NodeJS.ReadableStream & AsyncDisposable>
 
 const IMAGE_NAME = "sandy:latest"
 const VM_BOOTSTRAP = "/tmp/bootstrap"
@@ -68,8 +68,8 @@ ENTRYPOINT ["pnpm", "run", "-s", "entrypoint"]
 `
 }
 
-export async function defaultBuildContextFactory(): Promise<NodeJS.ReadableStream> {
-  await using staging = await makeTmpDir("sandy-docker-build-")
+export async function defaultBuildContextFactory(): Promise<NodeJS.ReadableStream & AsyncDisposable> {
+  const staging = await makeTmpDir("sandy-docker-build-")
   await fs.mkdir(`${staging.path}/bootstrap`, { recursive: true })
   await fs.mkdir(`${staging.path}/bootstrap/certs`, { recursive: true })
 
@@ -97,16 +97,11 @@ export async function defaultBuildContextFactory(): Promise<NodeJS.ReadableStrea
     process.stderr.write("sandy: Netskope certificate not found, skipping\n")
   }
 
-  // Buffer the tar output so the staging dir can be cleaned up before returning.
+  // Attach staging dir cleanup to the stream so the caller can dispose after
+  // Docker finishes reading — no need to buffer the tar in memory.
   const proc = spawn("tar", ["-c", "."], { cwd: staging.path })
   if (!proc.stdout) { throw new Error("tar process has no stdout") }
-  const chunks: Buffer[] = []
-  await new Promise<void>((resolve, reject) => {
-    proc.stdout!.on("data", (chunk: Buffer) => chunks.push(chunk))
-    proc.stdout!.on("end", resolve)
-    proc.stdout!.on("error", reject)
-  })
-  return Readable.from(Buffer.concat(chunks))
+  return Object.assign(proc.stdout, { [Symbol.asyncDispose]: () => staging[Symbol.asyncDispose]() })
 }
 
 export class DockerBackend implements Backend {
@@ -129,7 +124,7 @@ export class DockerBackend implements Backend {
   }
 
   async imageCreate(): Promise<void> {
-    const context = await this.buildContext()
+    await using context = await this.buildContext()
     const stream = await this.docker.buildImage(context, { t: IMAGE_NAME })
     // Parse build output JSON and surface Docker errors
     await new Promise<void>((resolve, reject) => {

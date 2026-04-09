@@ -9,7 +9,8 @@ import type {
   ContainerLike,
 } from "./docker-backend"
 
-const fakeBuildContext: BuildContextFactory = async () => Readable.from([])
+const fakeBuildContext: BuildContextFactory = async () =>
+  Object.assign(Readable.from([]), { [Symbol.asyncDispose]: async () => {} })
 
 function makeImageFake(config: { inspectThrows?: boolean } = {}): {
   image: ImageLike
@@ -116,7 +117,9 @@ describe("defaultBuildContextFactory", () => {
     const contextStream = await defaultBuildContextFactory()
 
     const tarList = spawn("tar", ["-t"])
-    if (!tarList.stdin) { throw new Error("tar stdin is null") }
+    if (!tarList.stdin) {
+      throw new Error("tar stdin is null")
+    }
     contextStream.pipe(tarList.stdin)
 
     const chunks: Buffer[] = []
