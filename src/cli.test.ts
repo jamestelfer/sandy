@@ -3,6 +3,7 @@ import { mkdirSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { runConfig } from "./cli/config"
 import { runImage } from "./cli/image"
+import { runSnapshot } from "./cli/snapshot"
 import { runCheck } from "./cli/check"
 import { runRun } from "./cli/run"
 import { runMcp } from "./cli/mcp"
@@ -70,6 +71,35 @@ describe("CLI image", () => {
     const backend = new DummyBackend()
     const errors: string[] = []
     const exitCode = await runImage(
+      ["unknown"],
+      backend,
+      () => {},
+      (e) => errors.push(e),
+    )
+    expect(exitCode).toBe(1)
+    expect(errors.length).toBeGreaterThan(0)
+  })
+})
+
+describe("CLI snapshot", () => {
+  it("create dispatches to backend.imageCreate()", async () => {
+    const backend = new DummyBackend()
+    const exitCode = await runSnapshot(["create"], backend)
+    expect(exitCode).toBe(0)
+    expect(backend.calls).toEqual([{ method: "imageCreate" }])
+  })
+
+  it("delete dispatches to backend.imageDelete()", async () => {
+    const backend = new DummyBackend()
+    const exitCode = await runSnapshot(["delete"], backend)
+    expect(exitCode).toBe(0)
+    expect(backend.calls).toEqual([{ method: "imageDelete" }])
+  })
+
+  it("unknown subcommand exits non-zero", async () => {
+    const backend = new DummyBackend()
+    const errors: string[] = []
+    const exitCode = await runSnapshot(
       ["unknown"],
       backend,
       () => {},

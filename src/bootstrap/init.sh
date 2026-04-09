@@ -25,6 +25,11 @@ else
   echo "No Netskope certificate found, skipping"
 fi
 
+# --- Prerequisites ---
+apt-get update -qq
+apt-get install -y --no-install-recommends ca-certificates curl xz-utils
+rm -rf /var/lib/apt/lists/*
+
 # --- Node.js ---
 NODE_VERSION=v24.14.1
 NODE_ARCH=linux-arm64

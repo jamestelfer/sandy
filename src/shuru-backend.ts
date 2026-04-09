@@ -1,5 +1,6 @@
 import * as path from "node:path"
 import * as fs from "node:fs/promises"
+import { makeTmpDir } from "./tmpdir"
 import type { StartOptions } from "@superhq/shuru"
 import { Sandbox } from "@superhq/shuru"
 import type { Backend } from "./backend"
@@ -31,10 +32,7 @@ export type ShellExecutor = (
 ) => Promise<{ stdout: string; stderr: string; exitCode: number }>
 
 export interface SandboxLike {
-  spawn(
-    cmd: string[],
-    opts?: { env?: Record<string, string> },
-  ): Promise<SpawnHandleLike>
+  spawn(cmd: string[], opts?: { env?: Record<string, string> }): Promise<SpawnHandleLike>
   stop(): Promise<void>
 }
 
@@ -48,10 +46,8 @@ export type SandboxFactory = (opts: StartOptions) => Promise<SandboxLike>
 const defaultSandboxFactory: SandboxFactory = async (opts) => Sandbox.start(opts)
 
 const CHECKPOINT_NAME = "sandy"
-const NETSKOPE_CERT_PATH =
-  "/Library/Application Support/Netskope/STAgent/data/nscacert.pem"
+const NETSKOPE_CERT_PATH = "/Library/Application Support/Netskope/STAgent/data/nscacert.pem"
 const VM_BOOTSTRAP = "/tmp/bootstrap"
-const STAGING_DIR = ".sandy/bootstrap"
 
 const defaultExecutor: ShellExecutor = async (cmd, opts) => {
   const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe", cwd: opts?.cwd })
@@ -81,26 +77,31 @@ export class ShuruBackend implements Backend {
   }
 
   async imageCreate(): Promise<void> {
-    await fs.mkdir(STAGING_DIR, { recursive: true })
-    await fs.mkdir(`${STAGING_DIR}/certs`, { recursive: true })
+    await using staging = await makeTmpDir("sandy-shuru-bootstrap-")
+    await fs.mkdir(`${staging.path}/certs`, { recursive: true })
+
+    // Use Bun.file().arrayBuffer() instead of fs.copyFile() so this works when
+    // the binary is compiled — embedded bunfs paths are not accessible to the OS.
+    async function copyEmbedded(src: string, dest: string): Promise<void> {
+      const buf = await Bun.file(src).arrayBuffer()
+      await fs.writeFile(dest, new Uint8Array(buf))
+    }
 
     await Promise.all([
-      fs.copyFile(initShPath, `${STAGING_DIR}/init.sh`),
-      fs.copyFile(nodeCertsShPath, `${STAGING_DIR}/node_certs.sh`),
-      fs.copyFile(bootstrapPackageJsonPath, `${STAGING_DIR}/package.json`),
-      fs.copyFile(bootstrapTsconfigJsonPath, `${STAGING_DIR}/tsconfig.json`),
-      fs.copyFile(entrypointPath, `${STAGING_DIR}/entrypoint`),
+      copyEmbedded(initShPath, `${staging.path}/init.sh`),
+      copyEmbedded(nodeCertsShPath, `${staging.path}/node_certs.sh`),
+      copyEmbedded(bootstrapPackageJsonPath, `${staging.path}/package.json`),
+      copyEmbedded(bootstrapTsconfigJsonPath, `${staging.path}/tsconfig.json`),
+      copyEmbedded(entrypointPath, `${staging.path}/entrypoint`),
     ])
 
     // Copy Netskope cert if present
     try {
-      await fs.copyFile(NETSKOPE_CERT_PATH, `${STAGING_DIR}/certs/nscacert.pem`)
+      await fs.copyFile(NETSKOPE_CERT_PATH, `${staging.path}/certs/nscacert.pem`)
       process.stderr.write("sandy: Netskope certificate staged for installation\n")
     } catch {
       process.stderr.write("sandy: Netskope certificate not found, skipping\n")
     }
-
-    const stagingAbsPath = path.resolve(STAGING_DIR)
 
     await this.executor([
       "shuru",
@@ -109,7 +110,7 @@ export class ShuruBackend implements Backend {
       CHECKPOINT_NAME,
       "--allow-net",
       "--mount",
-      `${stagingAbsPath}:${VM_BOOTSTRAP}`,
+      `${staging.path}:${VM_BOOTSTRAP}`,
       "--",
       "sh",
       `${VM_BOOTSTRAP}/init.sh`,
@@ -146,13 +147,7 @@ export class ShuruBackend implements Backend {
       [ENV_SANDY_OUTPUT]: VM_OUTPUT_DIR,
     }
 
-    const spawnCmd = [
-      "sh",
-      "-l",
-      "/workspace/entrypoint",
-      compiledPath,
-      ...(opts.scriptArgs ?? []),
-    ]
+    const spawnCmd = ["sh", "-l", "/workspace/entrypoint", compiledPath, ...(opts.scriptArgs ?? [])]
 
     try {
       const proc = await sb.spawn(spawnCmd, { env: spawnEnv })

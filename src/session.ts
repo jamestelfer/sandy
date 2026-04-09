@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import { humanId } from "human-id"
 
 export interface Session {
@@ -9,7 +9,7 @@ export interface Session {
 
 export async function createSession(name?: string): Promise<Session> {
   const sessionName = name ?? humanId({ separator: "-", capitalize: false })
-  const dir = join(".sandy", sessionName)
+  const dir = resolve(join(".sandy", sessionName))
 
   mkdirSync(dir, { recursive: true })
   ensureGitignore()

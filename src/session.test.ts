@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import { createSession } from "./session"
 
 const tmpDir = join(import.meta.dir, "../.tmp-test-session")
@@ -49,7 +49,7 @@ describe("createSession", () => {
   it("uses the provided name when given", async () => {
     const { name, dir } = await createSession("my-session")
     expect(name).toBe("my-session")
-    expect(dir).toBe(join(".sandy", "my-session"))
+    expect(dir).toBe(resolve(tmpDir, ".sandy", "my-session"))
     expect(existsSync(join(tmpDir, ".sandy", "my-session"))).toBe(true)
   })
 })

@@ -1,7 +1,8 @@
 import * as path from "node:path"
 import * as fs from "node:fs/promises"
-import * as os from "node:os"
+import { spawn } from "node:child_process"
 import { Writable } from "node:stream"
+import { makeTmpDir } from "./tmpdir"
 import type { Backend } from "./backend"
 import type { RunOptions, RunResult } from "./types"
 import {
@@ -51,7 +52,7 @@ export interface DockerClientLike {
   }
 }
 
-export type BuildContextFactory = () => Promise<NodeJS.ReadableStream>
+export type BuildContextFactory = () => Promise<NodeJS.ReadableStream & AsyncDisposable>
 
 const IMAGE_NAME = "sandy:latest"
 const VM_BOOTSTRAP = "/tmp/bootstrap"
@@ -66,30 +67,44 @@ ENTRYPOINT ["pnpm", "run", "-s", "entrypoint"]
 `
 }
 
-async function defaultBuildContextFactory(): Promise<NodeJS.ReadableStream> {
-  const stagingDir = await fs.mkdtemp(path.join(os.tmpdir(), "sandy-docker-build-"))
-  await fs.mkdir(`${stagingDir}/bootstrap`, { recursive: true })
-  await fs.mkdir(`${stagingDir}/bootstrap/certs`, { recursive: true })
+export async function defaultBuildContextFactory(): Promise<
+  NodeJS.ReadableStream & AsyncDisposable
+> {
+  const staging = await makeTmpDir("sandy-docker-build-")
+  await fs.mkdir(`${staging.path}/bootstrap`, { recursive: true })
+  await fs.mkdir(`${staging.path}/bootstrap/certs`, { recursive: true })
+
+  // Use Bun.file().arrayBuffer() instead of fs.copyFile() so this works when
+  // the binary is compiled — embedded bunfs paths are not accessible to the OS.
+  async function copyEmbedded(src: string, dest: string): Promise<void> {
+    const buf = await Bun.file(src).arrayBuffer()
+    await fs.writeFile(dest, new Uint8Array(buf))
+  }
 
   await Promise.all([
-    fs.copyFile(initShPath, `${stagingDir}/bootstrap/init.sh`),
-    fs.copyFile(nodeCertsShPath, `${stagingDir}/bootstrap/node_certs.sh`),
-    fs.copyFile(bootstrapPackageJsonPath, `${stagingDir}/bootstrap/package.json`),
-    fs.copyFile(bootstrapTsconfigJsonPath, `${stagingDir}/bootstrap/tsconfig.json`),
-    fs.copyFile(entrypointPath, `${stagingDir}/bootstrap/entrypoint`),
-    fs.writeFile(`${stagingDir}/Dockerfile`, generateDockerfile()),
+    copyEmbedded(initShPath, `${staging.path}/bootstrap/init.sh`),
+    copyEmbedded(nodeCertsShPath, `${staging.path}/bootstrap/node_certs.sh`),
+    copyEmbedded(bootstrapPackageJsonPath, `${staging.path}/bootstrap/package.json`),
+    copyEmbedded(bootstrapTsconfigJsonPath, `${staging.path}/bootstrap/tsconfig.json`),
+    copyEmbedded(entrypointPath, `${staging.path}/bootstrap/entrypoint`),
+    fs.writeFile(`${staging.path}/Dockerfile`, generateDockerfile()),
   ])
 
   // Copy Netskope cert if present
   try {
-    await fs.copyFile(NETSKOPE_CERT_PATH, `${stagingDir}/bootstrap/certs/nscacert.pem`)
+    await fs.copyFile(NETSKOPE_CERT_PATH, `${staging.path}/bootstrap/certs/nscacert.pem`)
     process.stderr.write("sandy: Netskope certificate staged for installation\n")
   } catch {
     process.stderr.write("sandy: Netskope certificate not found, skipping\n")
   }
 
-  const proc = Bun.spawn(["tar", "-c", "."], { cwd: stagingDir, stdout: "pipe", stderr: "pipe" })
-  return proc.stdout as unknown as NodeJS.ReadableStream
+  // Attach staging dir cleanup to the stream so the caller can dispose after
+  // Docker finishes reading — no need to buffer the tar in memory.
+  const proc = spawn("tar", ["-c", "."], { cwd: staging.path })
+  if (!proc.stdout) {
+    throw new Error("tar process has no stdout")
+  }
+  return Object.assign(proc.stdout, { [Symbol.asyncDispose]: () => staging[Symbol.asyncDispose]() })
 }
 
 export class DockerBackend implements Backend {
@@ -112,11 +127,28 @@ export class DockerBackend implements Backend {
   }
 
   async imageCreate(): Promise<void> {
-    const context = await this.buildContext()
+    await using context = await this.buildContext()
     const stream = await this.docker.buildImage(context, { t: IMAGE_NAME })
-    // Drain the build output stream to completion
+    // Parse build output JSON and surface Docker errors
     await new Promise<void>((resolve, reject) => {
-      stream.on("data", () => {})
+      stream.on("data", (chunk: Buffer) => {
+        for (const line of chunk.toString().split("\n")) {
+          if (!line.trim()) {
+            continue
+          }
+          try {
+            const msg = JSON.parse(line) as { stream?: string; error?: string }
+            if (msg.stream) {
+              process.stderr.write(msg.stream)
+            }
+            if (msg.error) {
+              reject(new Error(`docker build: ${msg.error.trim()}`))
+            }
+          } catch {
+            // non-JSON line, ignore
+          }
+        }
+      })
       stream.on("end", resolve)
       stream.on("error", reject)
     })
