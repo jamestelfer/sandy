@@ -1,21 +1,37 @@
+import type { CommandModule } from "yargs"
 import { readConfig, writeConfig } from "../config"
 
+export interface ConfigArgs {
+  docker: boolean
+  shuru: boolean
+}
+
 export async function runConfig(
-  args: string[],
+  argv: ConfigArgs,
   print: (line: string) => void = console.log,
-  _printErr: (line: string) => void = console.error,
-): Promise<number> {
-  if (args.includes("--docker")) {
+): Promise<void> {
+  if (argv.docker) {
     await writeConfig({ backend: "docker" })
     print("backend: docker")
-    return 0
+    return
   }
-  if (args.includes("--shuru")) {
+  if (argv.shuru) {
     await writeConfig({ backend: "shuru" })
     print("backend: shuru")
-    return 0
+    return
   }
   const config = await readConfig()
   print(`backend: ${config.backend}`)
-  return 0
 }
+
+const configCommand: CommandModule = {
+  command: "config",
+  describe: "Show or set the backend",
+  builder: (y) =>
+    y
+      .option("docker", { type: "boolean" })
+      .option("shuru", { type: "boolean" })
+      .conflicts("docker", "shuru"),
+  handler: async (argv) => runConfig(argv as unknown as ConfigArgs),
+}
+export default configCommand

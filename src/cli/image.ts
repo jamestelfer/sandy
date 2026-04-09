@@ -1,23 +1,36 @@
+import type { CommandModule } from "yargs"
 import type { Backend } from "../backend"
 
+export interface ImageArgs {
+  action: "create" | "delete"
+}
+
 export async function runImage(
-  args: string[],
+  argv: ImageArgs,
   backend: Backend,
   print: (line: string) => void = console.log,
-  printErr: (line: string) => void = console.error,
-): Promise<number> {
-  const subcommand = args[0]
-  if (subcommand === "create") {
+): Promise<void> {
+  if (argv.action === "create") {
     await backend.imageCreate()
     print("image created")
-    return 0
+    return
   }
-  if (subcommand === "delete") {
+  if (argv.action === "delete") {
     await backend.imageDelete()
     print("image deleted")
-    return 0
+    return
   }
-  printErr(`sandy image: unknown subcommand: ${subcommand ?? "(none)"}`)
-  printErr("Usage: sandy image create|delete")
-  return 1
+}
+
+export function makeImageCommand(backend: Backend): CommandModule {
+  return {
+    command: ["image <action>", "snapshot <action>"],
+    describe: "Manage the sandbox image",
+    builder: (y) =>
+      y.positional("action", {
+        choices: ["create", "delete"] as const,
+        demandOption: true,
+      }),
+    handler: async (argv) => runImage(argv as unknown as ImageArgs, backend),
+  }
 }

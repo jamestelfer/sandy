@@ -20,9 +20,11 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@superhq/shuru": "^0.4.2",
     "dockerode": "^4.0.10",
-    "human-id": "^4.0.0"
+    "human-id": "^4.0.0",
+    "yargs": "^18.0.0"
   },
   "devDependencies": {
-    "@types/dockerode": "^4.0.1"
+    "@types/dockerode": "^4.0.1",
+    "@types/yargs": "^17.0.35"
   }
 }
