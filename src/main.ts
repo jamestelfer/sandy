@@ -4,8 +4,9 @@ import { runImage } from "./cli/image"
 import { runCheck } from "./cli/check"
 import { runRun } from "./cli/run"
 import { runMcp } from "./cli/mcp"
-import { DummyBackend } from "./dummy-backend"
 import { ShuruBackend } from "./shuru-backend"
+import { DockerBackend } from "./docker-backend"
+import Docker from "dockerode"
 import type { Backend } from "./backend"
 
 function usage(): void {
@@ -26,8 +27,7 @@ async function createBackend(): Promise<Backend> {
     case "shuru":
       return new ShuruBackend()
     case "docker":
-      // Phase 5: DockerBackend
-      return new DummyBackend()
+      return new DockerBackend(new Docker())
   }
 }
 
