@@ -32,10 +32,12 @@ function makeDockerFake(config: {
   buildImageCalls: Array<{ opts: object }>
   createContainerCalls: Array<{ opts: object }>
   imageFake: ReturnType<typeof makeImageFake>
+  lastContainer: () => ReturnType<typeof makeContainerFake>
 } {
   const buildImageCalls: Array<{ opts: object }> = []
   const createContainerCalls: Array<{ opts: object }> = []
   const imageFake = makeImageFake(config.imageConfig)
+  let lastContainer: ReturnType<typeof makeContainerFake> | null = null
 
   const docker: DockerClientLike = {
     getImage: (_name: string) => imageFake.image,
@@ -49,7 +51,8 @@ function makeDockerFake(config: {
     },
     createContainer: async (opts: object): Promise<ContainerLike> => {
       createContainerCalls.push({ opts })
-      return makeContainerFake(config.containerConfig)
+      lastContainer = makeContainerFake(config.containerConfig)
+      return lastContainer
     },
     modem: {
       // Fake demuxStream: pipe directly to stdout (no Docker multiplexing header in test)
@@ -68,14 +71,16 @@ function makeDockerFake(config: {
     buildImageCalls,
     createContainerCalls,
     imageFake,
+    lastContainer: () => lastContainer!,
   }
 }
 
 function makeContainerFake(config: {
   exitCode?: number
   stdoutLines?: string[]
-} = {}): ContainerLike {
-  const container: ContainerLike = {
+} = {}): ContainerLike & { removeCalls: number } {
+  let removeCalls = 0
+  const container = {
     id: "test-container-id",
     start: async () => {},
     logs: async (): Promise<NodeJS.ReadableStream> => {
@@ -84,7 +89,12 @@ function makeContainerFake(config: {
       return Readable.from(lines.map((l) => `${l}\n`).join(""))
     },
     wait: async () => ({ StatusCode: config.exitCode ?? 0 }),
-    remove: async () => {},
+    remove: async () => {
+      removeCalls++
+    },
+    get removeCalls() {
+      return removeCalls
+    },
   }
   return container
 }
@@ -205,6 +215,30 @@ describe("DockerBackend.run", () => {
     expect(result.stdout).toContain("line one")
     expect(result.stdout).toContain("line two")
     expect(result.exitCode).toBe(2)
+  })
+
+  test("removes container after run completes", async () => {
+    const { docker, lastContainer } = makeDockerFake()
+    const backend = new DockerBackend(docker, fakeBuildContext)
+    await backend.run(baseRunOpts, () => {})
+    expect(lastContainer().removeCalls).toBe(1)
+  })
+
+  test("logs container ID to stderr on non-zero exit", async () => {
+    const { docker } = makeDockerFake({ containerConfig: { exitCode: 1 } })
+    const backend = new DockerBackend(docker, fakeBuildContext)
+    const stderrOutput: string[] = []
+    const originalWrite = process.stderr.write.bind(process.stderr)
+    process.stderr.write = (chunk: string | Uint8Array) => {
+      stderrOutput.push(chunk.toString())
+      return true
+    }
+    try {
+      await backend.run(baseRunOpts, () => {})
+    } finally {
+      process.stderr.write = originalWrite
+    }
+    expect(stderrOutput.join("")).toContain("test-container-id")
   })
 })
 
