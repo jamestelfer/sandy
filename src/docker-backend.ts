@@ -1,5 +1,6 @@
 import * as path from "node:path"
 import * as fs from "node:fs/promises"
+import { Writable } from "node:stream"
 import type { Backend } from "./backend"
 import type { RunOptions, RunResult } from "./types"
 import {
@@ -141,10 +142,7 @@ export class DockerBackend implements Backend {
       Cmd: ["sh", "-l", "/workspace/entrypoint", compiledPath, ...(opts.scriptArgs ?? [])],
       Env: Object.entries(env).map(([k, v]) => `${k}=${v}`),
       HostConfig: {
-        Binds: [
-          `${scriptDir}:${VM_SCRIPTS_DIR}:ro`,
-          `${opts.sessionDir}:${VM_OUTPUT_DIR}:rw`,
-        ],
+        Binds: [`${scriptDir}:${VM_SCRIPTS_DIR}:ro`, `${opts.sessionDir}:${VM_OUTPUT_DIR}:rw`],
         ExtraHosts: ["host.docker.internal:host-gateway"],
       },
     })
@@ -157,8 +155,6 @@ export class DockerBackend implements Backend {
     const logStream = await container.logs({ follow: true, stdout: true, stderr: true })
 
     await new Promise<void>((resolve) => {
-      const { Writable } = require("node:stream") as typeof import("node:stream")
-
       const stdoutWriter = new Writable({
         write(chunk: Buffer, _enc: string, cb: () => void) {
           const text = chunk.toString()

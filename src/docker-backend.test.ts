@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import { Readable } from "node:stream"
 import { DockerBackend, generateDockerfile } from "./docker-backend"
-import type { BuildContextFactory, DockerClientLike, ImageLike, ContainerLike } from "./docker-backend"
+import type {
+  BuildContextFactory,
+  DockerClientLike,
+  ImageLike,
+  ContainerLike,
+} from "./docker-backend"
 
 const fakeBuildContext: BuildContextFactory = async () => Readable.from([])
 
@@ -24,10 +29,12 @@ function makeImageFake(config: { inspectThrows?: boolean } = {}): {
   return { image, removeCalls }
 }
 
-function makeDockerFake(config: {
-  imageConfig?: { inspectThrows?: boolean }
-  containerConfig?: { exitCode?: number; stdoutLines?: string[] }
-} = {}): {
+function makeDockerFake(
+  config: {
+    imageConfig?: { inspectThrows?: boolean }
+    containerConfig?: { exitCode?: number; stdoutLines?: string[] }
+  } = {},
+): {
   docker: DockerClientLike
   buildImageCalls: Array<{ opts: object }>
   createContainerCalls: Array<{ opts: object }>
@@ -71,14 +78,18 @@ function makeDockerFake(config: {
     buildImageCalls,
     createContainerCalls,
     imageFake,
-    lastContainer: () => lastContainer!,
+    lastContainer: () => {
+      if (!lastContainer) {
+        throw new Error("createContainer was not called")
+      }
+      return lastContainer
+    },
   }
 }
 
-function makeContainerFake(config: {
-  exitCode?: number
-  stdoutLines?: string[]
-} = {}): ContainerLike & { removeCalls: number } {
+function makeContainerFake(
+  config: { exitCode?: number; stdoutLines?: string[] } = {},
+): ContainerLike & { removeCalls: number } {
   let removeCalls = 0
   const container = {
     id: "test-container-id",
