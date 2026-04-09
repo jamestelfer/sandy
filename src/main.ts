@@ -15,6 +15,7 @@ function usage(): void {
 Commands:
   config [--docker|--shuru]           Show or set the backend
   image create|delete                 Manage the sandbox image
+  snapshot create|delete              Synonym for image
   check baseline|connect              Run health checks
   run --script <path> --imds-port <n> Run a TypeScript script
   mcp                                 Start the MCP server
@@ -52,7 +53,7 @@ async function main(): Promise<void> {
     process.exit(await runMcp(backend))
   }
 
-  if (command === "image") {
+  if (command === "image" || command === "snapshot") {
     process.exit(await runImage(rest, backend))
   }
   if (command === "check") {
