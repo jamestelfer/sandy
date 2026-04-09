@@ -71,12 +71,19 @@ async function defaultBuildContextFactory(): Promise<NodeJS.ReadableStream> {
   await fs.mkdir(`${stagingDir}/bootstrap`, { recursive: true })
   await fs.mkdir(`${stagingDir}/bootstrap/certs`, { recursive: true })
 
+  // Use Bun.file().arrayBuffer() instead of fs.copyFile() so this works when
+  // the binary is compiled — embedded bunfs paths are not accessible to the OS.
+  async function copyEmbedded(src: string, dest: string): Promise<void> {
+    const buf = await Bun.file(src).arrayBuffer()
+    await fs.writeFile(dest, new Uint8Array(buf))
+  }
+
   await Promise.all([
-    fs.copyFile(initShPath, `${stagingDir}/bootstrap/init.sh`),
-    fs.copyFile(nodeCertsShPath, `${stagingDir}/bootstrap/node_certs.sh`),
-    fs.copyFile(bootstrapPackageJsonPath, `${stagingDir}/bootstrap/package.json`),
-    fs.copyFile(bootstrapTsconfigJsonPath, `${stagingDir}/bootstrap/tsconfig.json`),
-    fs.copyFile(entrypointPath, `${stagingDir}/bootstrap/entrypoint`),
+    copyEmbedded(initShPath, `${stagingDir}/bootstrap/init.sh`),
+    copyEmbedded(nodeCertsShPath, `${stagingDir}/bootstrap/node_certs.sh`),
+    copyEmbedded(bootstrapPackageJsonPath, `${stagingDir}/bootstrap/package.json`),
+    copyEmbedded(bootstrapTsconfigJsonPath, `${stagingDir}/bootstrap/tsconfig.json`),
+    copyEmbedded(entrypointPath, `${stagingDir}/bootstrap/entrypoint`),
     fs.writeFile(`${stagingDir}/Dockerfile`, generateDockerfile()),
   ])
 

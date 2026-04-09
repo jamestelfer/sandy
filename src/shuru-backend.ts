@@ -84,12 +84,19 @@ export class ShuruBackend implements Backend {
     await fs.mkdir(STAGING_DIR, { recursive: true })
     await fs.mkdir(`${STAGING_DIR}/certs`, { recursive: true })
 
+    // Use Bun.file().arrayBuffer() instead of fs.copyFile() so this works when
+    // the binary is compiled — embedded bunfs paths are not accessible to the OS.
+    async function copyEmbedded(src: string, dest: string): Promise<void> {
+      const buf = await Bun.file(src).arrayBuffer()
+      await fs.writeFile(dest, new Uint8Array(buf))
+    }
+
     await Promise.all([
-      fs.copyFile(initShPath, `${STAGING_DIR}/init.sh`),
-      fs.copyFile(nodeCertsShPath, `${STAGING_DIR}/node_certs.sh`),
-      fs.copyFile(bootstrapPackageJsonPath, `${STAGING_DIR}/package.json`),
-      fs.copyFile(bootstrapTsconfigJsonPath, `${STAGING_DIR}/tsconfig.json`),
-      fs.copyFile(entrypointPath, `${STAGING_DIR}/entrypoint`),
+      copyEmbedded(initShPath, `${STAGING_DIR}/init.sh`),
+      copyEmbedded(nodeCertsShPath, `${STAGING_DIR}/node_certs.sh`),
+      copyEmbedded(bootstrapPackageJsonPath, `${STAGING_DIR}/package.json`),
+      copyEmbedded(bootstrapTsconfigJsonPath, `${STAGING_DIR}/tsconfig.json`),
+      copyEmbedded(entrypointPath, `${STAGING_DIR}/entrypoint`),
     ])
 
     // Copy Netskope cert if present

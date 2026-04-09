@@ -1,4 +1,7 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import * as fs from "node:fs/promises"
+import * as os from "node:os"
+import * as path from "node:path"
 import type { StartOptions } from "@superhq/shuru"
 import { ShuruBackend } from "./shuru-backend"
 import type { ShellExecutor, SandboxFactory } from "./shuru-backend"
@@ -182,11 +185,43 @@ describe("ShuruBackend.run", () => {
 })
 
 describe("ShuruBackend.imageCreate", () => {
+  let tmpDir: string
+  let originalCwd: string
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "sandy-shuru-test-"))
+    originalCwd = process.cwd()
+    process.chdir(tmpDir)
+  })
+
+  afterEach(async () => {
+    process.chdir(originalCwd)
+    await fs.rm(tmpDir, { recursive: true, force: true })
+  })
+
   test("does not throw when Netskope cert is absent", async () => {
     const { executor } = makeExecutor()
     const backend = new ShuruBackend(executor)
     // Cert file doesn't exist — must not throw, just skip
     await expect(backend.imageCreate()).resolves.toBeUndefined()
+  })
+
+  test("writes all bootstrap files to the staging directory with non-zero size", async () => {
+    const { executor } = makeExecutor()
+    const backend = new ShuruBackend(executor)
+    await backend.imageCreate()
+
+    const bootstrapDir = path.join(tmpDir, ".sandy/bootstrap")
+    for (const name of [
+      "init.sh",
+      "node_certs.sh",
+      "package.json",
+      "tsconfig.json",
+      "entrypoint",
+    ]) {
+      const s = await fs.stat(path.join(bootstrapDir, name))
+      expect(s.size).toBeGreaterThan(0)
+    }
   })
 
   test("calls shuru checkpoint create sandy with --allow-net and bootstrap mount", async () => {
