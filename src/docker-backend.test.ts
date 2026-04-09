@@ -152,6 +152,25 @@ describe("DockerBackend.run", () => {
     const env = (createContainerCalls[0]?.opts as ContainerOpts)?.Env ?? []
     expect(env).toContain("AWS_EC2_METADATA_SERVICE_ENDPOINT=http://host.docker.internal:9001")
   })
+
+  test("sets all AWS env vars in container", async () => {
+    const { docker, createContainerCalls } = makeDockerFake()
+    const backend = new DockerBackend(docker, fakeBuildContext)
+    await backend.run({ ...baseRunOpts, region: "ap-southeast-2" }, () => {})
+    const env = (createContainerCalls[0]?.opts as ContainerOpts)?.Env ?? []
+    expect(env).toContain("AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE=IPv4")
+    expect(env).toContain("AWS_EC2_METADATA_V1_DISABLED=true")
+    expect(env).toContain("AWS_REGION=ap-southeast-2")
+    expect(env).toContain("SANDY_OUTPUT=/workspace/output")
+  })
+
+  test("defaults region to us-west-2 when not provided", async () => {
+    const { docker, createContainerCalls } = makeDockerFake()
+    const backend = new DockerBackend(docker, fakeBuildContext)
+    await backend.run({ ...baseRunOpts, region: undefined }, () => {})
+    const env = (createContainerCalls[0]?.opts as ContainerOpts)?.Env ?? []
+    expect(env).toContain("AWS_REGION=us-west-2")
+  })
 })
 
 describe("DockerBackend.imageExists", () => {
