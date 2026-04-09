@@ -2,58 +2,109 @@
 #
 # Initialise the sandy VM snapshot: install certificates, Node.js,
 # pnpm, workspace dependencies, and profile.d environment scripts.
+#
+# Usage: init.sh <step>
+#   Steps: prerequisites, certificates, nodejs, pnpm, workspace,
+#          profiles, dependencies, all
 
 set -eu
 
-BOOTSTRAP=/tmp/bootstrap
-CERT_FILE="${BOOTSTRAP}/certs/nscacert.pem"
+readonly BOOTSTRAP=/tmp/bootstrap
+readonly CERT_FILE="${BOOTSTRAP}/certs/nscacert.pem"
 
-# --- Netskope MitM certificates ---
-if [ -f "${CERT_FILE}" ]; then
-  echo "Installing Netskope MitM certificates..."
-  mkdir -p /usr/local/share/ca-certificates
-  cp "${CERT_FILE}" /usr/local/share/ca-certificates/netskope.crt
+prerequisites() {
+  echo "[--> prerequisites"
+  apt-get update -qq
+  apt-get install -y --no-install-recommends ca-certificates
+  apt-get clean -y
+}
 
-  if ! command -v update-ca-certificates > /dev/null; then
-    apt-get update
-    apt-get install --yes ca-certificates
-    rm -rf /var/lib/apt/lists/*
+certificates() {
+  echo "[--> certificates"
+  if [ -f "${CERT_FILE}" ]; then
+    echo "Installing Netskope MitM certificates..."
+    mkdir -p /usr/local/share/ca-certificates
+    cp "${CERT_FILE}" /usr/local/share/ca-certificates/netskope.crt
+
+    if ! command -v update-ca-certificates > /dev/null; then
+      apt-get update
+      apt-get install --yes ca-certificates
+      rm -rf /var/lib/apt/lists/*
+    fi
+
+    update-ca-certificates
+  else
+    echo "No Netskope certificate found, skipping"
   fi
+}
 
-  update-ca-certificates
-else
-  echo "No Netskope certificate found, skipping"
-fi
+nodejs() {
+  echo "[--> nodejs"
+  readonly NODE_VERSION=v24.14.1
+  readonly NODE_ARCH=linux-arm64
+  readonly NODE_URL="https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-${NODE_ARCH}.tar.xz"
+  echo "Installing Node.js ${NODE_VERSION}..."
+  apt-get install -y --no-install-recommends curl xz-utils
+  curl -fsSL "${NODE_URL}" | tar -xJ -C /usr --strip-components=1
+  apt-get clean -y
+}
 
-# --- Prerequisites ---
-apt-get update -qq
-apt-get install -y --no-install-recommends ca-certificates curl xz-utils
-rm -rf /var/lib/apt/lists/*
+setup_pnpm() {
+  echo "[--> pnpm"
+  corepack enable
+  corepack prepare pnpm@latest --activate
+}
 
-# --- Node.js ---
-NODE_VERSION=v24.14.1
-NODE_ARCH=linux-arm64
-NODE_URL="https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-${NODE_ARCH}.tar.xz"
-echo "Installing Node.js ${NODE_VERSION}..."
-curl -fsSL "${NODE_URL}" | tar -xJ -C /usr --strip-components=1
+workspace() {
+  echo "[--> workspace"
+  mkdir -p /workspace
+  cp "${BOOTSTRAP}/package.json" /workspace/
+  cp "${BOOTSTRAP}/tsconfig.json" /workspace/
+  cp "${BOOTSTRAP}/entrypoint" /workspace/entrypoint
+  chmod +x /workspace/entrypoint
+}
 
-# --- pnpm ---
-corepack enable
-corepack prepare pnpm@latest --activate
+profiles() {
+  echo "[--> profiles"
+  for f in "${BOOTSTRAP}"/*.sh; do
+    [ "$(basename "${f}")" = "init.sh" ] && continue
+    cp "${f}" /etc/profile.d/
+  done
+}
 
-# --- Workspace ---
-mkdir -p /workspace
-cp "${BOOTSTRAP}/package.json" /workspace/
-cp "${BOOTSTRAP}/tsconfig.json" /workspace/
-cp "${BOOTSTRAP}/entrypoint" /workspace/entrypoint
-chmod +x /workspace/entrypoint
+dependencies() {
+  echo "[--> dependencies"
+  cd /workspace
+  pnpm install
+}
 
-# --- profile.d scripts ---
-for f in "${BOOTSTRAP}"/*.sh; do
-  [ "$(basename "$f")" = "init.sh" ] && continue
-  cp "$f" /etc/profile.d/
-done
+run_all() {
+  prerequisites
+  certificates
+  nodejs
+  setup_pnpm
+  workspace
+  profiles
+  dependencies
+}
 
-# --- Dependencies ---
-cd /workspace
-pnpm install
+main() {
+  case "${1:-}" in
+    prerequisites) prerequisites ;;
+    certificates) certificates ;;
+    nodejs) nodejs ;;
+    pnpm) setup_pnpm ;;
+    workspace) workspace ;;
+    profiles) profiles ;;
+    dependencies) dependencies ;;
+    all) run_all ;;
+    *)
+      echo "Usage: init.sh <step>" >&2
+      echo "  Steps: prerequisites, certificates, nodejs, pnpm," >&2
+      echo "         workspace, profiles, dependencies, all" >&2
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"
