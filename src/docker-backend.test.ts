@@ -130,13 +130,27 @@ const baseRunOpts = {
   scriptArgs: [] as string[],
 }
 
+type ContainerOpts = {
+  Image?: string
+  Env?: string[]
+  HostConfig?: { Binds?: string[]; ExtraHosts?: string[] }
+}
+
 describe("DockerBackend.run", () => {
   test("creates container with Image sandy:latest", async () => {
     const { docker, createContainerCalls } = makeDockerFake()
     const backend = new DockerBackend(docker, fakeBuildContext)
     await backend.run(baseRunOpts, () => {})
     expect(createContainerCalls.length).toBe(1)
-    expect((createContainerCalls[0]?.opts as { Image?: string })?.Image).toBe("sandy:latest")
+    expect((createContainerCalls[0]?.opts as ContainerOpts)?.Image).toBe("sandy:latest")
+  })
+
+  test("sets IMDS endpoint to http://host.docker.internal:<port>", async () => {
+    const { docker, createContainerCalls } = makeDockerFake()
+    const backend = new DockerBackend(docker, fakeBuildContext)
+    await backend.run({ ...baseRunOpts, imdsPort: 9001 }, () => {})
+    const env = (createContainerCalls[0]?.opts as ContainerOpts)?.Env ?? []
+    expect(env).toContain("AWS_EC2_METADATA_SERVICE_ENDPOINT=http://host.docker.internal:9001")
   })
 })
 
