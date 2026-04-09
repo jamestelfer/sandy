@@ -49,11 +49,14 @@ function makeDockerFake(config: { imageConfig?: { inspectThrows?: boolean } } = 
       return makeContainerFake()
     },
     modem: {
+      // Fake demuxStream: pipe directly to stdout (no Docker multiplexing header in test)
       demuxStream: (
-        _stream: NodeJS.ReadableStream,
-        _stdout: NodeJS.WritableStream,
+        stream: NodeJS.ReadableStream,
+        stdout: NodeJS.WritableStream,
         _stderr: NodeJS.WritableStream,
-      ) => {},
+      ) => {
+        stream.pipe(stdout)
+      },
     },
   }
 
@@ -116,6 +119,24 @@ describe("DockerBackend.imageDelete", () => {
     const backend = new DockerBackend(docker)
     await backend.imageDelete()
     expect(imageFake.removeCalls.length).toBe(1)
+  })
+})
+
+const baseRunOpts = {
+  scriptPath: "/home/user/scripts/hello.ts",
+  imdsPort: 9001,
+  session: "test-session",
+  sessionDir: "/home/user/.sandy/test-session",
+  scriptArgs: [] as string[],
+}
+
+describe("DockerBackend.run", () => {
+  test("creates container with Image sandy:latest", async () => {
+    const { docker, createContainerCalls } = makeDockerFake()
+    const backend = new DockerBackend(docker, fakeBuildContext)
+    await backend.run(baseRunOpts, () => {})
+    expect(createContainerCalls.length).toBe(1)
+    expect((createContainerCalls[0]?.opts as { Image?: string })?.Image).toBe("sandy:latest")
   })
 })
 

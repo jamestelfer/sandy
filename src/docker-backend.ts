@@ -122,7 +122,80 @@ export class DockerBackend implements Backend {
     })
   }
 
-  async run(_opts: RunOptions, _onProgress: (message: string) => void): Promise<RunResult> {
-    throw new Error("not implemented")
+  async run(opts: RunOptions, onProgress: (message: string) => void): Promise<RunResult> {
+    const scriptDir = path.dirname(path.resolve(opts.scriptPath))
+    const scriptName = path.basename(opts.scriptPath, ".ts")
+    const compiledPath = `/workspace/dist/scripts/${scriptName}.js`
+    const imdsEndpoint = `http://host.docker.internal:${opts.imdsPort}`
+
+    const env: Record<string, string> = {
+      [ENV_ENDPOINT]: imdsEndpoint,
+      [ENV_ENDPOINT_MODE]: ENV_ENDPOINT_MODE_VALUE,
+      [ENV_V1_DISABLED]: ENV_V1_DISABLED_VALUE,
+      [ENV_REGION]: opts.region ?? DEFAULT_REGION,
+      [ENV_SANDY_OUTPUT]: VM_OUTPUT_DIR,
+    }
+
+    const container = await this.docker.createContainer({
+      Image: IMAGE_NAME,
+      Cmd: ["sh", "-l", "/workspace/entrypoint", compiledPath, ...(opts.scriptArgs ?? [])],
+      Env: Object.entries(env).map(([k, v]) => `${k}=${v}`),
+      HostConfig: {
+        Binds: [
+          `${scriptDir}:${VM_SCRIPTS_DIR}:ro`,
+          `${opts.sessionDir}:${VM_OUTPUT_DIR}:rw`,
+        ],
+        ExtraHosts: ["host.docker.internal:host-gateway"],
+      },
+    })
+
+    let stdoutBuf = ""
+    let stderrBuf = ""
+
+    await container.start()
+
+    const logStream = await container.logs({ follow: true, stdout: true, stderr: true })
+
+    await new Promise<void>((resolve) => {
+      const { Writable } = require("node:stream") as typeof import("node:stream")
+
+      const stdoutWriter = new Writable({
+        write(chunk: Buffer, _enc: string, cb: () => void) {
+          const text = chunk.toString()
+          stdoutBuf += text
+          for (const raw of text.split("\n")) {
+            const line = raw.trimEnd()
+            if (!line) {
+              continue
+            }
+            const parsed = parseProgressLine(line)
+            if (parsed.isProgress) {
+              onProgress(parsed.message)
+            }
+          }
+          cb()
+        },
+      })
+
+      const stderrWriter = new Writable({
+        write(chunk: Buffer, _enc: string, cb: () => void) {
+          stderrBuf += chunk.toString()
+          cb()
+        },
+      })
+
+      this.docker.modem.demuxStream(logStream, stdoutWriter, stderrWriter)
+      logStream.on("end", resolve)
+    })
+
+    const { StatusCode: exitCode } = await container.wait()
+
+    if (exitCode !== 0) {
+      process.stderr.write(`sandy: container ${container.id} exited with code ${exitCode}\n`)
+    }
+
+    await container.remove()
+
+    return { exitCode, stdout: stdoutBuf, stderr: stderrBuf, outputFiles: [] }
   }
 }
