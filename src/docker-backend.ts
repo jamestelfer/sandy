@@ -1,6 +1,7 @@
 import * as path from "node:path"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
+import { spawn } from "node:child_process"
 import { Writable } from "node:stream"
 import type { Backend } from "./backend"
 import type { RunOptions, RunResult } from "./types"
@@ -66,7 +67,7 @@ ENTRYPOINT ["pnpm", "run", "-s", "entrypoint"]
 `
 }
 
-async function defaultBuildContextFactory(): Promise<NodeJS.ReadableStream> {
+export async function defaultBuildContextFactory(): Promise<NodeJS.ReadableStream> {
   const stagingDir = await fs.mkdtemp(path.join(os.tmpdir(), "sandy-docker-build-"))
   await fs.mkdir(`${stagingDir}/bootstrap`, { recursive: true })
   await fs.mkdir(`${stagingDir}/bootstrap/certs`, { recursive: true })
@@ -95,8 +96,10 @@ async function defaultBuildContextFactory(): Promise<NodeJS.ReadableStream> {
     process.stderr.write("sandy: Netskope certificate not found, skipping\n")
   }
 
-  const proc = Bun.spawn(["tar", "-c", "."], { cwd: stagingDir, stdout: "pipe", stderr: "pipe" })
-  return proc.stdout as unknown as NodeJS.ReadableStream
+  // node:child_process spawn gives a Node.js Readable directly — no conversion needed.
+  const proc = spawn("tar", ["-c", "."], { cwd: stagingDir })
+  if (!proc.stdout) throw new Error("tar process has no stdout")
+  return proc.stdout
 }
 
 export class DockerBackend implements Backend {

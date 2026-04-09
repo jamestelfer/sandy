@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
+import { spawn } from "node:child_process"
 import { Readable } from "node:stream"
-import { DockerBackend, generateDockerfile } from "./docker-backend"
+import { DockerBackend, defaultBuildContextFactory, generateDockerfile } from "./docker-backend"
 import type {
   BuildContextFactory,
   DockerClientLike,
@@ -109,6 +110,31 @@ function makeContainerFake(
   }
   return container
 }
+
+describe("defaultBuildContextFactory", () => {
+  test("produces a tar stream containing all bootstrap files and Dockerfile", async () => {
+    const contextStream = await defaultBuildContextFactory()
+
+    const tarList = spawn("tar", ["-t"])
+    if (!tarList.stdin) throw new Error("tar stdin is null")
+    contextStream.pipe(tarList.stdin)
+
+    const chunks: Buffer[] = []
+    await new Promise<void>((resolve, reject) => {
+      tarList.stdout.on("data", (c: Buffer) => chunks.push(c))
+      tarList.stdout.on("end", resolve)
+      tarList.stdout.on("error", reject)
+    })
+    const listing = Buffer.concat(chunks).toString()
+
+    expect(listing).toContain("bootstrap/init.sh")
+    expect(listing).toContain("bootstrap/node_certs.sh")
+    expect(listing).toContain("bootstrap/package.json")
+    expect(listing).toContain("bootstrap/tsconfig.json")
+    expect(listing).toContain("bootstrap/entrypoint")
+    expect(listing).toContain("Dockerfile")
+  })
+})
 
 describe("generateDockerfile", () => {
   test("COPYs bootstrap dir to /tmp/bootstrap", () => {
