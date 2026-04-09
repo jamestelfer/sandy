@@ -85,6 +85,8 @@ export interface SandyRunParams {
   args?: string[]
 }
 
+export type ProgressCallback = (message: string) => void | Promise<void>
+
 export interface SandyRunResult {
   exitCode: number
   stdout: string
@@ -158,7 +160,7 @@ export class SandyMcpServer {
 
   async handleSandyRun(
     params: SandyRunParams,
-    onProgress?: (message: string) => void,
+    onProgress?: ProgressCallback,
   ): Promise<SandyRunResult> {
     const session = await this.ensureSession()
 
@@ -171,7 +173,9 @@ export class SandyMcpServer {
       scriptArgs: params.args,
     }
 
-    const result = await this.backend.run(opts, (msg) => onProgress?.(msg))
+    const result = await this.backend.run(opts, async (msg) => {
+      await onProgress?.(msg)
+    })
 
     return {
       exitCode: result.exitCode,
