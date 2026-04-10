@@ -34,7 +34,7 @@ function makeImageFake(config: { inspectThrows?: boolean } = {}): {
 function makeDockerFake(
   config: {
     imageConfig?: { inspectThrows?: boolean }
-    containerConfig?: { exitCode?: number; stdoutLines?: string[] }
+    containerConfig?: { exitCode?: number; stdoutLines?: string[]; stderrLines?: string[] }
   } = {},
 ): {
   docker: DockerClientLike
@@ -64,13 +64,18 @@ function makeDockerFake(
       return lastContainer
     },
     modem: {
-      // Fake demuxStream: pipe directly to stdout (no Docker multiplexing header in test)
+      // Fake demuxStream: pipe stdout stream to stdout writer, write stderr lines
+      // directly to stderr writer, and end both writers when the stream ends.
       demuxStream: (
         stream: NodeJS.ReadableStream,
         stdout: NodeJS.WritableStream,
-        _stderr: NodeJS.WritableStream,
+        stderr: NodeJS.WritableStream,
       ) => {
+        for (const line of config.containerConfig?.stderrLines ?? []) {
+          stderr.write(Buffer.from(`${line}\n`))
+        }
         stream.pipe(stdout)
+        stream.on("end", () => stderr.end())
       },
     },
   }
@@ -90,7 +95,7 @@ function makeDockerFake(
 }
 
 function makeContainerFake(
-  config: { exitCode?: number; stdoutLines?: string[] } = {},
+  config: { exitCode?: number; stdoutLines?: string[]; stderrLines?: string[] } = {},
 ): ContainerLike & { removeCalls: number } {
   let removeCalls = 0
   const container = {
@@ -265,6 +270,15 @@ describe("DockerBackend.run", () => {
     expect(result.output).toContain("line one")
     expect(result.output).toContain("line two")
     expect(result.exitCode).toBe(2)
+  })
+
+  test("routes container stderr output to stderrLine, appears with [err] prefix", async () => {
+    const { docker } = makeDockerFake({
+      containerConfig: { stderrLines: ["container error"] },
+    })
+    const backend = new DockerBackend(docker, fakeBuildContext)
+    const result = await backend.run(baseRunOpts, () => {})
+    expect(result.output).toContain("[err] container error")
   })
 
   test("removes container after run completes", async () => {

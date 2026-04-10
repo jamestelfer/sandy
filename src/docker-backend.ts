@@ -226,8 +226,21 @@ export class DockerBackend implements Backend {
         },
       })
 
+      // Wait for both writers to finish rather than the source stream to end.
+      // demuxStream's "end" handler calls end() on both writers; "finish" fires
+      // only after all buffered writes have been flushed — avoiding the race
+      // where the real Docker TCP stream's "end" fires before the last write
+      // callbacks have completed.
+      let finishCount = 0
+      const onFinish = () => {
+        if (++finishCount === 2) {
+          resolve()
+        }
+      }
+      stdoutWriter.on("finish", onFinish)
+      stderrWriter.on("finish", onFinish)
+
       this.docker.modem.demuxStream(logStream, stdoutWriter, stderrWriter)
-      logStream.on("end", resolve)
     })
 
     const { StatusCode: exitCode } = await container.wait()
