@@ -20,7 +20,7 @@ export async function runRun(
   const session = await createSession(argv.session)
   printErr(`sandy: output directory: ${session.dir}`)
 
-  const result = await backend.run(
+  await backend.run(
     {
       scriptPath: argv.script,
       imdsPort: argv.imdsPort,
@@ -31,10 +31,6 @@ export async function runRun(
     },
     (msg) => print(`[--> ${msg}`),
   )
-
-  if (result.output) {
-    print(result.output)
-  }
 }
 
 export function makeRunCommand(backend: Backend): CommandModule {

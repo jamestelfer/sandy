@@ -28,7 +28,7 @@ import entrypointPath from "./bootstrap/entrypoint" with { type: "file" }
 
 export type ShellExecutor = (
   cmd: string[],
-  opts?: { cwd?: string },
+  opts?: { cwd?: string; handler?: OutputHandler },
 ) => Promise<{ stdout: string; stderr: string; exitCode: number }>
 
 export interface SandboxLike {
@@ -49,11 +49,51 @@ const CHECKPOINT_NAME = "sandy"
 const NETSKOPE_CERT_PATH = "/Library/Application Support/Netskope/STAgent/data/nscacert.pem"
 const VM_BOOTSTRAP = "/tmp/bootstrap"
 
+async function readStream(
+  stream: ReadableStream<Uint8Array>,
+  onLine?: (line: string) => void,
+): Promise<string> {
+  const reader = stream.getReader()
+  const decoder = new TextDecoder()
+  let buf = ""
+  const lines: string[] = []
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        break
+      }
+      buf += decoder.decode(value, { stream: true })
+      const nl = buf.lastIndexOf("\n")
+      if (nl !== -1) {
+        for (const raw of buf.slice(0, nl).split("\n")) {
+          const line = raw.trimEnd()
+          if (line) {
+            lines.push(line)
+            onLine?.(line)
+          }
+        }
+        buf = buf.slice(nl + 1)
+      }
+    }
+    buf += decoder.decode()
+    const line = buf.trimEnd()
+    if (line) {
+      lines.push(line)
+      onLine?.(line)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  return lines.join("\n")
+}
+
 const defaultExecutor: ShellExecutor = async (cmd, opts) => {
   const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe", cwd: opts?.cwd })
+  const h = opts?.handler
   const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
+    readStream(proc.stdout, h ? (l) => h.stdoutLine(l) : undefined),
+    readStream(proc.stderr, h ? (l) => h.stderrLine(l) : undefined),
     proc.exited,
   ])
   return { stdout, stderr, exitCode }
@@ -73,7 +113,8 @@ export class ShuruBackend implements Backend {
   }
 
   async imageDelete(): Promise<void> {
-    await this.executor(["shuru", "checkpoint", "delete", CHECKPOINT_NAME])
+    const handler = new OutputHandler(() => {})
+    await this.executor(["shuru", "checkpoint", "delete", CHECKPOINT_NAME], { handler })
   }
 
   async imageCreate(): Promise<void> {
@@ -103,18 +144,22 @@ export class ShuruBackend implements Backend {
       process.stderr.write("sandy: Netskope certificate not found, skipping\n")
     }
 
-    await this.executor([
-      "shuru",
-      "checkpoint",
-      "create",
-      CHECKPOINT_NAME,
-      "--allow-net",
-      "--mount",
-      `${staging.path}:${VM_BOOTSTRAP}`,
-      "--",
-      "sh",
-      `${VM_BOOTSTRAP}/init.sh`,
-    ])
+    const handler = new OutputHandler(() => {})
+    await this.executor(
+      [
+        "shuru",
+        "checkpoint",
+        "create",
+        CHECKPOINT_NAME,
+        "--allow-net",
+        "--mount",
+        `${staging.path}:${VM_BOOTSTRAP}`,
+        "--",
+        "sh",
+        `${VM_BOOTSTRAP}/init.sh`,
+      ],
+      { handler },
+    )
   }
 
   async run(opts: RunOptions, onProgress: ProgressCallback): Promise<RunResult> {
