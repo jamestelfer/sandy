@@ -145,9 +145,19 @@ describe("generateDockerfile", () => {
     expect(df).toMatch(/COPY bootstrap\/ \/tmp\/bootstrap\//)
   })
 
-  test("RUNs init.sh from /tmp/bootstrap", () => {
+  test("RUNs each init.sh step as a separate layer", () => {
     const df = generateDockerfile()
-    expect(df).toContain("sh /tmp/bootstrap/init.sh")
+    for (const step of [
+      "prerequisites",
+      "certificates",
+      "nodejs",
+      "pnpm",
+      "workspace",
+      "profiles",
+      "dependencies",
+    ]) {
+      expect(df).toContain(`RUN sh /tmp/bootstrap/init.sh ${step}`)
+    }
   })
 
   test("sets ENTRYPOINT to pnpm run -s entrypoint", () => {
@@ -246,14 +256,14 @@ describe("DockerBackend.run", () => {
     expect(progress.join("\n")).not.toContain("normal output line")
   })
 
-  test("collects stdout into RunResult and captures exit code", async () => {
+  test("collects output into RunResult and captures exit code", async () => {
     const { docker } = makeDockerFake({
       containerConfig: { exitCode: 2, stdoutLines: ["line one", "line two"] },
     })
     const backend = new DockerBackend(docker, fakeBuildContext)
     const result = await backend.run(baseRunOpts, () => {})
-    expect(result.stdout).toContain("line one")
-    expect(result.stdout).toContain("line two")
+    expect(result.output).toContain("line one")
+    expect(result.output).toContain("line two")
     expect(result.exitCode).toBe(2)
   })
 

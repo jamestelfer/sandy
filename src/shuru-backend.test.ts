@@ -151,13 +151,13 @@ describe("ShuruBackend.run", () => {
     expect(progress.join("\n")).not.toContain("normal output line")
   })
 
-  test("collects all stdout into RunResult and captures exit code", async () => {
+  test("collects all output into RunResult and captures exit code", async () => {
     const { factory } = makeSandboxFactory({ exitCode: 2, stdoutLines: ["line one", "line two"] })
     const backend = new ShuruBackend(undefined, factory)
     const result = await backend.run(baseRunOpts, () => {})
 
-    expect(result.stdout).toContain("line one")
-    expect(result.stdout).toContain("line two")
+    expect(result.output).toContain("line one")
+    expect(result.output).toContain("line two")
     expect(result.exitCode).toBe(2)
   })
 

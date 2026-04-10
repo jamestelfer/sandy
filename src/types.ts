@@ -9,6 +9,8 @@ export const VM_SCRIPTS_DIR = "/workspace/scripts"
 export const VM_OUTPUT_DIR = "/workspace/output"
 export const DEFAULT_REGION = "us-west-2"
 
+export type ProgressCallback = (message: string) => void
+
 export interface RunOptions {
   scriptPath: string
   imdsPort: number
@@ -20,7 +22,6 @@ export interface RunOptions {
 
 export interface RunResult {
   exitCode: number
-  stdout: string
-  stderr: string
+  output: string
   outputFiles: string[]
 }

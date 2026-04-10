@@ -17,7 +17,8 @@ import {
   VM_OUTPUT_DIR,
   VM_SCRIPTS_DIR,
 } from "./types"
-import { parseProgressLine } from "./progress"
+import type { ProgressCallback } from "./types"
+import { OutputHandler } from "./output-handler"
 
 // Bootstrap file embeds — bundled into binary by Bun
 import initShPath from "./bootstrap/init.sh" with { type: "file" }
@@ -58,11 +59,22 @@ const IMAGE_NAME = "sandy:latest"
 const VM_BOOTSTRAP = "/tmp/bootstrap"
 const NETSKOPE_CERT_PATH = "/Library/Application Support/Netskope/STAgent/data/nscacert.pem"
 
+const INIT_STEPS = [
+  "prerequisites",
+  "certificates",
+  "nodejs",
+  "pnpm",
+  "workspace",
+  "profiles",
+  "dependencies",
+] as const
+
 export function generateDockerfile(): string {
+  const runs = INIT_STEPS.map((step) => `RUN sh ${VM_BOOTSTRAP}/init.sh ${step}`).join("\n")
   return `FROM ubuntu:24.04
 COPY bootstrap/ ${VM_BOOTSTRAP}/
-RUN chmod +x ${VM_BOOTSTRAP}/init.sh ${VM_BOOTSTRAP}/entrypoint && \\
-    sh ${VM_BOOTSTRAP}/init.sh
+RUN chmod +x ${VM_BOOTSTRAP}/init.sh ${VM_BOOTSTRAP}/entrypoint
+${runs}
 ENTRYPOINT ["pnpm", "run", "-s", "entrypoint"]
 `
 }
@@ -154,7 +166,7 @@ export class DockerBackend implements Backend {
     })
   }
 
-  async run(opts: RunOptions, onProgress: (message: string) => void): Promise<RunResult> {
+  async run(opts: RunOptions, onProgress: ProgressCallback): Promise<RunResult> {
     const scriptDir = path.dirname(path.resolve(opts.scriptPath))
     const scriptName = path.basename(opts.scriptPath, ".ts")
     const compiledPath = `/workspace/dist/scripts/${scriptName}.js`
@@ -183,8 +195,7 @@ export class DockerBackend implements Backend {
       },
     })
 
-    let stdoutBuf = ""
-    let stderrBuf = ""
+    const handler = new OutputHandler(onProgress)
 
     await container.start()
 
@@ -193,16 +204,10 @@ export class DockerBackend implements Backend {
     await new Promise<void>((resolve) => {
       const stdoutWriter = new Writable({
         write(chunk: Buffer, _enc: string, cb: () => void) {
-          const text = chunk.toString()
-          stdoutBuf += text
-          for (const raw of text.split("\n")) {
+          for (const raw of chunk.toString().split("\n")) {
             const line = raw.trimEnd()
-            if (!line) {
-              continue
-            }
-            const parsed = parseProgressLine(line)
-            if (parsed.isProgress) {
-              onProgress(parsed.message)
+            if (line) {
+              handler.stdoutLine(line)
             }
           }
           cb()
@@ -211,7 +216,12 @@ export class DockerBackend implements Backend {
 
       const stderrWriter = new Writable({
         write(chunk: Buffer, _enc: string, cb: () => void) {
-          stderrBuf += chunk.toString()
+          for (const raw of chunk.toString().split("\n")) {
+            const line = raw.trimEnd()
+            if (line) {
+              handler.stderrLine(line)
+            }
+          }
           cb()
         },
       })
@@ -228,6 +238,6 @@ export class DockerBackend implements Backend {
 
     await container.remove()
 
-    return { exitCode, stdout: stdoutBuf, stderr: stderrBuf, outputFiles: [] }
+    return { exitCode, output: handler.output, outputFiles: [] }
   }
 }

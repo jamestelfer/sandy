@@ -4,7 +4,7 @@ import { makeTmpDir } from "./tmpdir"
 import type { StartOptions } from "@superhq/shuru"
 import { Sandbox } from "@superhq/shuru"
 import type { Backend } from "./backend"
-import type { RunOptions, RunResult } from "./types"
+import type { ProgressCallback, RunOptions, RunResult } from "./types"
 import {
   DEFAULT_REGION,
   ENV_ENDPOINT,
@@ -17,7 +17,7 @@ import {
   VM_OUTPUT_DIR,
   VM_SCRIPTS_DIR,
 } from "./types"
-import { parseProgressLine } from "./progress"
+import { OutputHandler } from "./output-handler"
 
 // Bootstrap file embeds — bundled into binary by Bun
 import initShPath from "./bootstrap/init.sh" with { type: "file" }
@@ -117,7 +117,7 @@ export class ShuruBackend implements Backend {
     ])
   }
 
-  async run(opts: RunOptions, onProgress: (message: string) => void): Promise<RunResult> {
+  async run(opts: RunOptions, onProgress: ProgressCallback): Promise<RunResult> {
     const scriptDir = path.dirname(path.resolve(opts.scriptPath))
     const scriptName = path.basename(opts.scriptPath, ".ts")
     const compiledPath = `/workspace/dist/scripts/${scriptName}.js`
@@ -149,34 +149,32 @@ export class ShuruBackend implements Backend {
 
     const spawnCmd = ["sh", "-l", "/workspace/entrypoint", compiledPath, ...(opts.scriptArgs ?? [])]
 
+    const handler = new OutputHandler(onProgress)
+
     try {
       const proc = await sb.spawn(spawnCmd, { env: spawnEnv })
 
-      let stdoutBuf = ""
-      let stderrBuf = ""
-
       proc.on("stdout", (data) => {
-        const text = data.toString()
-        stdoutBuf += text
-        for (const raw of text.split("\n")) {
+        for (const raw of data.toString().split("\n")) {
           const line = raw.trimEnd()
-          if (!line) {
-            continue
-          }
-          const parsed = parseProgressLine(line)
-          if (parsed.isProgress) {
-            onProgress(parsed.message)
+          if (line) {
+            handler.stdoutLine(line)
           }
         }
       })
 
       proc.on("stderr", (data) => {
-        stderrBuf += data.toString()
+        for (const raw of data.toString().split("\n")) {
+          const line = raw.trimEnd()
+          if (line) {
+            handler.stderrLine(line)
+          }
+        }
       })
 
       const exitCode = await proc.exited
 
-      return { exitCode, stdout: stdoutBuf, stderr: stderrBuf, outputFiles: [] }
+      return { exitCode, output: handler.output, outputFiles: [] }
     } finally {
       await sb.stop()
     }

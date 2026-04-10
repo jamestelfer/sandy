@@ -32,8 +32,8 @@ export async function runRun(
     (msg) => print(`[--> ${msg}`),
   )
 
-  if (result.stdout) {
-    print(result.stdout)
+  if (result.output) {
+    print(result.output)
   }
 }
 

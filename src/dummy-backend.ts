@@ -1,5 +1,5 @@
 import type { Backend } from "./backend"
-import type { RunOptions, RunResult } from "./types"
+import type { ProgressCallback, RunOptions, RunResult } from "./types"
 
 type BackendCall =
   | { method: "imageCreate" }
@@ -10,7 +10,7 @@ type BackendCall =
 export class DummyBackend implements Backend {
   calls: BackendCall[] = []
   imageExistsResult = false
-  runResult: RunResult = { exitCode: 0, stdout: "", stderr: "", outputFiles: [] }
+  runResult: RunResult = { exitCode: 0, output: "", outputFiles: [] }
   progressLines: string[] = []
 
   async imageCreate(): Promise<void> {
@@ -26,7 +26,7 @@ export class DummyBackend implements Backend {
     return this.imageExistsResult
   }
 
-  async run(opts: RunOptions, onProgress: (message: string) => void): Promise<RunResult> {
+  async run(opts: RunOptions, onProgress: ProgressCallback): Promise<RunResult> {
     this.calls.push({ method: "run", opts })
     for (const line of this.progressLines) {
       onProgress(line)
