@@ -23,13 +23,13 @@ describe("sandy_run", () => {
   })
 
   test("dispatches to backend and returns structured result", async () => {
-    backend.runResult = { exitCode: 0, stdout: "hello", stderr: "warn", outputFiles: [] }
+    backend.runResult = { exitCode: 0, output: "hello\n[err] warn\n", outputFiles: [] }
 
     const result = await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 })
 
     expect(result.exitCode).toBe(0)
-    expect(result.stdout).toBe("hello")
-    expect(result.stderr).toBe("warn")
+    expect(result.output).toContain("hello")
+    expect(result.output).toContain("[err] warn")
     expect(result.sessionName).toBeTruthy()
     const call = findRun(backend)
     expect(call.opts.scriptPath).toBe("foo.ts")

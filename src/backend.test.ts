@@ -12,31 +12,55 @@ const testOpts: RunOptions = {
 describe("DummyBackend", () => {
   it("records imageCreate call", async () => {
     const backend = new DummyBackend()
-    await backend.imageCreate()
+    await backend.imageCreate(() => {})
     expect(backend.calls).toEqual([{ method: "imageCreate" }])
   })
 
   it("records imageDelete call", async () => {
     const backend = new DummyBackend()
-    await backend.imageDelete()
+    await backend.imageDelete(() => {})
     expect(backend.calls).toEqual([{ method: "imageDelete" }])
   })
 
   it("returns false for imageExists by default", async () => {
     const backend = new DummyBackend()
-    expect(await backend.imageExists()).toBe(false)
+    expect(await backend.imageExists(() => {})).toBe(false)
   })
 
   it("returns configured imageExists value", async () => {
     const backend = new DummyBackend()
     backend.imageExistsResult = true
-    expect(await backend.imageExists()).toBe(true)
+    expect(await backend.imageExists(() => {})).toBe(true)
   })
 
   it("records run call with opts", async () => {
     const backend = new DummyBackend()
     await backend.run(testOpts, () => {})
     expect(backend.calls).toEqual([{ method: "run", opts: testOpts }])
+  })
+
+  it("calls onProgress for each configured progress line from imageCreate", async () => {
+    const backend = new DummyBackend()
+    backend.progressLines = ["line 1", "line 2"]
+    const received: string[] = []
+    await backend.imageCreate((msg) => received.push(msg))
+    expect(received).toEqual(["line 1", "line 2"])
+  })
+
+  it("calls onProgress for each configured progress line from imageDelete", async () => {
+    const backend = new DummyBackend()
+    backend.progressLines = ["line 1", "line 2"]
+    const received: string[] = []
+    await backend.imageDelete((msg) => received.push(msg))
+    expect(received).toEqual(["line 1", "line 2"])
+  })
+
+  it("calls onProgress for each configured progress line from imageExists", async () => {
+    const backend = new DummyBackend()
+    backend.progressLines = ["line 1", "line 2"]
+    const received: string[] = []
+    await backend.imageExists((msg) => received.push(msg))
+    expect(received).toEqual(["line 1", "line 2"])
   })
 
   it("calls onProgress for each configured progress line", async () => {
@@ -49,15 +73,15 @@ describe("DummyBackend", () => {
 
   it("returns configured RunResult", async () => {
     const backend = new DummyBackend()
-    backend.runResult = { exitCode: 1, stdout: "out", stderr: "err", outputFiles: ["a.json"] }
+    backend.runResult = { exitCode: 1, output: "out", outputFiles: ["a.json"] }
     const result = await backend.run(testOpts, () => {})
-    expect(result).toEqual({ exitCode: 1, stdout: "out", stderr: "err", outputFiles: ["a.json"] })
+    expect(result).toEqual({ exitCode: 1, output: "out", outputFiles: ["a.json"] })
   })
 
   it("each instance starts with empty calls", async () => {
     const a = new DummyBackend()
     const b = new DummyBackend()
-    await a.imageCreate()
+    await a.imageCreate(() => {})
     expect(b.calls).toEqual([])
   })
 })

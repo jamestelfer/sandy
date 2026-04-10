@@ -7,14 +7,14 @@ export interface Session {
   dir: string
 }
 
-export async function createSession(name?: string): Promise<Session> {
+export async function createSession(name?: string, dir?: string): Promise<Session> {
   const sessionName = name ?? humanId({ separator: "-", capitalize: false })
-  const dir = resolve(join(".sandy", sessionName))
+  const resolvedDir = dir ? resolve(dir) : resolve(join(".sandy", sessionName))
 
-  mkdirSync(dir, { recursive: true })
+  mkdirSync(resolvedDir, { recursive: true })
   ensureGitignore()
 
-  return { name: sessionName, dir }
+  return { name: sessionName, dir: resolvedDir }
 }
 
 function ensureGitignore(): void {

@@ -1,30 +1,16 @@
 import * as path from "node:path"
 import * as fs from "node:fs/promises"
 import { spawn } from "node:child_process"
-import { Writable } from "node:stream"
 import { makeTmpDir } from "./tmpdir"
 import type { Backend } from "./backend"
 import type { RunOptions, RunResult } from "./types"
-import {
-  DEFAULT_REGION,
-  ENV_ENDPOINT,
-  ENV_ENDPOINT_MODE,
-  ENV_ENDPOINT_MODE_VALUE,
-  ENV_REGION,
-  ENV_SANDY_OUTPUT,
-  ENV_V1_DISABLED,
-  ENV_V1_DISABLED_VALUE,
-  VM_OUTPUT_DIR,
-  VM_SCRIPTS_DIR,
-} from "./types"
-import { parseProgressLine } from "./progress"
-
-// Bootstrap file embeds — bundled into binary by Bun
-import initShPath from "./bootstrap/init.sh" with { type: "file" }
-import nodeCertsShPath from "./bootstrap/node_certs.sh" with { type: "file" }
-import bootstrapPackageJsonPath from "./bootstrap/package.json" with { type: "file" }
-import bootstrapTsconfigJsonPath from "./bootstrap/tsconfig.json" with { type: "file" }
-import entrypointPath from "./bootstrap/entrypoint" with { type: "file" }
+import { VM_BOOTSTRAP, VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "./types"
+import type { ProgressCallback } from "./types"
+import { OutputHandler } from "./output-handler"
+import { resolveScriptDir } from "./check-scripts"
+import { OutputTracker } from "./scan-output"
+import { buildRunEnv } from "./run-env"
+import { stageBootstrapFiles } from "./bootstrap-staging"
 
 export interface ImageLike {
   inspect(): Promise<unknown>
@@ -43,26 +29,29 @@ export interface DockerClientLike {
   getImage(name: string): ImageLike
   buildImage(context: NodeJS.ReadableStream, opts: { t: string }): Promise<NodeJS.ReadableStream>
   createContainer(opts: object): Promise<ContainerLike>
-  modem: {
-    demuxStream(
-      stream: NodeJS.ReadableStream,
-      stdout: NodeJS.WritableStream,
-      stderr: NodeJS.WritableStream,
-    ): void
-  }
 }
 
 export type BuildContextFactory = () => Promise<NodeJS.ReadableStream & AsyncDisposable>
 
 const IMAGE_NAME = "sandy:latest"
-const VM_BOOTSTRAP = "/tmp/bootstrap"
-const NETSKOPE_CERT_PATH = "/Library/Application Support/Netskope/STAgent/data/nscacert.pem"
+
+const INIT_STEPS = [
+  "prerequisites",
+  "certificates",
+  "nodejs",
+  "pnpm",
+  "workspace",
+  "profiles",
+  "dependencies",
+] as const
 
 export function generateDockerfile(): string {
+  const runs = INIT_STEPS.map((step) => `RUN sh ${VM_BOOTSTRAP}/init.sh ${step}`).join("\n")
   return `FROM ubuntu:24.04
 COPY bootstrap/ ${VM_BOOTSTRAP}/
-RUN chmod +x ${VM_BOOTSTRAP}/init.sh ${VM_BOOTSTRAP}/entrypoint && \\
-    sh ${VM_BOOTSTRAP}/init.sh
+RUN chmod +x ${VM_BOOTSTRAP}/init.sh ${VM_BOOTSTRAP}/entrypoint
+${runs}
+WORKDIR /workspace
 ENTRYPOINT ["pnpm", "run", "-s", "entrypoint"]
 `
 }
@@ -72,31 +61,10 @@ export async function defaultBuildContextFactory(): Promise<
 > {
   const staging = await makeTmpDir("sandy-docker-build-")
   await fs.mkdir(`${staging.path}/bootstrap`, { recursive: true })
-  await fs.mkdir(`${staging.path}/bootstrap/certs`, { recursive: true })
-
-  // Use Bun.file().arrayBuffer() instead of fs.copyFile() so this works when
-  // the binary is compiled — embedded bunfs paths are not accessible to the OS.
-  async function copyEmbedded(src: string, dest: string): Promise<void> {
-    const buf = await Bun.file(src).arrayBuffer()
-    await fs.writeFile(dest, new Uint8Array(buf))
-  }
-
   await Promise.all([
-    copyEmbedded(initShPath, `${staging.path}/bootstrap/init.sh`),
-    copyEmbedded(nodeCertsShPath, `${staging.path}/bootstrap/node_certs.sh`),
-    copyEmbedded(bootstrapPackageJsonPath, `${staging.path}/bootstrap/package.json`),
-    copyEmbedded(bootstrapTsconfigJsonPath, `${staging.path}/bootstrap/tsconfig.json`),
-    copyEmbedded(entrypointPath, `${staging.path}/bootstrap/entrypoint`),
+    stageBootstrapFiles(`${staging.path}/bootstrap`),
     fs.writeFile(`${staging.path}/Dockerfile`, generateDockerfile()),
   ])
-
-  // Copy Netskope cert if present
-  try {
-    await fs.copyFile(NETSKOPE_CERT_PATH, `${staging.path}/bootstrap/certs/nscacert.pem`)
-    process.stderr.write("sandy: Netskope certificate staged for installation\n")
-  } catch {
-    process.stderr.write("sandy: Netskope certificate not found, skipping\n")
-  }
 
   // Attach staging dir cleanup to the stream so the caller can dispose after
   // Docker finishes reading — no need to buffer the tar in memory.
@@ -107,13 +75,48 @@ export async function defaultBuildContextFactory(): Promise<
   return Object.assign(proc.stdout, { [Symbol.asyncDispose]: () => staging[Symbol.asyncDispose]() })
 }
 
+
+// Parse Docker's multiplexed log stream format and route frames to OutputHandler.
+// Format: 8-byte header (1-byte type: 1=stdout 2=stderr, 3 pad bytes, 4-byte big-endian size) + payload.
+// The stream is consumed in flowing mode so the "end" event fires reliably.
+async function demuxDockerStream(stream: NodeJS.ReadableStream, handler: OutputHandler): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let buf = Buffer.alloc(0)
+
+    stream.on("data", (chunk: Buffer) => {
+      buf = Buffer.concat([buf, chunk])
+      while (buf.length >= 8) {
+        const payloadSize = buf.readUInt32BE(4)
+        if (buf.length < 8 + payloadSize) {
+          break
+        }
+        const type = buf[0]
+        const payload = buf.slice(8, 8 + payloadSize)
+        buf = buf.slice(8 + payloadSize)
+        if (type === 1) {
+          handler.feedStdout(payload)
+        } else if (type === 2) {
+          handler.feedStderr(payload)
+        }
+      }
+    })
+
+    stream.on("end", () => {
+      handler.flush()
+      resolve()
+    })
+
+    stream.on("error", reject)
+  })
+}
+
 export class DockerBackend implements Backend {
   constructor(
     private docker: DockerClientLike,
     private buildContext: BuildContextFactory = defaultBuildContextFactory,
   ) {}
 
-  async imageExists(): Promise<boolean> {
+  async imageExists(_onProgress: ProgressCallback): Promise<boolean> {
     try {
       await this.docker.getImage(IMAGE_NAME).inspect()
       return true
@@ -122,14 +125,15 @@ export class DockerBackend implements Backend {
     }
   }
 
-  async imageDelete(): Promise<void> {
+  async imageDelete(_onProgress: ProgressCallback): Promise<void> {
     await this.docker.getImage(IMAGE_NAME).remove()
   }
 
-  async imageCreate(): Promise<void> {
+  async imageCreate(onProgress: ProgressCallback): Promise<void> {
     await using context = await this.buildContext()
     const stream = await this.docker.buildImage(context, { t: IMAGE_NAME })
-    // Parse build output JSON and surface Docker errors
+    const handler = new OutputHandler(onProgress)
+    // Parse build output JSON, feed stream content through OutputHandler (stderr + progress)
     await new Promise<void>((resolve, reject) => {
       stream.on("data", (chunk: Buffer) => {
         for (const line of chunk.toString().split("\n")) {
@@ -139,7 +143,7 @@ export class DockerBackend implements Backend {
           try {
             const msg = JSON.parse(line) as { stream?: string; error?: string }
             if (msg.stream) {
-              process.stderr.write(msg.stream)
+              handler.feedStdout(Buffer.from(msg.stream))
             }
             if (msg.error) {
               reject(new Error(`docker build: ${msg.error.trim()}`))
@@ -149,31 +153,27 @@ export class DockerBackend implements Backend {
           }
         }
       })
-      stream.on("end", resolve)
+      stream.on("end", () => {
+        handler.flush()
+        resolve()
+      })
       stream.on("error", reject)
     })
   }
 
-  async run(opts: RunOptions, onProgress: (message: string) => void): Promise<RunResult> {
-    const scriptDir = path.dirname(path.resolve(opts.scriptPath))
+  async run(opts: RunOptions, onProgress: ProgressCallback): Promise<RunResult> {
+    await using scriptDirObj = await resolveScriptDir(opts.scriptPath)
     const scriptName = path.basename(opts.scriptPath, ".ts")
     const compiledPath = `/workspace/dist/scripts/${scriptName}.js`
     const imdsEndpoint = `http://host.docker.internal:${opts.imdsPort}`
-
-    const env: Record<string, string> = {
-      [ENV_ENDPOINT]: imdsEndpoint,
-      [ENV_ENDPOINT_MODE]: ENV_ENDPOINT_MODE_VALUE,
-      [ENV_V1_DISABLED]: ENV_V1_DISABLED_VALUE,
-      [ENV_REGION]: opts.region ?? DEFAULT_REGION,
-      [ENV_SANDY_OUTPUT]: VM_OUTPUT_DIR,
-    }
+    const env = buildRunEnv(opts, imdsEndpoint)
 
     const container = await this.docker.createContainer({
       Image: IMAGE_NAME,
-      Cmd: ["sh", "-l", "/workspace/entrypoint", compiledPath, ...(opts.scriptArgs ?? [])],
+      Cmd: [compiledPath, ...(opts.scriptArgs ?? [])],
       Env: Object.entries(env).map(([k, v]) => `${k}=${v}`),
       HostConfig: {
-        Binds: [`${scriptDir}:${VM_SCRIPTS_DIR}:ro`, `${opts.sessionDir}:${VM_OUTPUT_DIR}:rw`],
+        Binds: [`${scriptDirObj.path}:${VM_SCRIPTS_DIR}:ro`, `${opts.sessionDir}:${VM_OUTPUT_DIR}:rw`],
         // host.docker.internal resolves on macOS/Windows by default; on Linux the
         // host-gateway alias is required to make it resolve to the Docker bridge IP.
         ExtraHosts: ["host.docker.internal:host-gateway"],
@@ -183,44 +183,17 @@ export class DockerBackend implements Backend {
       },
     })
 
-    let stdoutBuf = ""
-    let stderrBuf = ""
+    const tracker = await OutputTracker.create(opts.sessionDir)
+    const handler = new OutputHandler(onProgress)
 
     await container.start()
 
     const logStream = await container.logs({ follow: true, stdout: true, stderr: true })
 
-    await new Promise<void>((resolve) => {
-      const stdoutWriter = new Writable({
-        write(chunk: Buffer, _enc: string, cb: () => void) {
-          const text = chunk.toString()
-          stdoutBuf += text
-          for (const raw of text.split("\n")) {
-            const line = raw.trimEnd()
-            if (!line) {
-              continue
-            }
-            const parsed = parseProgressLine(line)
-            if (parsed.isProgress) {
-              onProgress(parsed.message)
-            }
-          }
-          cb()
-        },
-      })
+    await demuxDockerStream(logStream, handler)
 
-      const stderrWriter = new Writable({
-        write(chunk: Buffer, _enc: string, cb: () => void) {
-          stderrBuf += chunk.toString()
-          cb()
-        },
-      })
-
-      this.docker.modem.demuxStream(logStream, stdoutWriter, stderrWriter)
-      logStream.on("end", resolve)
-    })
-
-    const { StatusCode: exitCode } = await container.wait()
+    const waitResult = await container.wait()
+    const exitCode = waitResult.StatusCode
 
     if (exitCode !== 0) {
       process.stderr.write(`sandy: container ${container.id} exited with code ${exitCode}\n`)
@@ -228,6 +201,9 @@ export class DockerBackend implements Backend {
 
     await container.remove()
 
-    return { exitCode, stdout: stdoutBuf, stderr: stderrBuf, outputFiles: [] }
+    const outputFiles = await tracker.changed()
+
+    return { exitCode, output: handler.output, outputFiles }
   }
 }
+

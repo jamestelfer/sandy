@@ -60,6 +60,54 @@ describe("CLI image", () => {
     await runImage({ action: "delete" }, backend)
     expect(backend.calls).toEqual([{ method: "imageDelete" }])
   })
+
+  it("forwards onProgress callback to backend.imageCreate()", async () => {
+    const backend = new DummyBackend()
+    backend.progressLines = ["step one"]
+    const received: string[] = []
+    await runImage({ action: "create" }, backend, (msg) => received.push(msg))
+    expect(received).toEqual(["step one"])
+  })
+
+  it("forwards onProgress callback to backend.imageDelete()", async () => {
+    const backend = new DummyBackend()
+    backend.progressLines = ["step one"]
+    const received: string[] = []
+    await runImage({ action: "delete" }, backend, (msg) => received.push(msg))
+    expect(received).toEqual(["step one"])
+  })
+
+  it("writes 'image created' to stderr after imageCreate completes", async () => {
+    const backend = new DummyBackend()
+    const stderrLines: string[] = []
+    const originalWrite = process.stderr.write.bind(process.stderr)
+    process.stderr.write = (chunk: string | Uint8Array) => {
+      stderrLines.push(chunk.toString())
+      return true
+    }
+    try {
+      await runImage({ action: "create" }, backend)
+    } finally {
+      process.stderr.write = originalWrite
+    }
+    expect(stderrLines.join("")).toContain("image created")
+  })
+
+  it("writes 'image deleted' to stderr after imageDelete completes", async () => {
+    const backend = new DummyBackend()
+    const stderrLines: string[] = []
+    const originalWrite = process.stderr.write.bind(process.stderr)
+    process.stderr.write = (chunk: string | Uint8Array) => {
+      stderrLines.push(chunk.toString())
+      return true
+    }
+    try {
+      await runImage({ action: "delete" }, backend)
+    } finally {
+      process.stderr.write = originalWrite
+    }
+    expect(stderrLines.join("")).toContain("image deleted")
+  })
 })
 
 describe("CLI check", () => {
@@ -69,6 +117,23 @@ describe("CLI check", () => {
     expect(backend.calls[0]).toMatchObject({ method: "run", opts: { scriptPath: "__baseline__" } })
   })
 
+  it("baseline does not set exit code on success", async () => {
+    const backend = new DummyBackend()
+    backend.runResult = { exitCode: 0, output: "", outputFiles: [] }
+    const prevExitCode = process.exitCode
+    await runBaseline(backend)
+    expect(process.exitCode).toBe(prevExitCode)
+  })
+
+  it("baseline sets exit code 1 on non-zero container exit", async () => {
+    const backend = new DummyBackend()
+    backend.runResult = { exitCode: 1, output: "", outputFiles: [] }
+    const prevExitCode = process.exitCode
+    await runBaseline(backend)
+    expect(process.exitCode).toBe(1)
+    process.exitCode = prevExitCode
+  })
+
   it("connect dispatches to backend.run() with imdsPort", async () => {
     const backend = new DummyBackend()
     await runConnect({ imdsPort: 9001, region: "us-west-2" }, backend)
@@ -76,6 +141,22 @@ describe("CLI check", () => {
       method: "run",
       opts: { scriptPath: "__connect__", imdsPort: 9001 },
     })
+  })
+
+  it("baseline forwards onProgress to backend.run()", async () => {
+    const backend = new DummyBackend()
+    backend.progressLines = ["checking baseline"]
+    const received: string[] = []
+    await runBaseline(backend, (msg) => received.push(msg))
+    expect(received).toEqual(["checking baseline"])
+  })
+
+  it("connect forwards onProgress to backend.run()", async () => {
+    const backend = new DummyBackend()
+    backend.progressLines = ["checking connect"]
+    const received: string[] = []
+    await runConnect({ imdsPort: 9001, region: "us-west-2" }, backend, (msg) => received.push(msg))
+    expect(received).toEqual(["checking connect"])
   })
 })
 
@@ -87,6 +168,16 @@ describe("CLI run", () => {
       method: "run",
       opts: { scriptPath: "foo.ts", imdsPort: 9001 },
     })
+  })
+
+  it("forwards onProgress to backend.run() without adding a prefix", async () => {
+    const backend = new DummyBackend()
+    backend.progressLines = ["compiling..."]
+    const received: string[] = []
+    await runRun({ script: "foo.ts", imdsPort: 9001, region: "us-west-2" }, backend, (msg) =>
+      received.push(msg),
+    )
+    expect(received).toEqual(["compiling..."])
   })
 
   it("uses provided --session name", async () => {
@@ -111,6 +202,19 @@ describe("CLI run", () => {
     }
   })
 
+  it("uses --output-dir as session directory when provided", async () => {
+    const backend = new DummyBackend()
+    const customDir = join(tmpDir, "my-out")
+    await runRun(
+      { script: "foo.ts", imdsPort: 9001, region: "us-west-2", outputDir: customDir },
+      backend,
+    )
+    expect(backend.calls[0]).toMatchObject({
+      method: "run",
+      opts: { sessionDir: customDir },
+    })
+  })
+
   it("passes script args after --", async () => {
     const backend = new DummyBackend()
     await runRun(
@@ -121,6 +225,33 @@ describe("CLI run", () => {
       method: "run",
       opts: { scriptArgs: ["arg1", "arg2"] },
     })
+  })
+
+  it("sets process.exitCode when script exits non-zero", async () => {
+    const backend = new DummyBackend()
+    backend.runResult = { exitCode: 2, output: "", outputFiles: [] }
+    const prevExitCode = process.exitCode
+    await runRun({ script: "foo.ts", imdsPort: 9001, region: "us-west-2" }, backend)
+    expect(process.exitCode).toBe(2)
+    process.exitCode = prevExitCode
+  })
+
+  it("output directory message does not carry [err] prefix", async () => {
+    const backend = new DummyBackend()
+    const stderrLines: string[] = []
+    const originalWrite = process.stderr.write.bind(process.stderr)
+    process.stderr.write = (chunk: string | Uint8Array) => {
+      stderrLines.push(chunk.toString())
+      return true
+    }
+    try {
+      await runRun({ script: "foo.ts", imdsPort: 9001, region: "us-west-2" }, backend)
+    } finally {
+      process.stderr.write = originalWrite
+    }
+    const combined = stderrLines.join("")
+    expect(combined).toContain("output directory")
+    expect(combined).not.toContain("[err]")
   })
 })
 

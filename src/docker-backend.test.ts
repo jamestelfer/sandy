@@ -1,4 +1,6 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 import { spawn } from "node:child_process"
 import { Readable } from "node:stream"
 import { DockerBackend, defaultBuildContextFactory, generateDockerfile } from "./docker-backend"
@@ -34,7 +36,7 @@ function makeImageFake(config: { inspectThrows?: boolean } = {}): {
 function makeDockerFake(
   config: {
     imageConfig?: { inspectThrows?: boolean }
-    containerConfig?: { exitCode?: number; stdoutLines?: string[] }
+    containerConfig?: { exitCode?: number; stdoutLines?: string[]; stderrLines?: string[] }
   } = {},
 ): {
   docker: DockerClientLike
@@ -63,16 +65,6 @@ function makeDockerFake(
       lastContainer = makeContainerFake(config.containerConfig)
       return lastContainer
     },
-    modem: {
-      // Fake demuxStream: pipe directly to stdout (no Docker multiplexing header in test)
-      demuxStream: (
-        stream: NodeJS.ReadableStream,
-        stdout: NodeJS.WritableStream,
-        _stderr: NodeJS.WritableStream,
-      ) => {
-        stream.pipe(stdout)
-      },
-    },
   }
 
   return {
@@ -89,8 +81,17 @@ function makeDockerFake(
   }
 }
 
+// Build a Docker multiplexed log frame: 1-byte type (1=stdout, 2=stderr), 3 pad, 4-byte big-endian size, payload
+function dockerFrame(type: 1 | 2, payload: string): Buffer {
+  const body = Buffer.from(payload)
+  const header = Buffer.alloc(8)
+  header[0] = type
+  header.writeUInt32BE(body.length, 4)
+  return Buffer.concat([header, body])
+}
+
 function makeContainerFake(
-  config: { exitCode?: number; stdoutLines?: string[] } = {},
+  config: { exitCode?: number; stdoutLines?: string[]; stderrLines?: string[] } = {},
 ): ContainerLike & { removeCalls: number } {
   let removeCalls = 0
   const container = {
@@ -98,8 +99,14 @@ function makeContainerFake(
     start: async () => {},
     logs: async (): Promise<NodeJS.ReadableStream> => {
       const { Readable } = await import("node:stream")
-      const lines = config.stdoutLines ?? []
-      return Readable.from(lines.map((l) => `${l}\n`).join(""))
+      const frames: Buffer[] = []
+      for (const line of config.stdoutLines ?? []) {
+        frames.push(dockerFrame(1, `${line}\n`))
+      }
+      for (const line of config.stderrLines ?? []) {
+        frames.push(dockerFrame(2, `${line}\n`))
+      }
+      return Readable.from(Buffer.concat(frames))
     },
     wait: async () => ({ StatusCode: config.exitCode ?? 0 }),
     remove: async () => {
@@ -135,6 +142,7 @@ describe("defaultBuildContextFactory", () => {
     expect(listing).toContain("bootstrap/package.json")
     expect(listing).toContain("bootstrap/tsconfig.json")
     expect(listing).toContain("bootstrap/entrypoint")
+    expect(listing).toContain("bootstrap/sandy.ts")
     expect(listing).toContain("Dockerfile")
   })
 })
@@ -145,9 +153,24 @@ describe("generateDockerfile", () => {
     expect(df).toMatch(/COPY bootstrap\/ \/tmp\/bootstrap\//)
   })
 
-  test("RUNs init.sh from /tmp/bootstrap", () => {
+  test("RUNs each init.sh step as a separate layer", () => {
     const df = generateDockerfile()
-    expect(df).toContain("sh /tmp/bootstrap/init.sh")
+    for (const step of [
+      "prerequisites",
+      "certificates",
+      "nodejs",
+      "pnpm",
+      "workspace",
+      "profiles",
+      "dependencies",
+    ]) {
+      expect(df).toContain(`RUN sh /tmp/bootstrap/init.sh ${step}`)
+    }
+  })
+
+  test("sets WORKDIR to /workspace so pnpm can find package.json", () => {
+    const df = generateDockerfile()
+    expect(df).toContain("WORKDIR /workspace")
   })
 
   test("sets ENTRYPOINT to pnpm run -s entrypoint", () => {
@@ -160,9 +183,27 @@ describe("DockerBackend.imageCreate", () => {
   test("calls buildImage with tag sandy:latest", async () => {
     const { docker, buildImageCalls } = makeDockerFake()
     const backend = new DockerBackend(docker, fakeBuildContext)
-    await backend.imageCreate()
+    await backend.imageCreate(() => {})
     expect(buildImageCalls.length).toBe(1)
     expect((buildImageCalls[0]?.opts as { t?: string })?.t).toBe("sandy:latest")
+  })
+
+  test("forwards [-->-prefixed stream content as progress", async () => {
+    // Build stream returning JSON with [-->-prefixed stream content
+    const buildLine = JSON.stringify({ stream: "[-->  building layer\n" })
+    const { docker } = makeDockerFake()
+    const fakeContextWithProgress: BuildContextFactory = async () =>
+      Object.assign(Readable.from([]), { [Symbol.asyncDispose]: async () => {} })
+    // Override buildImage to return a stream with progress content
+    const progressDocker: DockerClientLike = {
+      ...docker,
+      buildImage: async (): Promise<NodeJS.ReadableStream> =>
+        Readable.from([Buffer.from(`${buildLine}\n`)]),
+    }
+    const backend = new DockerBackend(progressDocker, fakeContextWithProgress)
+    const progress: string[] = []
+    await backend.imageCreate((msg) => progress.push(msg))
+    expect(progress).toContain("building layer")
   })
 })
 
@@ -170,7 +211,7 @@ describe("DockerBackend.imageDelete", () => {
   test("calls remove on sandy:latest", async () => {
     const { docker, imageFake } = makeDockerFake()
     const backend = new DockerBackend(docker)
-    await backend.imageDelete()
+    await backend.imageDelete(() => {})
     expect(imageFake.removeCalls.length).toBe(1)
   })
 })
@@ -185,11 +226,22 @@ const baseRunOpts = {
 
 type ContainerOpts = {
   Image?: string
+  Entrypoint?: string[]
+  Cmd?: string[]
   Env?: string[]
   HostConfig?: { Binds?: string[]; ExtraHosts?: string[] }
 }
 
 describe("DockerBackend.run", () => {
+  test("passes compiled script path as Cmd so Dockerfile ENTRYPOINT receives it as argument", async () => {
+    const { docker, createContainerCalls } = makeDockerFake()
+    const backend = new DockerBackend(docker, fakeBuildContext)
+    await backend.run(baseRunOpts, () => {})
+    const opts = createContainerCalls[0]?.opts as ContainerOpts
+    expect(opts?.Cmd).toEqual(["/workspace/dist/scripts/hello.js"])
+    expect(opts?.Entrypoint).toBeUndefined()
+  })
+
   test("creates container with Image sandy:latest", async () => {
     const { docker, createContainerCalls } = makeDockerFake()
     const backend = new DockerBackend(docker, fakeBuildContext)
@@ -246,15 +298,24 @@ describe("DockerBackend.run", () => {
     expect(progress.join("\n")).not.toContain("normal output line")
   })
 
-  test("collects stdout into RunResult and captures exit code", async () => {
+  test("collects output into RunResult and captures exit code", async () => {
     const { docker } = makeDockerFake({
       containerConfig: { exitCode: 2, stdoutLines: ["line one", "line two"] },
     })
     const backend = new DockerBackend(docker, fakeBuildContext)
     const result = await backend.run(baseRunOpts, () => {})
-    expect(result.stdout).toContain("line one")
-    expect(result.stdout).toContain("line two")
+    expect(result.output).toContain("line one")
+    expect(result.output).toContain("line two")
     expect(result.exitCode).toBe(2)
+  })
+
+  test("routes container stderr output to stderrLine, appears with [err] prefix", async () => {
+    const { docker } = makeDockerFake({
+      containerConfig: { stderrLines: ["container error"] },
+    })
+    const backend = new DockerBackend(docker, fakeBuildContext)
+    const result = await backend.run(baseRunOpts, () => {})
+    expect(result.output).toContain("[err] container error")
   })
 
   test("removes container after run completes", async () => {
@@ -262,6 +323,48 @@ describe("DockerBackend.run", () => {
     const backend = new DockerBackend(docker, fakeBuildContext)
     await backend.run(baseRunOpts, () => {})
     expect(lastContainer().removeCalls).toBe(1)
+  })
+
+  test("outputFiles includes files created during the run, not pre-existing ones", async () => {
+    const tmpDir = join(import.meta.dir, "../.tmp-test-docker-run")
+    mkdirSync(tmpDir, { recursive: true })
+    try {
+      // pre-existing file written before the backend run starts
+      writeFileSync(join(tmpDir, "pre-existing.json"), "{}")
+
+      // custom docker fake that writes a new file during container.start()
+      const { docker } = makeDockerFake()
+      const writingDocker: DockerClientLike = {
+        ...docker,
+        createContainer: async (opts) => {
+          const container = await docker.createContainer(opts)
+          return {
+            ...container,
+            start: async () => {
+              writeFileSync(join(tmpDir, "result.json"), "{}")
+              return container.start()
+            },
+          }
+        },
+      }
+
+      const backend = new DockerBackend(writingDocker, fakeBuildContext)
+      const result = await backend.run({ ...baseRunOpts, sessionDir: tmpDir }, () => {})
+      expect(result.outputFiles).toContain("result.json")
+      expect(result.outputFiles).not.toContain("pre-existing.json")
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  test("returns empty outputFiles when sessionDir does not exist", async () => {
+    const { docker } = makeDockerFake()
+    const backend = new DockerBackend(docker, fakeBuildContext)
+    const result = await backend.run(
+      { ...baseRunOpts, sessionDir: "/nonexistent/path/that/does/not/exist" },
+      () => {},
+    )
+    expect(result.outputFiles).toEqual([])
   })
 
   test("logs container ID to stderr on non-zero exit", async () => {
@@ -286,12 +389,12 @@ describe("DockerBackend.imageExists", () => {
   test("returns true when sandy:latest can be inspected", async () => {
     const { docker } = makeDockerFake()
     const backend = new DockerBackend(docker)
-    expect(await backend.imageExists()).toBe(true)
+    expect(await backend.imageExists(() => {})).toBe(true)
   })
 
   test("returns false when sandy:latest does not exist", async () => {
     const { docker } = makeDockerFake({ imageConfig: { inspectThrows: true } })
     const backend = new DockerBackend(docker)
-    expect(await backend.imageExists()).toBe(false)
+    expect(await backend.imageExists(() => {})).toBe(false)
   })
 })

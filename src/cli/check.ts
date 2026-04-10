@@ -1,6 +1,8 @@
 import type { CommandModule } from "yargs"
 import type { Backend } from "../backend"
+import { OutputHandler } from "../output-handler"
 import { createSession } from "../session"
+import type { ProgressCallback, RunOptions } from "../types"
 import { DEFAULT_REGION } from "../types"
 
 export interface ConnectArgs {
@@ -8,55 +10,52 @@ export interface ConnectArgs {
   region: string
 }
 
+async function runCheck(
+  backend: Backend,
+  onProgress: ProgressCallback,
+  opts: Omit<RunOptions, "session" | "sessionDir">,
+  label: string,
+): Promise<void> {
+  const handler = new OutputHandler(onProgress)
+  const session = await createSession()
+  const result = await backend.run({ ...opts, session: session.name, sessionDir: session.dir }, onProgress)
+  if (result.exitCode !== 0) {
+    handler.stderrLine(`sandy: ${label} check failed`)
+    process.exitCode = 1
+  } else {
+    handler.stdoutLine(`sandy: ${label} check passed`)
+  }
+}
+
 export async function runBaseline(
   backend: Backend,
-  print: (line: string) => void = console.log,
-  printErr: (line: string) => void = console.error,
+  onProgress: ProgressCallback = () => {},
 ): Promise<void> {
-  const session = await createSession()
-  const result = await backend.run(
-    {
-      scriptPath: "__baseline__",
-      imdsPort: 0,
-      session: session.name,
-      sessionDir: session.dir,
-    },
-    (msg) => print(`[--> ${msg}`),
-  )
-  if (result.exitCode !== 0) {
-    printErr("baseline check failed")
-  }
+  await runCheck(backend, onProgress, { scriptPath: "__baseline__", imdsPort: 0 }, "baseline")
 }
 
 export async function runConnect(
   argv: ConnectArgs,
   backend: Backend,
-  print: (line: string) => void = console.log,
-  printErr: (line: string) => void = console.error,
+  onProgress: ProgressCallback = () => {},
 ): Promise<void> {
-  const session = await createSession()
-  const result = await backend.run(
-    {
-      scriptPath: "__connect__",
-      imdsPort: argv.imdsPort,
-      region: argv.region,
-      session: session.name,
-      sessionDir: session.dir,
-    },
-    (msg) => print(`[--> ${msg}`),
+  await runCheck(
+    backend,
+    onProgress,
+    { scriptPath: "__connect__", imdsPort: argv.imdsPort, region: argv.region },
+    "connect",
   )
-  if (result.exitCode !== 0) {
-    printErr("connect check failed")
-  }
 }
 
-export function makeCheckCommand(backend: Backend): CommandModule {
+export function makeCheckCommand(backend: Backend, onProgress: ProgressCallback): CommandModule {
   return {
     command: "check",
     describe: "Run health checks",
     builder: (y) =>
       y
-        .command("baseline", "Run baseline health check", {}, async () => runBaseline(backend))
+        .command("baseline", "Run baseline health check", {}, async () =>
+          runBaseline(backend, onProgress),
+        )
         .command(
           "connect",
           "Run connectivity check",
@@ -64,7 +63,7 @@ export function makeCheckCommand(backend: Backend): CommandModule {
             y
               .option("imds-port", { type: "number", demandOption: true })
               .option("region", { type: "string", default: DEFAULT_REGION }),
-          async (argv) => runConnect(argv as unknown as ConnectArgs, backend),
+          async (argv) => runConnect(argv as unknown as ConnectArgs, backend, onProgress),
         )
         .demandCommand(1),
     handler: () => {},

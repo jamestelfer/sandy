@@ -89,8 +89,7 @@ export type ProgressCallback = (message: string) => void | Promise<void>
 
 export interface SandyRunResult {
   exitCode: number
-  stdout: string
-  stderr: string
+  output: string
   sessionName: string
 }
 
@@ -138,8 +137,7 @@ export class SandyMcpServer {
     const result = await this.backend.run(opts, () => {})
     return {
       exitCode: result.exitCode,
-      stdout: result.stdout,
-      stderr: result.stderr,
+      output: result.output,
       sessionName: session.name,
     }
   }
@@ -179,8 +177,7 @@ export class SandyMcpServer {
 
     return {
       exitCode: result.exitCode,
-      stdout: result.stdout,
-      stderr: result.stderr,
+      output: result.output,
       sessionName: session.name,
     }
   }

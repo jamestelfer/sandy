@@ -1,4 +1,6 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 import type { StartOptions } from "@superhq/shuru"
 import { ShuruBackend } from "./shuru-backend"
 import type { ShellExecutor, SandboxFactory } from "./shuru-backend"
@@ -57,10 +59,16 @@ const baseRunOpts: RunOptions = {
 
 function makeExecutor(
   responses: Record<string, { stdout: string; stderr: string; exitCode: number }> = {},
+  stdoutLines: string[] = [],
 ): { executor: ShellExecutor; calls: string[][] } {
   const calls: string[][] = []
-  const executor: ShellExecutor = async (cmd) => {
+  const executor: ShellExecutor = async (cmd, opts) => {
     calls.push(cmd)
+    if (opts?.handler) {
+      for (const line of stdoutLines) {
+        opts.handler.stdoutLine(line)
+      }
+    }
     return responses[cmd.join(" ")] ?? { stdout: "", stderr: "", exitCode: 0 }
   }
   return { executor, calls }
@@ -151,14 +159,89 @@ describe("ShuruBackend.run", () => {
     expect(progress.join("\n")).not.toContain("normal output line")
   })
 
-  test("collects all stdout into RunResult and captures exit code", async () => {
+  test("collects all output into RunResult and captures exit code", async () => {
     const { factory } = makeSandboxFactory({ exitCode: 2, stdoutLines: ["line one", "line two"] })
     const backend = new ShuruBackend(undefined, factory)
     const result = await backend.run(baseRunOpts, () => {})
 
-    expect(result.stdout).toContain("line one")
-    expect(result.stdout).toContain("line two")
+    expect(result.output).toContain("line one")
+    expect(result.output).toContain("line two")
     expect(result.exitCode).toBe(2)
+  })
+
+  test("assembles lines split across multiple stdout chunks", async () => {
+    // Emit the line in two separate Buffer events (no \n in the first)
+    const startOptsCalls: StartOptions[] = []
+    const factory: SandboxFactory = async (opts) => {
+      startOptsCalls.push(opts)
+      return {
+        spawn: async () => {
+          const listeners: { stdout: ((d: Buffer) => void)[]; stderr: ((d: Buffer) => void)[] } = {
+            stdout: [],
+            stderr: [],
+          }
+          const handle = {
+            on(evt: "stdout" | "stderr", h: (d: Buffer) => void) {
+              listeners[evt].push(h)
+              return handle
+            },
+            exited: new Promise<number>((resolve) => {
+              setTimeout(() => {
+                for (const h of listeners.stdout) {
+                  h(Buffer.from("hel"))
+                  h(Buffer.from("lo\n"))
+                }
+                resolve(0)
+              }, 0)
+            }),
+          }
+          return handle
+        },
+        stop: async () => {},
+      }
+    }
+    const backend = new ShuruBackend(undefined, factory)
+    const result = await backend.run(baseRunOpts, () => {})
+    expect(result.output).toContain("hello")
+  })
+
+  test("outputFiles includes files created during the run, not pre-existing ones", async () => {
+    const tmpDir = join(import.meta.dir, "../.tmp-test-shuru-run")
+    mkdirSync(tmpDir, { recursive: true })
+    try {
+      // pre-existing file written before the backend run starts
+      writeFileSync(join(tmpDir, "pre-existing.json"), "{}")
+
+      // factory writes a new file into sessionDir during "spawn" to simulate script output
+      const factory: SandboxFactory = async () => ({
+        spawn: async () => {
+          writeFileSync(join(tmpDir, "result.json"), "{}")
+          const handle = {
+            on: (_: "stdout" | "stderr", __: (d: Buffer) => void) => handle,
+            exited: Promise.resolve(0),
+          }
+          return handle
+        },
+        stop: async () => {},
+      })
+
+      const backend = new ShuruBackend(undefined, factory)
+      const result = await backend.run({ ...baseRunOpts, sessionDir: tmpDir }, () => {})
+      expect(result.outputFiles).toContain("result.json")
+      expect(result.outputFiles).not.toContain("pre-existing.json")
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  test("returns empty outputFiles when sessionDir does not exist", async () => {
+    const { factory } = makeSandboxFactory()
+    const backend = new ShuruBackend(undefined, factory)
+    const result = await backend.run(
+      { ...baseRunOpts, sessionDir: "/nonexistent/path/that/does/not/exist" },
+      () => {},
+    )
+    expect(result.outputFiles).toEqual([])
   })
 
   test("stops the sandbox after run completes", async () => {
@@ -186,13 +269,13 @@ describe("ShuruBackend.imageCreate", () => {
     const { executor } = makeExecutor()
     const backend = new ShuruBackend(executor)
     // Cert file doesn't exist — must not throw, just skip
-    await expect(backend.imageCreate()).resolves.toBeUndefined()
+    await expect(backend.imageCreate(() => {})).resolves.toBeUndefined()
   })
 
   test("calls shuru checkpoint create sandy with --allow-net and bootstrap mount", async () => {
     const { executor, calls } = makeExecutor()
     const backend = new ShuruBackend(executor)
-    await backend.imageCreate()
+    await backend.imageCreate(() => {})
 
     const cmd = calls[0]
     expect(cmd.slice(0, 4)).toEqual(["shuru", "checkpoint", "create", "sandy"])
@@ -206,14 +289,31 @@ describe("ShuruBackend.imageCreate", () => {
     expect(sepIdx).toBeGreaterThan(-1)
     expect(cmd.slice(sepIdx + 1).join(" ")).toContain("/tmp/bootstrap/init.sh")
   })
+
+  test("forwards [-->-prefixed executor output as progress", async () => {
+    const { executor } = makeExecutor({}, ["[-->  checkpoint step 1", "normal line"])
+    const backend = new ShuruBackend(executor)
+    const progress: string[] = []
+    await backend.imageCreate((msg) => progress.push(msg))
+    expect(progress).toContain("checkpoint step 1")
+    expect(progress.join("\n")).not.toContain("normal line")
+  })
 })
 
 describe("ShuruBackend.imageDelete", () => {
   test("calls shuru checkpoint delete sandy", async () => {
     const { executor, calls } = makeExecutor()
     const backend = new ShuruBackend(executor)
-    await backend.imageDelete()
+    await backend.imageDelete(() => {})
     expect(calls[0]).toEqual(["shuru", "checkpoint", "delete", "sandy"])
+  })
+
+  test("forwards [-->-prefixed executor output as progress", async () => {
+    const { executor } = makeExecutor({}, ["[-->  deleting checkpoint"])
+    const backend = new ShuruBackend(executor)
+    const progress: string[] = []
+    await backend.imageDelete((msg) => progress.push(msg))
+    expect(progress).toContain("deleting checkpoint")
   })
 })
 
@@ -227,7 +327,7 @@ describe("ShuruBackend.imageExists", () => {
       },
     })
     const backend = new ShuruBackend(executor)
-    expect(await backend.imageExists()).toBe(false)
+    expect(await backend.imageExists(() => {})).toBe(false)
   })
 
   test("returns false when sandy is absent from the list", async () => {
@@ -235,7 +335,7 @@ describe("ShuruBackend.imageExists", () => {
       "shuru checkpoint list": { stdout: "other-checkpoint 2024-01-02\n", stderr: "", exitCode: 0 },
     })
     const backend = new ShuruBackend(executor)
-    expect(await backend.imageExists()).toBe(false)
+    expect(await backend.imageExists(() => {})).toBe(false)
   })
 
   test("returns false when checkpoint list is empty", async () => {
@@ -243,7 +343,7 @@ describe("ShuruBackend.imageExists", () => {
       "shuru checkpoint list": { stdout: "", stderr: "", exitCode: 0 },
     })
     const backend = new ShuruBackend(executor)
-    expect(await backend.imageExists()).toBe(false)
+    expect(await backend.imageExists(() => {})).toBe(false)
   })
 
   test("calls shuru checkpoint list and returns true when sandy is present", async () => {
@@ -255,7 +355,7 @@ describe("ShuruBackend.imageExists", () => {
       },
     })
     const backend = new ShuruBackend(executor)
-    expect(await backend.imageExists()).toBe(true)
+    expect(await backend.imageExists(() => {})).toBe(true)
     expect(calls[0]).toEqual(["shuru", "checkpoint", "list"])
   })
 })

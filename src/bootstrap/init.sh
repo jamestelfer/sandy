@@ -60,6 +60,7 @@ workspace() {
   mkdir -p /workspace
   cp "${BOOTSTRAP}/package.json" /workspace/
   cp "${BOOTSTRAP}/tsconfig.json" /workspace/
+  cp "${BOOTSTRAP}/sandy.ts" /workspace/
   cp "${BOOTSTRAP}/entrypoint" /workspace/entrypoint
   chmod +x /workspace/entrypoint
 }
