@@ -19,10 +19,13 @@ export function checkScript(name: string): string {
     return 'console.log("sandy: baseline OK")\n'
   }
   // __connect__: verifies AWS SDK can reach IMDS
-  return [
-    'import { EC2Client, DescribeRegionsCommand } from "@aws-sdk/client-ec2"',
-    "const client = new EC2Client({})",
-    "const result = await client.send(new DescribeRegionsCommand({}))",
-    'console.log(`sandy: connect OK (${result.Regions?.length ?? 0} regions)`)',
-  ].join("\n") + "\n"
+  // \${ escapes interpolation so the literal ${...} appears in the generated script
+  return `import { EC2Client, DescribeRegionsCommand } from "@aws-sdk/client-ec2"
+import { progress } from "../sandy.js"
+progress("Using ECS SDK to check connectivity to IMDS...")
+const client = new EC2Client({})
+const result = await client.send(new DescribeRegionsCommand({}))
+progress(\`Connect succeeded, found (\${result.Regions?.length ?? 0} regions)\`)
+console.log("sandy: connect OK")
+`
 }
