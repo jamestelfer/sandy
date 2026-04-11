@@ -77,12 +77,21 @@ CLI entry (src/main.ts)
 ```
 
 **Backend interface** (`src/backend.ts`):
-- `imageCreate()` — create/build the sandbox image
-- `imageDelete()` — delete the sandbox image
-- `imageExists()` → boolean
-- `run(opts: RunOptions, onProgress: (msg: string) => void)` → `RunResult`
+- `imageCreate(onProgress)` — create/build the sandbox image
+- `imageDelete(onProgress)` — delete the sandbox image
+- `imageExists(onProgress)` → boolean
+- `run(opts: RunOptions, onProgress)` → `RunResult`
 
-**Progress protocol**: the real backend (Phase 3/5) reads stdout from the VM/container, parses lines with `parseProgressLine()`, and calls `onProgress(message)` for `[-->` prefixed lines. The CLI handler then formats and prints them. Normal stdout is captured in `RunResult.stdout`.
+All four methods accept a `ProgressCallback`. `imageExists` is a silent boolean probe — its callback is never called by implementations, but it is accepted for interface consistency. Callers may invoke it directly before delegating to the backend if they want to surface a status message.
+
+**Output/progress design** — backends are output-modality agnostic:
+
+- All subprocess output (stdout + stderr) is routed through `OutputHandler` and written to **stderr**. This works for both CLI users (immediate visibility) and MCP (which uses stderr as its transport channel).
+- `[-->` prefixed lines are detected by `OutputHandler` (via `parseProgressLine()`), stripped of their prefix, and delivered to the `ProgressCallback`. The callback receives the clean message string — no prefix.
+- The caller plugs in the appropriate handler:
+  - **CLI** (`src/main.ts`): `(msg) => process.stderr.write(`\x1b[1m${msg}\x1b[0m\n`)` — bold text to stderr.
+  - **MCP** (Phase 4): will send MCP progress notifications instead.
+- Swapping the progress handler changes display behaviour without touching any backend code.
 
 **Session**: a human-readable name (`human-id` format, e.g. `happy-fox-trail`) identifying an output directory at `.sandy/<name>/`. Auto-generated if not provided; `.sandy/.gitignore` with `*` is created on first use.
 
