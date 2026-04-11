@@ -175,9 +175,27 @@ describe("DockerBackend.imageCreate", () => {
   test("calls buildImage with tag sandy:latest", async () => {
     const { docker, buildImageCalls } = makeDockerFake()
     const backend = new DockerBackend(docker, fakeBuildContext)
-    await backend.imageCreate()
+    await backend.imageCreate(() => {})
     expect(buildImageCalls.length).toBe(1)
     expect((buildImageCalls[0]?.opts as { t?: string })?.t).toBe("sandy:latest")
+  })
+
+  test("forwards [-->-prefixed stream content as progress", async () => {
+    // Build stream returning JSON with [-->-prefixed stream content
+    const buildLine = JSON.stringify({ stream: "[-->  building layer\n" })
+    const { docker } = makeDockerFake()
+    const fakeContextWithProgress: BuildContextFactory = async () =>
+      Object.assign(Readable.from([]), { [Symbol.asyncDispose]: async () => {} })
+    // Override buildImage to return a stream with progress content
+    const progressDocker: DockerClientLike = {
+      ...docker,
+      buildImage: async (): Promise<NodeJS.ReadableStream> =>
+        Readable.from([Buffer.from(`${buildLine}\n`)]),
+    }
+    const backend = new DockerBackend(progressDocker, fakeContextWithProgress)
+    const progress: string[] = []
+    await backend.imageCreate((msg) => progress.push(msg))
+    expect(progress).toContain("building layer")
   })
 })
 
@@ -185,7 +203,7 @@ describe("DockerBackend.imageDelete", () => {
   test("calls remove on sandy:latest", async () => {
     const { docker, imageFake } = makeDockerFake()
     const backend = new DockerBackend(docker)
-    await backend.imageDelete()
+    await backend.imageDelete(() => {})
     expect(imageFake.removeCalls.length).toBe(1)
   })
 })
@@ -310,12 +328,12 @@ describe("DockerBackend.imageExists", () => {
   test("returns true when sandy:latest can be inspected", async () => {
     const { docker } = makeDockerFake()
     const backend = new DockerBackend(docker)
-    expect(await backend.imageExists()).toBe(true)
+    expect(await backend.imageExists(() => {})).toBe(true)
   })
 
   test("returns false when sandy:latest does not exist", async () => {
     const { docker } = makeDockerFake({ imageConfig: { inspectThrows: true } })
     const backend = new DockerBackend(docker)
-    expect(await backend.imageExists()).toBe(false)
+    expect(await backend.imageExists(() => {})).toBe(false)
   })
 })

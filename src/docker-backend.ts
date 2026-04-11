@@ -137,10 +137,11 @@ export class DockerBackend implements Backend {
     await this.docker.getImage(IMAGE_NAME).remove()
   }
 
-  async imageCreate(_onProgress: ProgressCallback): Promise<void> {
+  async imageCreate(onProgress: ProgressCallback): Promise<void> {
     await using context = await this.buildContext()
     const stream = await this.docker.buildImage(context, { t: IMAGE_NAME })
-    // Parse build output JSON and surface Docker errors
+    const handler = new OutputHandler(onProgress)
+    // Parse build output JSON, feed stream content through OutputHandler (stderr + progress)
     await new Promise<void>((resolve, reject) => {
       stream.on("data", (chunk: Buffer) => {
         for (const line of chunk.toString().split("\n")) {
@@ -150,7 +151,7 @@ export class DockerBackend implements Backend {
           try {
             const msg = JSON.parse(line) as { stream?: string; error?: string }
             if (msg.stream) {
-              process.stderr.write(msg.stream)
+              handler.feedStdout(Buffer.from(msg.stream))
             }
             if (msg.error) {
               reject(new Error(`docker build: ${msg.error.trim()}`))
@@ -160,7 +161,10 @@ export class DockerBackend implements Backend {
           }
         }
       })
-      stream.on("end", resolve)
+      stream.on("end", () => {
+        handler.flush()
+        resolve()
+      })
       stream.on("error", reject)
     })
   }

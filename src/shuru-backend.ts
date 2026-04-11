@@ -106,18 +106,19 @@ export class ShuruBackend implements Backend {
   ) {}
 
   async imageExists(_onProgress: ProgressCallback): Promise<boolean> {
+    // imageExists is a silent probe — no subprocess output, callback intentionally unused
     const { stdout } = await this.executor(["shuru", "checkpoint", "list"])
     return stdout
       .split("\n")
       .some((line) => line === CHECKPOINT_NAME || line.startsWith(`${CHECKPOINT_NAME} `))
   }
 
-  async imageDelete(_onProgress: ProgressCallback): Promise<void> {
-    const handler = new OutputHandler(() => {})
+  async imageDelete(onProgress: ProgressCallback): Promise<void> {
+    const handler = new OutputHandler(onProgress)
     await this.executor(["shuru", "checkpoint", "delete", CHECKPOINT_NAME], { handler })
   }
 
-  async imageCreate(_onProgress: ProgressCallback): Promise<void> {
+  async imageCreate(onProgress: ProgressCallback): Promise<void> {
     await using staging = await makeTmpDir("sandy-shuru-bootstrap-")
     await fs.mkdir(`${staging.path}/certs`, { recursive: true })
 
@@ -144,7 +145,7 @@ export class ShuruBackend implements Backend {
       process.stderr.write("sandy: Netskope certificate not found, skipping\n")
     }
 
-    const handler = new OutputHandler(() => {})
+    const handler = new OutputHandler(onProgress)
     await this.executor(
       [
         "shuru",
