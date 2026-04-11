@@ -12,5 +12,5 @@
     "stableTypeOrdering": true,
     "skipLibCheck": true
   },
-  "include": ["scripts"]
+  "include": ["scripts", "sandy.ts"]
 }

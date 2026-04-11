@@ -52,4 +52,17 @@ describe("createSession", () => {
     expect(dir).toBe(resolve(tmpDir, ".sandy", "my-session"))
     expect(existsSync(join(tmpDir, ".sandy", "my-session"))).toBe(true)
   })
+
+  it("uses the provided dir when given, ignoring the default .sandy/<name>/ path", async () => {
+    const customDir = join(tmpDir, "custom-output")
+    const { dir } = await createSession(undefined, customDir)
+    expect(dir).toBe(customDir)
+    expect(existsSync(customDir)).toBe(true)
+  })
+
+  it("still generates a session name when only dir is provided", async () => {
+    const customDir = join(tmpDir, "custom-output")
+    const { name } = await createSession(undefined, customDir)
+    expect(name).toMatch(/^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)+$/)
+  })
 })
