@@ -4,7 +4,11 @@ import * as path from "node:path"
 import { OutputTracker } from "./scan-output"
 
 async function withTmpDir(fn: (dir: string) => Promise<void>): Promise<void> {
-  const dir = path.join(import.meta.dir, "../.tmp-test-scan-output", Math.random().toString(36).slice(2))
+  const dir = path.join(
+    import.meta.dir,
+    "../.tmp-test-scan-output",
+    Math.random().toString(36).slice(2),
+  )
   await fs.mkdir(dir, { recursive: true })
   try {
     await fn(dir)
@@ -70,7 +74,11 @@ describe("OutputTracker", () => {
   })
 
   test("changed() returns files if dir appears after construction", async () => {
-    const dir = path.join(import.meta.dir, "../.tmp-test-scan-output-late", Math.random().toString(36).slice(2))
+    const dir = path.join(
+      import.meta.dir,
+      "../.tmp-test-scan-output-late",
+      Math.random().toString(36).slice(2),
+    )
     const tracker = await OutputTracker.create(dir)
     await fs.mkdir(dir, { recursive: true })
     try {

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import { mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { spawn } from "node:child_process"
@@ -166,6 +166,29 @@ describe("generateDockerfile", () => {
     ]) {
       expect(df).toContain(`RUN sh /tmp/bootstrap/init.sh ${step}`)
     }
+  })
+
+  test("sets cert bundle ENV vars before init steps, mirroring node_certs.sh", () => {
+    const df = generateDockerfile()
+    const certBundle = "/etc/ssl/certs/ca-certificates.crt"
+    for (const key of [
+      "NIX_SSL_CERT_FILE",
+      "AWS_CA_BUNDLE",
+      "CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE",
+      "CURL_CA_BUNDLE",
+      "GRPC_DEFAULT_SSL_ROOTS_FILE_PATH",
+      "NODE_EXTRA_CA_CERTS",
+      "PIP_CERT",
+      "REQUESTS_CA_BUNDLE",
+      "SSL_CERT_FILE",
+      "GIT_SSL_CAINFO",
+    ]) {
+      expect(df).toContain(`${key}=${certBundle}`)
+    }
+    // ENV block must appear before the first RUN init.sh step
+    const envPos = df.indexOf(`NODE_EXTRA_CA_CERTS=${certBundle}`)
+    const firstRunPos = df.indexOf("RUN sh /tmp/bootstrap/init.sh prerequisites")
+    expect(envPos).toBeLessThan(firstRunPos)
   })
 
   test("sets WORKDIR to /workspace so pnpm can find package.json", () => {

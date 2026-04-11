@@ -13,6 +13,8 @@ import ec2DescribePath from "../isolate/skills/sandy/resources/examples/ec2_desc
 import ecsServicesPath from "../isolate/skills/sandy/resources/examples/ecs_services.ts" with {
   type: "file",
 }
+import type { ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types"
+import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol"
 
 const EXAMPLES: Record<string, string> = {
   ec2_describe: readFileSync(ec2DescribePath, "utf-8"),
@@ -98,6 +100,27 @@ interface ActiveSession {
   dir: string
 }
 
+export const handlerProgressCallback = (
+  handlerContext: RequestHandlerExtra<ServerRequest, ServerNotification>,
+): ProgressCallback => {
+  const token = handlerContext._meta?.progressToken
+  if (token === undefined) {
+    return async (message: string) => {}
+  }
+
+  let notificationCount = 1
+  return async (message: string) => {
+    await handlerContext.sendNotification({
+      method: "notifications/progress",
+      params: {
+        progressToken: token,
+        progress: notificationCount++,
+        message,
+      },
+    })
+  }
+}
+
 export class SandyMcpServer {
   private activeSession: ActiveSession | null = null
   private resumedName: string | null = null
@@ -121,6 +144,7 @@ export class SandyMcpServer {
   // ── Tool handlers ────────────────────────────────────────────────────────
 
   async handleSandyCheck(
+    onProgress: ProgressCallback,
     action: "baseline" | "connect",
     imdsPort?: number,
   ): Promise<SandyRunResult> {
@@ -134,7 +158,7 @@ export class SandyMcpServer {
       session: session.name,
       sessionDir: session.dir,
     }
-    const result = await this.backend.run(opts, () => {})
+    const result = await this.backend.run(opts, onProgress)
     return {
       exitCode: result.exitCode,
       output: result.output,
@@ -142,11 +166,11 @@ export class SandyMcpServer {
     }
   }
 
-  async handleSandyImage(action: "create" | "delete"): Promise<void> {
+  async handleSandyImage(onProgress: ProgressCallback, action: "create" | "delete"): Promise<void> {
     if (action === "create") {
-      await this.backend.imageCreate()
+      await this.backend.imageCreate(onProgress)
     } else {
-      await this.backend.imageDelete()
+      await this.backend.imageDelete(onProgress)
     }
   }
 
@@ -203,8 +227,9 @@ export class SandyMcpServer {
           action: z.enum(["create", "delete"]).describe('"create" or "delete"'),
         }),
       },
-      async ({ action }) => {
-        await this.handleSandyImage(action)
+      async ({ action }, ctx) => {
+        const onProgress = handlerProgressCallback(ctx)
+        await this.handleSandyImage(onProgress, action)
         return {
           content: [{ type: "text" as const, text: `Image ${action} complete.` }],
         }
@@ -220,8 +245,9 @@ export class SandyMcpServer {
           imdsPort: z.number().optional().describe("IMDS port (required for connect)"),
         }),
       },
-      async ({ action, imdsPort }) => {
-        const result = await this.handleSandyCheck(action, imdsPort)
+      async ({ action, imdsPort }, ctx) => {
+        const onProgress = handlerProgressCallback(ctx)
+        const result = await this.handleSandyCheck(onProgress, action, imdsPort)
         return {
           content: [
             {
@@ -244,25 +270,10 @@ export class SandyMcpServer {
           args: z.array(z.string()).optional().describe("Arguments passed to the script"),
         }),
       },
-      async ({ script, imdsPort, region, args }, extra) => {
-        const progressToken = extra._meta?.progressToken
-        let progressCount = 0
+      async ({ script, imdsPort, region, args }, ctx) => {
+        const onProgress = handlerProgressCallback(ctx)
 
-        const result = await this.handleSandyRun(
-          { script, imdsPort, region, args },
-          async (msg) => {
-            if (progressToken !== undefined) {
-              await extra.sendNotification({
-                method: "notifications/progress",
-                params: {
-                  progressToken,
-                  progress: ++progressCount,
-                  message: msg,
-                },
-              })
-            }
-          },
-        )
+        const result = await this.handleSandyRun({ script, imdsPort, region, args }, onProgress)
 
         return {
           content: [{ type: "text" as const, text: JSON.stringify(result) }],
@@ -281,7 +292,12 @@ export class SandyMcpServer {
       async ({ sessionName }) => {
         this.handleResumeSession(sessionName)
         return {
-          content: [{ type: "text" as const, text: `Active session set to: ${sessionName}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: `Active session set to: ${sessionName}`,
+            },
+          ],
         }
       },
     )
@@ -301,7 +317,9 @@ export class SandyMcpServer {
       }),
     )
 
-    const exampleTemplate = new ResourceTemplate("sandy://examples/{name}", { list: undefined })
+    const exampleTemplate = new ResourceTemplate("sandy://examples/{name}", {
+      list: undefined,
+    })
     server.registerResource(
       "examples",
       exampleTemplate,

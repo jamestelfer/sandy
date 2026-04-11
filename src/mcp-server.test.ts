@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from "bun:test"
 import { DummyBackend } from "./dummy-backend"
-import { SandyMcpServer } from "./mcp-server"
+import { SandyMcpServer, handlerProgressCallback } from "./mcp-server"
 import type { RunOptions } from "./types"
 
 type RunCall = { method: "run"; opts: RunOptions }
@@ -106,14 +106,14 @@ describe("sandy_check", () => {
   })
 
   test("baseline dispatches run with __baseline__ scriptPath and imdsPort 0", async () => {
-    await server.handleSandyCheck("baseline")
+    await server.handleSandyCheck(() => {}, "baseline")
     const run = findRun(backend)
     expect(run.opts.scriptPath).toBe("__baseline__")
     expect(run.opts.imdsPort).toBe(0)
   })
 
   test("connect dispatches run with __connect__ scriptPath and given imdsPort", async () => {
-    await server.handleSandyCheck("connect", 9001)
+    await server.handleSandyCheck(() => {}, "connect", 9001)
     const run = findRun(backend)
     expect(run.opts.scriptPath).toBe("__connect__")
     expect(run.opts.imdsPort).toBe(9001)
@@ -130,12 +130,12 @@ describe("sandy_image", () => {
   })
 
   test("create dispatches to backend.imageCreate()", async () => {
-    await server.handleSandyImage("create")
+    await server.handleSandyImage(() => {}, "create")
     expect(backend.calls).toContainEqual({ method: "imageCreate" })
   })
 
   test("delete dispatches to backend.imageDelete()", async () => {
-    await server.handleSandyImage("delete")
+    await server.handleSandyImage(() => {}, "delete")
     expect(backend.calls).toContainEqual({ method: "imageDelete" })
   })
 })
@@ -149,12 +149,95 @@ describe("progress", () => {
     server = new SandyMcpServer(backend)
   })
 
-  test("progress lines from backend are forwarded via onProgress callback", async () => {
+  test("handleSandyRun forwards backend progress via onProgress", async () => {
     backend.progressLines = ["loading resources", "querying ec2"]
     const received: string[] = []
 
     await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 }, (msg) => received.push(msg))
 
     expect(received).toEqual(["loading resources", "querying ec2"])
+  })
+
+  test("handleSandyCheck forwards backend progress via onProgress", async () => {
+    backend.progressLines = ["checking IMDS"]
+    const received: string[] = []
+
+    await server.handleSandyCheck((msg) => received.push(msg), "baseline")
+
+    expect(received).toEqual(["checking IMDS"])
+  })
+
+  test("handleSandyImage forwards backend progress on create", async () => {
+    backend.progressLines = ["pulling base image", "installing node"]
+    const received: string[] = []
+
+    await server.handleSandyImage((msg) => received.push(msg), "create")
+
+    expect(received).toEqual(["pulling base image", "installing node"])
+  })
+
+  test("handleSandyImage forwards backend progress on delete", async () => {
+    backend.progressLines = ["removing image"]
+    const received: string[] = []
+
+    await server.handleSandyImage((msg) => received.push(msg), "delete")
+
+    expect(received).toEqual(["removing image"])
+  })
+})
+
+// Fake RequestHandlerExtra with just the fields handlerProgressCallback uses.
+function makeHandlerContext(progressToken?: string | number) {
+  const sent: { method: string; params: object }[] = []
+  const ctx = {
+    _meta: progressToken !== undefined ? { progressToken } : {},
+    sendNotification: async (n: { method: string; params: object }) => {
+      sent.push(n)
+    },
+  }
+  return { ctx, sent }
+}
+
+describe("handlerProgressCallback", () => {
+  test("returns a no-op when no progressToken", async () => {
+    const { ctx, sent } = makeHandlerContext()
+    const cb = handlerProgressCallback(ctx as Parameters<typeof handlerProgressCallback>[0])
+
+    await cb("ignored message")
+
+    expect(sent).toHaveLength(0)
+  })
+
+  test("sends notifications/progress with the token and message", async () => {
+    const { ctx, sent } = makeHandlerContext("my-token")
+    const cb = handlerProgressCallback(ctx as Parameters<typeof handlerProgressCallback>[0])
+
+    await cb("step one")
+
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toEqual({
+      method: "notifications/progress",
+      params: { progressToken: "my-token", progress: 1, message: "step one" },
+    })
+  })
+
+  test("increments the progress counter on each call", async () => {
+    const { ctx, sent } = makeHandlerContext("tok")
+    const cb = handlerProgressCallback(ctx as Parameters<typeof handlerProgressCallback>[0])
+
+    await cb("a")
+    await cb("b")
+    await cb("c")
+
+    expect(sent.map((n) => (n.params as { progress: number }).progress)).toEqual([1, 2, 3])
+  })
+
+  test("numeric progressToken is preserved in notifications", async () => {
+    const { ctx, sent } = makeHandlerContext(42)
+    const cb = handlerProgressCallback(ctx as Parameters<typeof handlerProgressCallback>[0])
+
+    await cb("msg")
+
+    expect((sent[0]?.params as { progressToken: unknown }).progressToken).toBe(42)
   })
 })

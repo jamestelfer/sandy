@@ -18,7 +18,10 @@ async function runCheck(
 ): Promise<void> {
   const handler = new OutputHandler(onProgress)
   const session = await createSession()
-  const result = await backend.run({ ...opts, session: session.name, sessionDir: session.dir }, onProgress)
+  const result = await backend.run(
+    { ...opts, session: session.name, sessionDir: session.dir },
+    onProgress,
+  )
   if (result.exitCode !== 0) {
     handler.stderrLine(`sandy: ${label} check failed`)
     process.exitCode = 1

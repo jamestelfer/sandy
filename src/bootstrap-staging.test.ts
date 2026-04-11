@@ -10,7 +10,14 @@ describe("stageBootstrapFiles", () => {
     try {
       await stageBootstrapFiles(tmpDir)
 
-      const expected = ["init.sh", "node_certs.sh", "package.json", "tsconfig.json", "entrypoint", "sandy.ts"]
+      const expected = [
+        "init.sh",
+        "node_certs.sh",
+        "package.json",
+        "tsconfig.json",
+        "entrypoint",
+        "sandy.ts",
+      ]
       for (const name of expected) {
         const stat = await fs.stat(path.join(tmpDir, name))
         expect(stat.isFile()).toBe(true)
