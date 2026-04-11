@@ -1,5 +1,4 @@
 import * as fs from "node:fs/promises"
-import { VM_BOOTSTRAP } from "./types"
 
 // Bootstrap file embeds — bundled into binary by Bun
 import initShPath from "./bootstrap/init.sh" with { type: "file" }

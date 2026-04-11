@@ -55,7 +55,11 @@ describe("DockerBackend integration", () => {
       const docker = new Docker()
       const backend = new DockerBackend(docker)
       // Prune stopped containers so none hold a reference to the image
-      try { await docker.pruneContainers() } catch { /* ignore */ }
+      try {
+        await docker.pruneContainers()
+      } catch {
+        /* ignore */
+      }
       if (!(await backend.imageExists())) {
         await backend.imageCreate()
       }
@@ -71,8 +75,16 @@ describe("DockerBackend integration", () => {
       const docker = new Docker()
       const backend = new DockerBackend(docker)
       // Prune stopped containers then remove image
-      try { await docker.pruneContainers() } catch { /* ignore */ }
-      try { await docker.getImage("sandy:latest").remove() } catch { /* already absent */ }
+      try {
+        await docker.pruneContainers()
+      } catch {
+        /* ignore */
+      }
+      try {
+        await docker.getImage("sandy:latest").remove()
+      } catch {
+        /* already absent */
+      }
       expect(await backend.imageExists()).toBe(false)
     },
     TIMEOUT,

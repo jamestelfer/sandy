@@ -22,7 +22,8 @@ async function createBackend(): Promise<Backend> {
   }
 }
 
-const onProgress: ProgressCallback = (msg: string) => process.stderr.write(`\x1b[1;36m→ ${msg}\x1b[0m\n`)
+const onProgress: ProgressCallback = (msg: string) =>
+  process.stderr.write(`\x1b[1;36m→ ${msg}\x1b[0m\n`)
 
 async function main(): Promise<void> {
   const backend = await createBackend()

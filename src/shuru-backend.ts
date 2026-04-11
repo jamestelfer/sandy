@@ -82,7 +82,6 @@ const defaultExecutor: ShellExecutor = async (cmd, opts) => {
   return { stdout, stderr, exitCode }
 }
 
-
 export class ShuruBackend implements Backend {
   constructor(
     private executor: ShellExecutor = defaultExecutor,
@@ -169,4 +168,3 @@ export class ShuruBackend implements Backend {
     }
   }
 }
-
