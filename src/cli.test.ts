@@ -60,6 +60,22 @@ describe("CLI image", () => {
     await runImage({ action: "delete" }, backend)
     expect(backend.calls).toEqual([{ method: "imageDelete" }])
   })
+
+  it("forwards onProgress callback to backend.imageCreate()", async () => {
+    const backend = new DummyBackend()
+    backend.progressLines = ["step one"]
+    const received: string[] = []
+    await runImage({ action: "create" }, backend, (msg) => received.push(msg))
+    expect(received).toEqual(["step one"])
+  })
+
+  it("forwards onProgress callback to backend.imageDelete()", async () => {
+    const backend = new DummyBackend()
+    backend.progressLines = ["step one"]
+    const received: string[] = []
+    await runImage({ action: "delete" }, backend, (msg) => received.push(msg))
+    expect(received).toEqual(["step one"])
+  })
 })
 
 describe("CLI check", () => {
@@ -77,6 +93,22 @@ describe("CLI check", () => {
       opts: { scriptPath: "__connect__", imdsPort: 9001 },
     })
   })
+
+  it("baseline forwards onProgress to backend.run()", async () => {
+    const backend = new DummyBackend()
+    backend.progressLines = ["checking baseline"]
+    const received: string[] = []
+    await runBaseline(backend, (msg) => received.push(msg))
+    expect(received).toEqual(["checking baseline"])
+  })
+
+  it("connect forwards onProgress to backend.run()", async () => {
+    const backend = new DummyBackend()
+    backend.progressLines = ["checking connect"]
+    const received: string[] = []
+    await runConnect({ imdsPort: 9001, region: "us-west-2" }, backend, (msg) => received.push(msg))
+    expect(received).toEqual(["checking connect"])
+  })
 })
 
 describe("CLI run", () => {
@@ -87,6 +119,16 @@ describe("CLI run", () => {
       method: "run",
       opts: { scriptPath: "foo.ts", imdsPort: 9001 },
     })
+  })
+
+  it("forwards onProgress to backend.run() without adding a prefix", async () => {
+    const backend = new DummyBackend()
+    backend.progressLines = ["compiling..."]
+    const received: string[] = []
+    await runRun({ script: "foo.ts", imdsPort: 9001, region: "us-west-2" }, backend, (msg) =>
+      received.push(msg),
+    )
+    expect(received).toEqual(["compiling..."])
   })
 
   it("uses provided --session name", async () => {

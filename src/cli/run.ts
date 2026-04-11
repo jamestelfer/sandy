@@ -1,6 +1,7 @@
 import type { CommandModule } from "yargs"
 import type { Backend } from "../backend"
 import { createSession } from "../session"
+import type { ProgressCallback } from "../types"
 import { DEFAULT_REGION } from "../types"
 
 export interface RunArgs {
@@ -14,6 +15,7 @@ export interface RunArgs {
 export async function runRun(
   argv: RunArgs,
   backend: Backend,
+  onProgress: ProgressCallback = () => {},
   print: (line: string) => void = console.log,
   printErr: (line: string) => void = console.error,
 ): Promise<void> {
@@ -29,11 +31,11 @@ export async function runRun(
       sessionDir: session.dir,
       scriptArgs: argv["--"],
     },
-    (msg) => print(`[--> ${msg}`),
+    onProgress,
   )
 }
 
-export function makeRunCommand(backend: Backend): CommandModule {
+export function makeRunCommand(backend: Backend, onProgress: ProgressCallback): CommandModule {
   return {
     command: "run",
     describe: "Run a TypeScript script",
@@ -44,6 +46,6 @@ export function makeRunCommand(backend: Backend): CommandModule {
         .option("region", { type: "string", default: DEFAULT_REGION })
         .option("session", { type: "string" })
         .parserConfiguration({ "populate--": true }),
-    handler: async (argv) => runRun(argv as unknown as RunArgs, backend),
+    handler: async (argv) => runRun(argv as unknown as RunArgs, backend, onProgress, print),
   }
 }

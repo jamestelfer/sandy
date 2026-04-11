@@ -1,6 +1,7 @@
 import type { CommandModule } from "yargs"
 import type { Backend } from "../backend"
 import { createSession } from "../session"
+import type { ProgressCallback } from "../types"
 import { DEFAULT_REGION } from "../types"
 
 export interface ConnectArgs {
@@ -10,6 +11,7 @@ export interface ConnectArgs {
 
 export async function runBaseline(
   backend: Backend,
+  onProgress: ProgressCallback = () => {},
   print: (line: string) => void = console.log,
   printErr: (line: string) => void = console.error,
 ): Promise<void> {
@@ -21,7 +23,7 @@ export async function runBaseline(
       session: session.name,
       sessionDir: session.dir,
     },
-    (msg) => print(`[--> ${msg}`),
+    onProgress,
   )
   if (result.exitCode !== 0) {
     printErr("baseline check failed")
@@ -31,6 +33,7 @@ export async function runBaseline(
 export async function runConnect(
   argv: ConnectArgs,
   backend: Backend,
+  onProgress: ProgressCallback = () => {},
   print: (line: string) => void = console.log,
   printErr: (line: string) => void = console.error,
 ): Promise<void> {
@@ -43,20 +46,22 @@ export async function runConnect(
       session: session.name,
       sessionDir: session.dir,
     },
-    (msg) => print(`[--> ${msg}`),
+    onProgress,
   )
   if (result.exitCode !== 0) {
     printErr("connect check failed")
   }
 }
 
-export function makeCheckCommand(backend: Backend): CommandModule {
+export function makeCheckCommand(backend: Backend, onProgress: ProgressCallback): CommandModule {
   return {
     command: "check",
     describe: "Run health checks",
     builder: (y) =>
       y
-        .command("baseline", "Run baseline health check", {}, async () => runBaseline(backend))
+        .command("baseline", "Run baseline health check", {}, async () =>
+          runBaseline(backend, onProgress),
+        )
         .command(
           "connect",
           "Run connectivity check",
@@ -64,7 +69,7 @@ export function makeCheckCommand(backend: Backend): CommandModule {
             y
               .option("imds-port", { type: "number", demandOption: true })
               .option("region", { type: "string", default: DEFAULT_REGION }),
-          async (argv) => runConnect(argv as unknown as ConnectArgs, backend),
+          async (argv) => runConnect(argv as unknown as ConnectArgs, backend, onProgress),
         )
         .demandCommand(1),
     handler: () => {},
