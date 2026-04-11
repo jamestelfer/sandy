@@ -1,5 +1,6 @@
 import type { CommandModule } from "yargs"
 import type { Backend } from "../backend"
+import { OutputHandler } from "../output-handler"
 import type { ProgressCallback } from "../types"
 
 export interface ImageArgs {
@@ -10,16 +11,16 @@ export async function runImage(
   argv: ImageArgs,
   backend: Backend,
   onProgress: ProgressCallback = () => {},
-  print: (line: string) => void = console.log,
 ): Promise<void> {
+  const handler = new OutputHandler(onProgress)
   switch (argv.action) {
     case "create":
       await backend.imageCreate(onProgress)
-      print("image created")
+      handler.stdoutLine("image created")
       break
     case "delete":
       await backend.imageDelete(onProgress)
-      print("image deleted")
+      handler.stdoutLine("image deleted")
       break
   }
 }

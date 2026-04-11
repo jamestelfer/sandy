@@ -76,6 +76,38 @@ describe("CLI image", () => {
     await runImage({ action: "delete" }, backend, (msg) => received.push(msg))
     expect(received).toEqual(["step one"])
   })
+
+  it("writes 'image created' to stderr after imageCreate completes", async () => {
+    const backend = new DummyBackend()
+    const stderrLines: string[] = []
+    const originalWrite = process.stderr.write.bind(process.stderr)
+    process.stderr.write = (chunk: string | Uint8Array) => {
+      stderrLines.push(chunk.toString())
+      return true
+    }
+    try {
+      await runImage({ action: "create" }, backend)
+    } finally {
+      process.stderr.write = originalWrite
+    }
+    expect(stderrLines.join("")).toContain("image created")
+  })
+
+  it("writes 'image deleted' to stderr after imageDelete completes", async () => {
+    const backend = new DummyBackend()
+    const stderrLines: string[] = []
+    const originalWrite = process.stderr.write.bind(process.stderr)
+    process.stderr.write = (chunk: string | Uint8Array) => {
+      stderrLines.push(chunk.toString())
+      return true
+    }
+    try {
+      await runImage({ action: "delete" }, backend)
+    } finally {
+      process.stderr.write = originalWrite
+    }
+    expect(stderrLines.join("")).toContain("image deleted")
+  })
 })
 
 describe("CLI check", () => {
@@ -83,6 +115,23 @@ describe("CLI check", () => {
     const backend = new DummyBackend()
     await runBaseline(backend)
     expect(backend.calls[0]).toMatchObject({ method: "run", opts: { scriptPath: "__baseline__" } })
+  })
+
+  it("baseline does not set exit code on success", async () => {
+    const backend = new DummyBackend()
+    backend.runResult = { exitCode: 0, output: "", outputFiles: [] }
+    const prevExitCode = process.exitCode
+    await runBaseline(backend)
+    expect(process.exitCode).toBe(prevExitCode)
+  })
+
+  it("baseline sets exit code 1 on non-zero container exit", async () => {
+    const backend = new DummyBackend()
+    backend.runResult = { exitCode: 1, output: "", outputFiles: [] }
+    const prevExitCode = process.exitCode
+    await runBaseline(backend)
+    expect(process.exitCode).toBe(1)
+    process.exitCode = prevExitCode
   })
 
   it("connect dispatches to backend.run() with imdsPort", async () => {
@@ -153,6 +202,19 @@ describe("CLI run", () => {
     }
   })
 
+  it("uses --output-dir as session directory when provided", async () => {
+    const backend = new DummyBackend()
+    const customDir = join(tmpDir, "my-out")
+    await runRun(
+      { script: "foo.ts", imdsPort: 9001, region: "us-west-2", outputDir: customDir },
+      backend,
+    )
+    expect(backend.calls[0]).toMatchObject({
+      method: "run",
+      opts: { sessionDir: customDir },
+    })
+  })
+
   it("passes script args after --", async () => {
     const backend = new DummyBackend()
     await runRun(
@@ -163,6 +225,33 @@ describe("CLI run", () => {
       method: "run",
       opts: { scriptArgs: ["arg1", "arg2"] },
     })
+  })
+
+  it("sets process.exitCode when script exits non-zero", async () => {
+    const backend = new DummyBackend()
+    backend.runResult = { exitCode: 2, output: "", outputFiles: [] }
+    const prevExitCode = process.exitCode
+    await runRun({ script: "foo.ts", imdsPort: 9001, region: "us-west-2" }, backend)
+    expect(process.exitCode).toBe(2)
+    process.exitCode = prevExitCode
+  })
+
+  it("output directory message does not carry [err] prefix", async () => {
+    const backend = new DummyBackend()
+    const stderrLines: string[] = []
+    const originalWrite = process.stderr.write.bind(process.stderr)
+    process.stderr.write = (chunk: string | Uint8Array) => {
+      stderrLines.push(chunk.toString())
+      return true
+    }
+    try {
+      await runRun({ script: "foo.ts", imdsPort: 9001, region: "us-west-2" }, backend)
+    } finally {
+      process.stderr.write = originalWrite
+    }
+    const combined = stderrLines.join("")
+    expect(combined).toContain("output directory")
+    expect(combined).not.toContain("[err]")
   })
 })
 
