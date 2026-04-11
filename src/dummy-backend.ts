@@ -13,16 +13,25 @@ export class DummyBackend implements Backend {
   runResult: RunResult = { exitCode: 0, output: "", outputFiles: [] }
   progressLines: string[] = []
 
-  async imageCreate(): Promise<void> {
+  async imageCreate(onProgress: ProgressCallback): Promise<void> {
     this.calls.push({ method: "imageCreate" })
+    for (const line of this.progressLines) {
+      onProgress(line)
+    }
   }
 
-  async imageDelete(): Promise<void> {
+  async imageDelete(onProgress: ProgressCallback): Promise<void> {
     this.calls.push({ method: "imageDelete" })
+    for (const line of this.progressLines) {
+      onProgress(line)
+    }
   }
 
-  async imageExists(): Promise<boolean> {
+  async imageExists(onProgress: ProgressCallback): Promise<boolean> {
     this.calls.push({ method: "imageExists" })
+    for (const line of this.progressLines) {
+      onProgress(line)
+    }
     return this.imageExistsResult
   }
 

@@ -105,19 +105,19 @@ export class ShuruBackend implements Backend {
     private sandboxFactory: SandboxFactory = defaultSandboxFactory,
   ) {}
 
-  async imageExists(): Promise<boolean> {
+  async imageExists(_onProgress: ProgressCallback): Promise<boolean> {
     const { stdout } = await this.executor(["shuru", "checkpoint", "list"])
     return stdout
       .split("\n")
       .some((line) => line === CHECKPOINT_NAME || line.startsWith(`${CHECKPOINT_NAME} `))
   }
 
-  async imageDelete(): Promise<void> {
+  async imageDelete(_onProgress: ProgressCallback): Promise<void> {
     const handler = new OutputHandler(() => {})
     await this.executor(["shuru", "checkpoint", "delete", CHECKPOINT_NAME], { handler })
   }
 
-  async imageCreate(): Promise<void> {
+  async imageCreate(_onProgress: ProgressCallback): Promise<void> {
     await using staging = await makeTmpDir("sandy-shuru-bootstrap-")
     await fs.mkdir(`${staging.path}/certs`, { recursive: true })
 
@@ -199,25 +199,11 @@ export class ShuruBackend implements Backend {
     try {
       const proc = await sb.spawn(spawnCmd, { env: spawnEnv })
 
-      proc.on("stdout", (data) => {
-        for (const raw of data.toString().split("\n")) {
-          const line = raw.trimEnd()
-          if (line) {
-            handler.stdoutLine(line)
-          }
-        }
-      })
-
-      proc.on("stderr", (data) => {
-        for (const raw of data.toString().split("\n")) {
-          const line = raw.trimEnd()
-          if (line) {
-            handler.stderrLine(line)
-          }
-        }
-      })
+      proc.on("stdout", (data) => handler.feedStdout(data))
+      proc.on("stderr", (data) => handler.feedStderr(data))
 
       const exitCode = await proc.exited
+      handler.flush()
 
       return { exitCode, output: handler.output, outputFiles: [] }
     } finally {

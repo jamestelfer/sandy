@@ -1,7 +1,6 @@
 import * as path from "node:path"
 import * as fs from "node:fs/promises"
 import { spawn } from "node:child_process"
-import { Writable } from "node:stream"
 import { makeTmpDir } from "./tmpdir"
 import type { Backend } from "./backend"
 import type { RunOptions, RunResult } from "./types"
@@ -125,7 +124,7 @@ export class DockerBackend implements Backend {
     private buildContext: BuildContextFactory = defaultBuildContextFactory,
   ) {}
 
-  async imageExists(): Promise<boolean> {
+  async imageExists(_onProgress: ProgressCallback): Promise<boolean> {
     try {
       await this.docker.getImage(IMAGE_NAME).inspect()
       return true
@@ -134,11 +133,11 @@ export class DockerBackend implements Backend {
     }
   }
 
-  async imageDelete(): Promise<void> {
+  async imageDelete(_onProgress: ProgressCallback): Promise<void> {
     await this.docker.getImage(IMAGE_NAME).remove()
   }
 
-  async imageCreate(): Promise<void> {
+  async imageCreate(_onProgress: ProgressCallback): Promise<void> {
     await using context = await this.buildContext()
     const stream = await this.docker.buildImage(context, { t: IMAGE_NAME })
     // Parse build output JSON and surface Docker errors
@@ -202,30 +201,6 @@ export class DockerBackend implements Backend {
     const logStream = await container.logs({ follow: true, stdout: true, stderr: true })
 
     await new Promise<void>((resolve) => {
-      const stdoutWriter = new Writable({
-        write(chunk: Buffer, _enc: string, cb: () => void) {
-          for (const raw of chunk.toString().split("\n")) {
-            const line = raw.trimEnd()
-            if (line) {
-              handler.stdoutLine(line)
-            }
-          }
-          cb()
-        },
-      })
-
-      const stderrWriter = new Writable({
-        write(chunk: Buffer, _enc: string, cb: () => void) {
-          for (const raw of chunk.toString().split("\n")) {
-            const line = raw.trimEnd()
-            if (line) {
-              handler.stderrLine(line)
-            }
-          }
-          cb()
-        },
-      })
-
       // Wait for both writers to finish rather than the source stream to end.
       // demuxStream's "end" handler calls end() on both writers; "finish" fires
       // only after all buffered writes have been flushed — avoiding the race
@@ -237,10 +212,10 @@ export class DockerBackend implements Backend {
           resolve()
         }
       }
-      stdoutWriter.on("finish", onFinish)
-      stderrWriter.on("finish", onFinish)
+      handler.stdoutWriter.on("finish", onFinish)
+      handler.stderrWriter.on("finish", onFinish)
 
-      this.docker.modem.demuxStream(logStream, stdoutWriter, stderrWriter)
+      this.docker.modem.demuxStream(logStream, handler.stdoutWriter, handler.stderrWriter)
     })
 
     const { StatusCode: exitCode } = await container.wait()
