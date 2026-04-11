@@ -45,10 +45,29 @@ const INIT_STEPS = [
   "dependencies",
 ] as const
 
+// Mirrors node_certs.sh — baked into the image so the cert vars are set at both
+// build time (pnpm install, curl, etc.) and container runtime.
+const CERT_BUNDLE = "/etc/ssl/certs/ca-certificates.crt"
+const DOCKERFILE_ENV = [
+  `NIX_SSL_CERT_FILE=${CERT_BUNDLE}`,
+  `AWS_CA_BUNDLE=${CERT_BUNDLE}`,
+  `CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE=${CERT_BUNDLE}`,
+  `CURL_CA_BUNDLE=${CERT_BUNDLE}`,
+  `GRPC_DEFAULT_SSL_ROOTS_FILE_PATH=${CERT_BUNDLE}`,
+  `NODE_EXTRA_CA_CERTS=${CERT_BUNDLE}`,
+  `PIP_CERT=${CERT_BUNDLE}`,
+  `REQUESTS_CA_BUNDLE=${CERT_BUNDLE}`,
+  `SSL_CERT_FILE=${CERT_BUNDLE}`,
+  `GIT_SSL_CAINFO=${CERT_BUNDLE}`,
+]
+  .map((kv) => `    ${kv}`)
+  .join(" \\\n")
+
 export function generateDockerfile(): string {
   const runs = INIT_STEPS.map((step) => `RUN sh ${VM_BOOTSTRAP}/init.sh ${step}`).join("\n")
   return `FROM ubuntu:24.04
 COPY bootstrap/ ${VM_BOOTSTRAP}/
+ENV ${DOCKERFILE_ENV}
 RUN chmod +x ${VM_BOOTSTRAP}/init.sh ${VM_BOOTSTRAP}/entrypoint
 ${runs}
 WORKDIR /workspace
@@ -75,11 +94,13 @@ export async function defaultBuildContextFactory(): Promise<
   return Object.assign(proc.stdout, { [Symbol.asyncDispose]: () => staging[Symbol.asyncDispose]() })
 }
 
-
 // Parse Docker's multiplexed log stream format and route frames to OutputHandler.
 // Format: 8-byte header (1-byte type: 1=stdout 2=stderr, 3 pad bytes, 4-byte big-endian size) + payload.
 // The stream is consumed in flowing mode so the "end" event fires reliably.
-async function demuxDockerStream(stream: NodeJS.ReadableStream, handler: OutputHandler): Promise<void> {
+async function demuxDockerStream(
+  stream: NodeJS.ReadableStream,
+  handler: OutputHandler,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     let buf = Buffer.alloc(0)
 
@@ -173,7 +194,10 @@ export class DockerBackend implements Backend {
       Cmd: [compiledPath, ...(opts.scriptArgs ?? [])],
       Env: Object.entries(env).map(([k, v]) => `${k}=${v}`),
       HostConfig: {
-        Binds: [`${scriptDirObj.path}:${VM_SCRIPTS_DIR}:ro`, `${opts.sessionDir}:${VM_OUTPUT_DIR}:rw`],
+        Binds: [
+          `${scriptDirObj.path}:${VM_SCRIPTS_DIR}:ro`,
+          `${opts.sessionDir}:${VM_OUTPUT_DIR}:rw`,
+        ],
         // host.docker.internal resolves on macOS/Windows by default; on Linux the
         // host-gateway alias is required to make it resolve to the Docker bridge IP.
         ExtraHosts: ["host.docker.internal:host-gateway"],
@@ -206,4 +230,3 @@ export class DockerBackend implements Backend {
     return { exitCode, output: handler.output, outputFiles }
   }
 }
-
