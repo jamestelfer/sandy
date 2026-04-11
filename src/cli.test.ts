@@ -131,7 +131,7 @@ describe("CLI check", () => {
     const prevExitCode = process.exitCode
     await runBaseline(backend)
     expect(process.exitCode).toBe(1)
-    process.exitCode = prevExitCode
+    process.exitCode = prevExitCode ?? 0
   })
 
   it("connect dispatches to backend.run() with imdsPort", async () => {
@@ -233,7 +233,7 @@ describe("CLI run", () => {
     const prevExitCode = process.exitCode
     await runRun({ script: "foo.ts", imdsPort: 9001, region: "us-west-2" }, backend)
     expect(process.exitCode).toBe(2)
-    process.exitCode = prevExitCode
+    process.exitCode = prevExitCode ?? 0
   })
 
   it("output directory message does not carry [err] prefix", async () => {

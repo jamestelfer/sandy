@@ -1,25 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
-import { checkScript, resolveScriptDir } from "./check-scripts"
-
-describe("checkScript", () => {
-  test("baseline script logs sandy: baseline OK", () => {
-    const script = checkScript("__baseline__")
-    expect(script).toContain("sandy: baseline OK")
-  })
-
-  test("connect script imports EC2Client", () => {
-    const script = checkScript("__connect__")
-    expect(script).toContain("EC2Client")
-    expect(script).toContain("DescribeRegionsCommand")
-  })
-
-  test("connect script logs sandy: connect OK", () => {
-    const script = checkScript("__connect__")
-    expect(script).toContain("sandy: connect OK")
-  })
-})
+import { resolveScriptDir } from "./check-scripts"
 
 describe("resolveScriptDir", () => {
   test("__baseline__ creates a temp dir containing the baseline script", async () => {

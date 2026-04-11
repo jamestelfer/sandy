@@ -3,121 +3,9 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { spawn } from "node:child_process"
 import { Readable } from "node:stream"
-import { DockerBackend, defaultBuildContextFactory, generateDockerfile } from "./docker-backend"
-import type {
-  BuildContextFactory,
-  DockerClientLike,
-  ImageLike,
-  ContainerLike,
-} from "./docker-backend"
-
-const fakeBuildContext: BuildContextFactory = async () =>
-  Object.assign(Readable.from([]), { [Symbol.asyncDispose]: async () => {} })
-
-function makeImageFake(config: { inspectThrows?: boolean } = {}): {
-  image: ImageLike
-  removeCalls: string[]
-} {
-  const removeCalls: string[] = []
-  const image: ImageLike = {
-    inspect: async () => {
-      if (config.inspectThrows) {
-        throw new Error("No such image")
-      }
-      return {}
-    },
-    remove: async () => {
-      removeCalls.push("remove")
-    },
-  }
-  return { image, removeCalls }
-}
-
-function makeDockerFake(
-  config: {
-    imageConfig?: { inspectThrows?: boolean }
-    containerConfig?: { exitCode?: number; stdoutLines?: string[]; stderrLines?: string[] }
-  } = {},
-): {
-  docker: DockerClientLike
-  buildImageCalls: Array<{ opts: object }>
-  createContainerCalls: Array<{ opts: object }>
-  imageFake: ReturnType<typeof makeImageFake>
-  lastContainer: () => ReturnType<typeof makeContainerFake>
-} {
-  const buildImageCalls: Array<{ opts: object }> = []
-  const createContainerCalls: Array<{ opts: object }> = []
-  const imageFake = makeImageFake(config.imageConfig)
-  let lastContainer: ReturnType<typeof makeContainerFake> | null = null
-
-  const docker: DockerClientLike = {
-    getImage: (_name: string) => imageFake.image,
-    buildImage: async (
-      _context: NodeJS.ReadableStream,
-      opts: object,
-    ): Promise<NodeJS.ReadableStream> => {
-      buildImageCalls.push({ opts })
-      const { Readable } = await import("node:stream")
-      return Readable.from([])
-    },
-    createContainer: async (opts: object): Promise<ContainerLike> => {
-      createContainerCalls.push({ opts })
-      lastContainer = makeContainerFake(config.containerConfig)
-      return lastContainer
-    },
-  }
-
-  return {
-    docker,
-    buildImageCalls,
-    createContainerCalls,
-    imageFake,
-    lastContainer: () => {
-      if (!lastContainer) {
-        throw new Error("createContainer was not called")
-      }
-      return lastContainer
-    },
-  }
-}
-
-// Build a Docker multiplexed log frame: 1-byte type (1=stdout, 2=stderr), 3 pad, 4-byte big-endian size, payload
-function dockerFrame(type: 1 | 2, payload: string): Buffer {
-  const body = Buffer.from(payload)
-  const header = Buffer.alloc(8)
-  header[0] = type
-  header.writeUInt32BE(body.length, 4)
-  return Buffer.concat([header, body])
-}
-
-function makeContainerFake(
-  config: { exitCode?: number; stdoutLines?: string[]; stderrLines?: string[] } = {},
-): ContainerLike & { removeCalls: number } {
-  let removeCalls = 0
-  const container = {
-    id: "test-container-id",
-    start: async () => {},
-    logs: async (): Promise<NodeJS.ReadableStream> => {
-      const { Readable } = await import("node:stream")
-      const frames: Buffer[] = []
-      for (const line of config.stdoutLines ?? []) {
-        frames.push(dockerFrame(1, `${line}\n`))
-      }
-      for (const line of config.stderrLines ?? []) {
-        frames.push(dockerFrame(2, `${line}\n`))
-      }
-      return Readable.from(Buffer.concat(frames))
-    },
-    wait: async () => ({ StatusCode: config.exitCode ?? 0 }),
-    remove: async () => {
-      removeCalls++
-    },
-    get removeCalls() {
-      return removeCalls
-    },
-  }
-  return container
-}
+import { DockerBackend, defaultBuildContextFactory } from "./docker-backend"
+import type { DockerClientLike } from "./docker-backend"
+import { fakeBuildContext, makeDockerFake } from "./test-helpers"
 
 describe("defaultBuildContextFactory", () => {
   test("produces a tar stream containing all bootstrap files and Dockerfile", async () => {
@@ -147,62 +35,26 @@ describe("defaultBuildContextFactory", () => {
   })
 })
 
-describe("generateDockerfile", () => {
-  test("COPYs bootstrap dir to /tmp/bootstrap", () => {
-    const df = generateDockerfile()
-    expect(df).toMatch(/COPY bootstrap\/ \/tmp\/bootstrap\//)
-  })
-
-  test("RUNs each init.sh step as a separate layer", () => {
-    const df = generateDockerfile()
-    for (const step of [
-      "prerequisites",
-      "certificates",
-      "nodejs",
-      "pnpm",
-      "workspace",
-      "profiles",
-      "dependencies",
-    ]) {
-      expect(df).toContain(`RUN sh /tmp/bootstrap/init.sh ${step}`)
-    }
-  })
-
-  test("sets cert bundle ENV vars before init steps, mirroring node_certs.sh", () => {
-    const df = generateDockerfile()
-    const certBundle = "/etc/ssl/certs/ca-certificates.crt"
-    for (const key of [
-      "NIX_SSL_CERT_FILE",
-      "AWS_CA_BUNDLE",
-      "CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE",
-      "CURL_CA_BUNDLE",
-      "GRPC_DEFAULT_SSL_ROOTS_FILE_PATH",
-      "NODE_EXTRA_CA_CERTS",
-      "PIP_CERT",
-      "REQUESTS_CA_BUNDLE",
-      "SSL_CERT_FILE",
-      "GIT_SSL_CAINFO",
-    ]) {
-      expect(df).toContain(`${key}=${certBundle}`)
-    }
-    // ENV block must appear before the first RUN init.sh step
-    const envPos = df.indexOf(`NODE_EXTRA_CA_CERTS=${certBundle}`)
-    const firstRunPos = df.indexOf("RUN sh /tmp/bootstrap/init.sh prerequisites")
-    expect(envPos).toBeLessThan(firstRunPos)
-  })
-
-  test("sets WORKDIR to /workspace so pnpm can find package.json", () => {
-    const df = generateDockerfile()
-    expect(df).toContain("WORKDIR /workspace")
-  })
-
-  test("sets ENTRYPOINT to pnpm run -s entrypoint", () => {
-    const df = generateDockerfile()
-    expect(df).toContain('ENTRYPOINT ["pnpm", "run", "-s", "entrypoint"]')
-  })
-})
-
 describe("DockerBackend.imageCreate", () => {
+  test("does not fire progress callbacks after a build error frame", async () => {
+    // Stream emits an error frame then a progress line. Without a rejected guard,
+    // the data handler continues processing after reject() and fires onProgress.
+    const errorLine = JSON.stringify({ error: "build failed" })
+    const progressAfterError = JSON.stringify({ stream: "[-->  progress after error\n" })
+    const { docker } = makeDockerFake()
+    const errorDocker: DockerClientLike = {
+      ...docker,
+      buildImage: async (): Promise<NodeJS.ReadableStream> =>
+        Readable.from([Buffer.from(`${errorLine}\n${progressAfterError}\n`)]),
+    }
+    const backend = new DockerBackend(errorDocker, fakeBuildContext)
+
+    const progress: string[] = []
+    await backend.imageCreate((msg) => progress.push(msg)).catch(() => {})
+
+    expect(progress).toHaveLength(0)
+  })
+
   test("calls buildImage with tag sandy:latest", async () => {
     const { docker, buildImageCalls } = makeDockerFake()
     const backend = new DockerBackend(docker, fakeBuildContext)

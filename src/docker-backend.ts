@@ -1,16 +1,22 @@
 import * as path from "node:path"
 import * as fs from "node:fs/promises"
+import { readFileSync } from "node:fs"
 import { spawn } from "node:child_process"
 import { makeTmpDir } from "./tmpdir"
 import type { Backend } from "./backend"
 import type { RunOptions, RunResult } from "./types"
-import { VM_BOOTSTRAP, VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "./types"
+import { VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "./types"
 import type { ProgressCallback } from "./types"
 import { OutputHandler } from "./output-handler"
 import { resolveScriptDir } from "./check-scripts"
 import { OutputTracker } from "./scan-output"
 import { buildRunEnv } from "./run-env"
 import { stageBootstrapFiles } from "./bootstrap-staging"
+
+// Dockerfile — embedded in binary by Bun at build time
+import dockerfilePath from "./docker/Dockerfile" with { type: "file" }
+
+const DOCKERFILE = readFileSync(dockerfilePath, "utf-8")
 
 export interface ImageLike {
   inspect(): Promise<unknown>
@@ -35,46 +41,6 @@ export type BuildContextFactory = () => Promise<NodeJS.ReadableStream & AsyncDis
 
 const IMAGE_NAME = "sandy:latest"
 
-const INIT_STEPS = [
-  "prerequisites",
-  "certificates",
-  "nodejs",
-  "pnpm",
-  "workspace",
-  "profiles",
-  "dependencies",
-] as const
-
-// Mirrors node_certs.sh — baked into the image so the cert vars are set at both
-// build time (pnpm install, curl, etc.) and container runtime.
-const CERT_BUNDLE = "/etc/ssl/certs/ca-certificates.crt"
-const DOCKERFILE_ENV = [
-  `NIX_SSL_CERT_FILE=${CERT_BUNDLE}`,
-  `AWS_CA_BUNDLE=${CERT_BUNDLE}`,
-  `CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE=${CERT_BUNDLE}`,
-  `CURL_CA_BUNDLE=${CERT_BUNDLE}`,
-  `GRPC_DEFAULT_SSL_ROOTS_FILE_PATH=${CERT_BUNDLE}`,
-  `NODE_EXTRA_CA_CERTS=${CERT_BUNDLE}`,
-  `PIP_CERT=${CERT_BUNDLE}`,
-  `REQUESTS_CA_BUNDLE=${CERT_BUNDLE}`,
-  `SSL_CERT_FILE=${CERT_BUNDLE}`,
-  `GIT_SSL_CAINFO=${CERT_BUNDLE}`,
-]
-  .map((kv) => `    ${kv}`)
-  .join(" \\\n")
-
-export function generateDockerfile(): string {
-  const runs = INIT_STEPS.map((step) => `RUN sh ${VM_BOOTSTRAP}/init.sh ${step}`).join("\n")
-  return `FROM ubuntu:24.04
-COPY bootstrap/ ${VM_BOOTSTRAP}/
-ENV ${DOCKERFILE_ENV}
-RUN chmod +x ${VM_BOOTSTRAP}/init.sh ${VM_BOOTSTRAP}/entrypoint
-${runs}
-WORKDIR /workspace
-ENTRYPOINT ["pnpm", "run", "-s", "entrypoint"]
-`
-}
-
 export async function defaultBuildContextFactory(): Promise<
   NodeJS.ReadableStream & AsyncDisposable
 > {
@@ -82,7 +48,7 @@ export async function defaultBuildContextFactory(): Promise<
   await fs.mkdir(`${staging.path}/bootstrap`, { recursive: true })
   await Promise.all([
     stageBootstrapFiles(`${staging.path}/bootstrap`),
-    fs.writeFile(`${staging.path}/Dockerfile`, generateDockerfile()),
+    fs.writeFile(`${staging.path}/Dockerfile`, DOCKERFILE),
   ])
 
   // Attach staging dir cleanup to the stream so the caller can dispose after
@@ -112,8 +78,8 @@ async function demuxDockerStream(
           break
         }
         const type = buf[0]
-        const payload = buf.slice(8, 8 + payloadSize)
-        buf = buf.slice(8 + payloadSize)
+        const payload = buf.subarray(8, 8 + payloadSize)
+        buf = buf.subarray(8 + payloadSize)
         if (type === 1) {
           handler.feedStdout(payload)
         } else if (type === 2) {
@@ -156,7 +122,7 @@ export class DockerBackend implements Backend {
     const handler = new OutputHandler(onProgress)
     // Parse build output JSON, feed stream content through OutputHandler (stderr + progress)
     await new Promise<void>((resolve, reject) => {
-      stream.on("data", (chunk: Buffer) => {
+      const onData = (chunk: Buffer) => {
         for (const line of chunk.toString().split("\n")) {
           if (!line.trim()) {
             continue
@@ -167,13 +133,16 @@ export class DockerBackend implements Backend {
               handler.feedStdout(Buffer.from(msg.stream))
             }
             if (msg.error) {
+              stream.off("data", onData)
               reject(new Error(`docker build: ${msg.error.trim()}`))
+              return
             }
           } catch {
             // non-JSON line, ignore
           }
         }
-      })
+      }
+      stream.on("data", onData)
       stream.on("end", () => {
         handler.flush()
         resolve()
@@ -210,23 +179,25 @@ export class DockerBackend implements Backend {
     const tracker = await OutputTracker.create(opts.sessionDir)
     const handler = new OutputHandler(onProgress)
 
-    await container.start()
+    try {
+      await container.start()
 
-    const logStream = await container.logs({ follow: true, stdout: true, stderr: true })
+      const logStream = await container.logs({ follow: true, stdout: true, stderr: true })
 
-    await demuxDockerStream(logStream, handler)
+      await demuxDockerStream(logStream, handler)
 
-    const waitResult = await container.wait()
-    const exitCode = waitResult.StatusCode
+      const waitResult = await container.wait()
+      const exitCode = waitResult.StatusCode
 
-    if (exitCode !== 0) {
-      process.stderr.write(`sandy: container ${container.id} exited with code ${exitCode}\n`)
+      if (exitCode !== 0) {
+        process.stderr.write(`sandy: container ${container.id} exited with code ${exitCode}\n`)
+      }
+
+      const outputFiles = await tracker.changed()
+
+      return { exitCode, output: handler.output, outputFiles }
+    } finally {
+      await container.remove()
     }
-
-    await container.remove()
-
-    const outputFiles = await tracker.changed()
-
-    return { exitCode, output: handler.output, outputFiles }
   }
 }

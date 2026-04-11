@@ -19,7 +19,10 @@ export async function copyEmbedded(src: string, dest: string): Promise<void> {
 
 // Stage all bootstrap files into destDir, creating a certs/ subdirectory.
 // Both backends call this with their own destDir; the Netskope cert is copied if present.
-export async function stageBootstrapFiles(destDir: string): Promise<void> {
+export async function stageBootstrapFiles(
+  destDir: string,
+  logger: (msg: string) => void = (msg) => process.stderr.write(msg),
+): Promise<void> {
   await fs.mkdir(`${destDir}/certs`, { recursive: true })
 
   await Promise.all([
@@ -33,8 +36,8 @@ export async function stageBootstrapFiles(destDir: string): Promise<void> {
 
   try {
     await fs.copyFile(NETSKOPE_CERT_PATH, `${destDir}/certs/nscacert.pem`)
-    process.stderr.write("sandy: Netskope certificate staged for installation\n")
+    logger("sandy: Netskope certificate staged for installation\n")
   } catch {
-    process.stderr.write("sandy: Netskope certificate not found, skipping\n")
+    // cert absent — silent
   }
 }

@@ -10,10 +10,13 @@
     "build:all": "bun build --compile --target=bun-darwin-arm64 src/main.ts --outfile dist/sandy-darwin-arm64 && bun build --compile --target=bun-darwin-x64 src/main.ts --outfile dist/sandy-darwin-x64 && bun build --compile --target=bun-linux-arm64 src/main.ts --outfile dist/sandy-linux-arm64 && bun build --compile --target=bun-linux-x64 src/main.ts --outfile dist/sandy-linux-x64",
     "test": "bun test",
     "lint": "biome lint .",
-    "lint:fix": "biome lint --fix .",
+    "lint:fix": "biome lint --fix --unsafe .",
     "format": "biome format .",
     "format:fix": "biome format --write .",
-    "agent": "bun run lint:fix && bun run format:fix && bun run build && bun run test"
+    "agent": "bun run lint:fix && bun run format:fix && bun run build && bun run test",
+    "integration": "INTEGRATION=true bun test --testPathPattern integration",
+    "integration:docker": "INTEGRATION=true bun test src/docker-backend.integration.test.ts",
+    "integration:shuru": "INTEGRATION=true bun test src/shuru-backend.integration.test.ts"
   },
   "dependencies": {
     "@biomejs/biome": "^2.4.10",

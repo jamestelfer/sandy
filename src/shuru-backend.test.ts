@@ -1,53 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import { mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import type { StartOptions } from "@superhq/shuru"
 import { ShuruBackend } from "./shuru-backend"
-import type { ShellExecutor, SandboxFactory } from "./shuru-backend"
+import type { SandboxFactory } from "./shuru-backend"
 import type { RunOptions } from "./types"
-
-function makeSandboxFactory(config: { exitCode?: number; stdoutLines?: string[] } = {}): {
-  factory: SandboxFactory
-  startOptsCalls: StartOptions[]
-  spawnCalls: Array<{ cmd: string[]; env?: Record<string, string> }>
-} {
-  const startOptsCalls: StartOptions[] = []
-  const spawnCalls: Array<{ cmd: string[]; env?: Record<string, string> }> = []
-
-  const factory: SandboxFactory = async (opts: StartOptions) => {
-    startOptsCalls.push(opts)
-    return {
-      spawn: async (cmd: string[], spawnOpts?: { env?: Record<string, string> }) => {
-        spawnCalls.push({ cmd, env: spawnOpts?.env })
-        const listeners: { stdout: ((d: Buffer) => void)[]; stderr: ((d: Buffer) => void)[] } = {
-          stdout: [],
-          stderr: [],
-        }
-        const handle = {
-          on(evt: "stdout" | "stderr", h: (d: Buffer) => void) {
-            listeners[evt].push(h)
-            return handle
-          },
-          // setTimeout(0) defers emission past listener registration
-          exited: new Promise<number>((resolve) => {
-            setTimeout(() => {
-              for (const line of config.stdoutLines ?? []) {
-                for (const h of listeners.stdout) {
-                  h(Buffer.from(`${line}\n`))
-                }
-              }
-              resolve(config.exitCode ?? 0)
-            }, 0)
-          }),
-        }
-        return handle
-      },
-      stop: async () => {},
-    }
-  }
-
-  return { factory, startOptsCalls, spawnCalls }
-}
+import { makeSandboxFactory, makeExecutor } from "./test-helpers"
 
 const baseRunOpts: RunOptions = {
   scriptPath: "/home/user/scripts/hello.ts",
@@ -55,23 +12,6 @@ const baseRunOpts: RunOptions = {
   session: "test-session",
   sessionDir: "/home/user/.sandy/test-session",
   scriptArgs: [],
-}
-
-function makeExecutor(
-  responses: Record<string, { stdout: string; stderr: string; exitCode: number }> = {},
-  stdoutLines: string[] = [],
-): { executor: ShellExecutor; calls: string[][] } {
-  const calls: string[][] = []
-  const executor: ShellExecutor = async (cmd, opts) => {
-    calls.push(cmd)
-    if (opts?.handler) {
-      for (const line of stdoutLines) {
-        opts.handler.stdoutLine(line)
-      }
-    }
-    return responses[cmd.join(" ")] ?? { stdout: "", stderr: "", exitCode: 0 }
-  }
-  return { executor, calls }
 }
 
 describe("ShuruBackend.run", () => {
