@@ -1,4 +1,6 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 import type { StartOptions } from "@superhq/shuru"
 import { ShuruBackend } from "./shuru-backend"
 import type { ShellExecutor, SandboxFactory } from "./shuru-backend"
@@ -201,6 +203,45 @@ describe("ShuruBackend.run", () => {
     const backend = new ShuruBackend(undefined, factory)
     const result = await backend.run(baseRunOpts, () => {})
     expect(result.output).toContain("hello")
+  })
+
+  test("outputFiles includes files created during the run, not pre-existing ones", async () => {
+    const tmpDir = join(import.meta.dir, "../.tmp-test-shuru-run")
+    mkdirSync(tmpDir, { recursive: true })
+    try {
+      // pre-existing file written before the backend run starts
+      writeFileSync(join(tmpDir, "pre-existing.json"), "{}")
+
+      // factory writes a new file into sessionDir during "spawn" to simulate script output
+      const factory: SandboxFactory = async () => ({
+        spawn: async () => {
+          writeFileSync(join(tmpDir, "result.json"), "{}")
+          const handle = {
+            on: (_: "stdout" | "stderr", __: (d: Buffer) => void) => handle,
+            exited: Promise.resolve(0),
+          }
+          return handle
+        },
+        stop: async () => {},
+      })
+
+      const backend = new ShuruBackend(undefined, factory)
+      const result = await backend.run({ ...baseRunOpts, sessionDir: tmpDir }, () => {})
+      expect(result.outputFiles).toContain("result.json")
+      expect(result.outputFiles).not.toContain("pre-existing.json")
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  test("returns empty outputFiles when sessionDir does not exist", async () => {
+    const { factory } = makeSandboxFactory()
+    const backend = new ShuruBackend(undefined, factory)
+    const result = await backend.run(
+      { ...baseRunOpts, sessionDir: "/nonexistent/path/that/does/not/exist" },
+      () => {},
+    )
+    expect(result.outputFiles).toEqual([])
   })
 
   test("stops the sandbox after run completes", async () => {

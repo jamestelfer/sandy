@@ -1,30 +1,15 @@
 import * as path from "node:path"
-import * as fs from "node:fs/promises"
 import { makeTmpDir } from "./tmpdir"
 import type { StartOptions } from "@superhq/shuru"
 import { Sandbox } from "@superhq/shuru"
 import type { Backend } from "./backend"
 import type { ProgressCallback, RunOptions, RunResult } from "./types"
-import {
-  DEFAULT_REGION,
-  ENV_ENDPOINT,
-  ENV_ENDPOINT_MODE,
-  ENV_ENDPOINT_MODE_VALUE,
-  ENV_REGION,
-  ENV_SANDY_OUTPUT,
-  ENV_V1_DISABLED,
-  ENV_V1_DISABLED_VALUE,
-  VM_OUTPUT_DIR,
-  VM_SCRIPTS_DIR,
-} from "./types"
+import { VM_BOOTSTRAP, VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "./types"
 import { OutputHandler } from "./output-handler"
-
-// Bootstrap file embeds — bundled into binary by Bun
-import initShPath from "./bootstrap/init.sh" with { type: "file" }
-import nodeCertsShPath from "./bootstrap/node_certs.sh" with { type: "file" }
-import bootstrapPackageJsonPath from "./bootstrap/package.json" with { type: "file" }
-import bootstrapTsconfigJsonPath from "./bootstrap/tsconfig.json" with { type: "file" }
-import entrypointPath from "./bootstrap/entrypoint" with { type: "file" }
+import { resolveScriptDir } from "./check-scripts"
+import { OutputTracker } from "./scan-output"
+import { buildRunEnv } from "./run-env"
+import { stageBootstrapFiles } from "./bootstrap-staging"
 
 export type ShellExecutor = (
   cmd: string[],
@@ -46,8 +31,6 @@ export type SandboxFactory = (opts: StartOptions) => Promise<SandboxLike>
 const defaultSandboxFactory: SandboxFactory = async (opts) => Sandbox.start(opts)
 
 const CHECKPOINT_NAME = "sandy"
-const NETSKOPE_CERT_PATH = "/Library/Application Support/Netskope/STAgent/data/nscacert.pem"
-const VM_BOOTSTRAP = "/tmp/bootstrap"
 
 async function readStream(
   stream: ReadableStream<Uint8Array>,
@@ -99,6 +82,7 @@ const defaultExecutor: ShellExecutor = async (cmd, opts) => {
   return { stdout, stderr, exitCode }
 }
 
+
 export class ShuruBackend implements Backend {
   constructor(
     private executor: ShellExecutor = defaultExecutor,
@@ -120,30 +104,7 @@ export class ShuruBackend implements Backend {
 
   async imageCreate(onProgress: ProgressCallback): Promise<void> {
     await using staging = await makeTmpDir("sandy-shuru-bootstrap-")
-    await fs.mkdir(`${staging.path}/certs`, { recursive: true })
-
-    // Use Bun.file().arrayBuffer() instead of fs.copyFile() so this works when
-    // the binary is compiled — embedded bunfs paths are not accessible to the OS.
-    async function copyEmbedded(src: string, dest: string): Promise<void> {
-      const buf = await Bun.file(src).arrayBuffer()
-      await fs.writeFile(dest, new Uint8Array(buf))
-    }
-
-    await Promise.all([
-      copyEmbedded(initShPath, `${staging.path}/init.sh`),
-      copyEmbedded(nodeCertsShPath, `${staging.path}/node_certs.sh`),
-      copyEmbedded(bootstrapPackageJsonPath, `${staging.path}/package.json`),
-      copyEmbedded(bootstrapTsconfigJsonPath, `${staging.path}/tsconfig.json`),
-      copyEmbedded(entrypointPath, `${staging.path}/entrypoint`),
-    ])
-
-    // Copy Netskope cert if present
-    try {
-      await fs.copyFile(NETSKOPE_CERT_PATH, `${staging.path}/certs/nscacert.pem`)
-      process.stderr.write("sandy: Netskope certificate staged for installation\n")
-    } catch {
-      process.stderr.write("sandy: Netskope certificate not found, skipping\n")
-    }
+    await stageBootstrapFiles(staging.path)
 
     const handler = new OutputHandler(onProgress)
     await this.executor(
@@ -164,10 +125,11 @@ export class ShuruBackend implements Backend {
   }
 
   async run(opts: RunOptions, onProgress: ProgressCallback): Promise<RunResult> {
-    const scriptDir = path.dirname(path.resolve(opts.scriptPath))
+    await using scriptDirObj = await resolveScriptDir(opts.scriptPath)
     const scriptName = path.basename(opts.scriptPath, ".ts")
     const compiledPath = `/workspace/dist/scripts/${scriptName}.js`
     const imdsEndpoint = `http://10.0.0.1:${opts.imdsPort}`
+    const spawnEnv = buildRunEnv(opts, imdsEndpoint)
 
     const startOpts: StartOptions = {
       from: CHECKPOINT_NAME,
@@ -175,7 +137,7 @@ export class ShuruBackend implements Backend {
       allowHostWrites: true,
       exposeHost: [String(opts.imdsPort)],
       mounts: {
-        [scriptDir]: VM_SCRIPTS_DIR,
+        [scriptDirObj.path]: VM_SCRIPTS_DIR,
         [opts.sessionDir]: `${VM_OUTPUT_DIR}:rw`,
       },
       network: {
@@ -185,16 +147,9 @@ export class ShuruBackend implements Backend {
 
     const sb = await this.sandboxFactory(startOpts)
 
-    const spawnEnv: Record<string, string> = {
-      [ENV_ENDPOINT]: imdsEndpoint,
-      [ENV_ENDPOINT_MODE]: ENV_ENDPOINT_MODE_VALUE,
-      [ENV_V1_DISABLED]: ENV_V1_DISABLED_VALUE,
-      [ENV_REGION]: opts.region ?? DEFAULT_REGION,
-      [ENV_SANDY_OUTPUT]: VM_OUTPUT_DIR,
-    }
-
     const spawnCmd = ["sh", "-l", "/workspace/entrypoint", compiledPath, ...(opts.scriptArgs ?? [])]
 
+    const tracker = await OutputTracker.create(opts.sessionDir)
     const handler = new OutputHandler(onProgress)
 
     try {
@@ -206,9 +161,12 @@ export class ShuruBackend implements Backend {
       const exitCode = await proc.exited
       handler.flush()
 
-      return { exitCode, output: handler.output, outputFiles: [] }
+      const outputFiles = await tracker.changed()
+
+      return { exitCode, output: handler.output, outputFiles }
     } finally {
       await sb.stop()
     }
   }
 }
+
