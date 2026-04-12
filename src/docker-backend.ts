@@ -1,16 +1,22 @@
 import * as path from "node:path"
 import * as fs from "node:fs/promises"
+import { readFileSync } from "node:fs"
 import { spawn } from "node:child_process"
 import { makeTmpDir } from "./tmpdir"
 import type { Backend } from "./backend"
 import type { RunOptions, RunResult } from "./types"
-import { VM_BOOTSTRAP, VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "./types"
+import { VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "./types"
 import type { ProgressCallback } from "./types"
 import { OutputHandler } from "./output-handler"
 import { resolveScriptDir } from "./check-scripts"
 import { OutputTracker } from "./scan-output"
 import { buildRunEnv } from "./run-env"
 import { stageBootstrapFiles } from "./bootstrap-staging"
+
+// Dockerfile — embedded in binary by Bun at build time
+import dockerfilePath from "./docker/Dockerfile" with { type: "file" }
+
+const DOCKERFILE = readFileSync(dockerfilePath, "utf-8")
 
 export interface ImageLike {
   inspect(): Promise<unknown>
@@ -35,44 +41,6 @@ export type BuildContextFactory = () => Promise<NodeJS.ReadableStream & AsyncDis
 
 const IMAGE_NAME = "sandy:latest"
 
-const INIT_STEPS = [
-  "prerequisites",
-  "certificates",
-  "pnpm",
-  "workspace",
-  "profiles",
-  "dependencies",
-] as const
-
-const CERT_BUNDLE = "/etc/ssl/certs/ca-certificates.crt"
-
-// Mirrors node_certs.sh — baked into the image so the cert vars are set at both
-// build time (pnpm install, curl, etc.) and container runtime.
-const DOCKERFILE_ENV = [
-  `NIX_SSL_CERT_FILE=${CERT_BUNDLE}`,
-  `AWS_CA_BUNDLE=${CERT_BUNDLE}`,
-  `CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE=${CERT_BUNDLE}`,
-  `CURL_CA_BUNDLE=${CERT_BUNDLE}`,
-  `GRPC_DEFAULT_SSL_ROOTS_FILE_PATH=${CERT_BUNDLE}`,
-  `NODE_EXTRA_CA_CERTS=${CERT_BUNDLE}`,
-  `PIP_CERT=${CERT_BUNDLE}`,
-  `REQUESTS_CA_BUNDLE=${CERT_BUNDLE}`,
-  `SSL_CERT_FILE=${CERT_BUNDLE}`,
-  `GIT_SSL_CAINFO=${CERT_BUNDLE}`,
-].join(" \\\n    ")
-
-export function generateDockerfile(): string {
-  const runs = INIT_STEPS.map((step) => `RUN sh ${VM_BOOTSTRAP}/init.sh ${step}`).join("\n")
-  return `FROM node:24-slim
-COPY bootstrap/ ${VM_BOOTSTRAP}/
-ENV ${DOCKERFILE_ENV}
-RUN chmod +x ${VM_BOOTSTRAP}/init.sh ${VM_BOOTSTRAP}/entrypoint
-${runs}
-WORKDIR /workspace
-ENTRYPOINT ["pnpm", "run", "-s", "entrypoint"]
-`
-}
-
 export async function defaultBuildContextFactory(): Promise<
   NodeJS.ReadableStream & AsyncDisposable
 > {
@@ -80,7 +48,7 @@ export async function defaultBuildContextFactory(): Promise<
   await fs.mkdir(`${staging.path}/bootstrap`, { recursive: true })
   await Promise.all([
     stageBootstrapFiles(`${staging.path}/bootstrap`),
-    fs.writeFile(`${staging.path}/Dockerfile`, generateDockerfile()),
+    fs.writeFile(`${staging.path}/Dockerfile`, DOCKERFILE),
   ])
 
   // Attach staging dir cleanup to the stream so the caller can dispose after
