@@ -3,7 +3,7 @@ import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mc
 import { z } from "zod"
 import type { Backend } from "./backend"
 import { createSession } from "./session"
-import type { RunOptions } from "./types"
+import type { ProgressCallback, RunOptions } from "./types"
 import { DEFAULT_REGION } from "./types"
 
 // Example scripts — embedded in binary by Bun at build time
@@ -87,8 +87,6 @@ export interface SandyRunParams {
   args?: string[]
 }
 
-export type ProgressCallback = (message: string) => void | Promise<void>
-
 export interface SandyRunResult {
   exitCode: number
   output: string
@@ -105,7 +103,7 @@ export const handlerProgressCallback = (
 ): ProgressCallback => {
   const token = handlerContext._meta?.progressToken
   if (token === undefined) {
-    return async (message: string) => {}
+    return async (_message: string) => {}
   }
 
   let notificationCount = 1
@@ -195,9 +193,7 @@ export class SandyMcpServer {
       scriptArgs: params.args,
     }
 
-    const result = await this.backend.run(opts, async (msg) => {
-      await onProgress?.(msg)
-    })
+    const result = await this.backend.run(opts, onProgress ?? (() => {}))
 
     return {
       exitCode: result.exitCode,
@@ -209,6 +205,7 @@ export class SandyMcpServer {
   private async ensureSession(): Promise<ActiveSession> {
     if (!this.activeSession) {
       const session = await createSession(this.resumedName ?? undefined)
+      this.resumedName = null
       this.activeSession = session
     }
     return this.activeSession

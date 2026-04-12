@@ -64,6 +64,20 @@ describe("session management", () => {
     const run = findRun(backend)
     expect(run.opts.session).toBe("my-custom-session")
   })
+
+  test("activeSession reset after resume does not reuse the resumed name", async () => {
+    server.handleResumeSession("session-a")
+    await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 })
+
+    // Force-clear activeSession without a new handleResumeSession call, simulating an
+    // internal reset (error recovery, reconnect, etc.) that bypasses handleResumeSession.
+    // Without the fix, resumedName is still "session-a" and would be reused.
+    ;(server as unknown as { activeSession: null }).activeSession = null
+
+    const result = await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 })
+
+    expect(result.sessionName).not.toBe("session-a")
+  })
 })
 
 describe("resources", () => {

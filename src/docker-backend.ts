@@ -59,7 +59,7 @@ const DOCKERFILE_ENV = [
   `SSL_CERT_FILE=${CERT_BUNDLE}`,
   `GIT_SSL_CAINFO=${CERT_BUNDLE}`,
 ]
-  .map((kv) => `    ${kv}`)
+  .map((kv, i) => (i === 0 ? kv : `    ${kv}`))
   .join(" \\\n")
 
 export function generateDockerfile(): string {
@@ -155,7 +155,9 @@ export class DockerBackend implements Backend {
     const handler = new OutputHandler(onProgress)
     // Parse build output JSON, feed stream content through OutputHandler (stderr + progress)
     await new Promise<void>((resolve, reject) => {
+      let rejected = false
       stream.on("data", (chunk: Buffer) => {
+        if (rejected) return
         for (const line of chunk.toString().split("\n")) {
           if (!line.trim()) {
             continue
@@ -166,7 +168,9 @@ export class DockerBackend implements Backend {
               handler.feedStdout(Buffer.from(msg.stream))
             }
             if (msg.error) {
+              rejected = true
               reject(new Error(`docker build: ${msg.error.trim()}`))
+              return
             }
           } catch {
             // non-JSON line, ignore
