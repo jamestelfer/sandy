@@ -13,7 +13,10 @@
     "lint:fix": "biome lint --fix .",
     "format": "biome format .",
     "format:fix": "biome format --write .",
-    "agent": "bun run lint:fix && bun run format:fix && bun run build && bun run test"
+    "agent": "bun run lint:fix && bun run format:fix && bun run build && bun run test",
+    "integration": "INTEGRATION=true bun test --testPathPattern integration",
+    "integration:docker": "INTEGRATION=true bun test src/docker-backend.integration.test.ts",
+    "integration:shuru": "INTEGRATION=true bun test src/shuru-backend.integration.test.ts"
   },
   "dependencies": {
     "@biomejs/biome": "^2.4.10",
