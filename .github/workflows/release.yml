@@ -1,0 +1,21 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: AryaLabsHQ/bunli-releaser@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          brew-tap: jamestelfer/homebrew-tap
+          brew-token: ${{ secrets.HOMEBREW_TAP_TOKEN }}

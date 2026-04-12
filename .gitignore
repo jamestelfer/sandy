@@ -1,5 +1,6 @@
 node_modules
 dist
+.bunli
 .claude/settings.local.json
 
 # Sandbox environment bind-mount artifacts
