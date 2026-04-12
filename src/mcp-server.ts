@@ -90,6 +90,7 @@ export class SandyMcpServer {
     onProgress: ProgressCallback,
     action: "baseline" | "connect",
     imdsPort?: number,
+    region?: string,
   ): Promise<SandyRunResult> {
     const scriptPath = action === "baseline" ? "__baseline__" : "__connect__"
     const port = imdsPort ?? 0
@@ -97,7 +98,7 @@ export class SandyMcpServer {
     const opts: RunOptions = {
       scriptPath,
       imdsPort: port,
-      region: DEFAULT_REGION,
+      region: region ?? DEFAULT_REGION,
       session: session.name,
       sessionDir: session.dir,
     }
@@ -185,11 +186,12 @@ export class SandyMcpServer {
         inputSchema: z.object({
           action: z.enum(["baseline", "connect"]).describe('"baseline" or "connect"'),
           imdsPort: z.number().optional().describe("IMDS port (required for connect)"),
+          region: z.string().optional().describe("AWS region (default: us-west-2)"),
         }),
       },
-      async ({ action, imdsPort }, ctx) => {
+      async ({ action, imdsPort, region }, ctx) => {
         const onProgress = handlerProgressCallback(ctx)
-        const result = await this.handleSandyCheck(onProgress, action, imdsPort)
+        const result = await this.handleSandyCheck(onProgress, action, imdsPort, region)
         return {
           content: [
             {
