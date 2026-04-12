@@ -153,12 +153,11 @@ describe("generateDockerfile", () => {
     expect(df).toMatch(/COPY bootstrap\/ \/tmp\/bootstrap\//)
   })
 
-  test("RUNs each init.sh step as a separate layer", () => {
+  test("RUNs each init.sh step as a separate layer, skipping nodejs (provided by base image)", () => {
     const df = generateDockerfile()
     for (const step of [
       "prerequisites",
       "certificates",
-      "nodejs",
       "pnpm",
       "workspace",
       "profiles",
@@ -166,6 +165,7 @@ describe("generateDockerfile", () => {
     ]) {
       expect(df).toContain(`RUN sh /tmp/bootstrap/init.sh ${step}`)
     }
+    expect(df).not.toContain("RUN sh /tmp/bootstrap/init.sh nodejs")
   })
 
   test("sets cert bundle ENV vars before init steps, mirroring node_certs.sh", () => {

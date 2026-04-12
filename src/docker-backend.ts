@@ -38,7 +38,6 @@ const IMAGE_NAME = "sandy:latest"
 const INIT_STEPS = [
   "prerequisites",
   "certificates",
-  "nodejs",
   "pnpm",
   "workspace",
   "profiles",
@@ -65,7 +64,7 @@ const DOCKERFILE_ENV = [
 
 export function generateDockerfile(): string {
   const runs = INIT_STEPS.map((step) => `RUN sh ${VM_BOOTSTRAP}/init.sh ${step}`).join("\n")
-  return `FROM ubuntu:24.04
+  return `FROM node:24-slim
 COPY bootstrap/ ${VM_BOOTSTRAP}/
 ENV ${DOCKERFILE_ENV}
 RUN chmod +x ${VM_BOOTSTRAP}/init.sh ${VM_BOOTSTRAP}/entrypoint
