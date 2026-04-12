@@ -10,7 +10,7 @@
     "build:all": "bun build --compile --target=bun-darwin-arm64 src/main.ts --outfile dist/sandy-darwin-arm64 && bun build --compile --target=bun-darwin-x64 src/main.ts --outfile dist/sandy-darwin-x64 && bun build --compile --target=bun-linux-arm64 src/main.ts --outfile dist/sandy-linux-arm64 && bun build --compile --target=bun-linux-x64 src/main.ts --outfile dist/sandy-linux-x64",
     "test": "bun test",
     "lint": "biome lint .",
-    "lint:fix": "biome lint --fix .",
+    "lint:fix": "biome lint --fix --unsafe .",
     "format": "biome format .",
     "format:fix": "biome format --write .",
     "agent": "bun run lint:fix && bun run format:fix && bun run build && bun run test",

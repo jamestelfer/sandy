@@ -5,7 +5,7 @@ import { spawn } from "node:child_process"
 import { Readable } from "node:stream"
 import { DockerBackend, defaultBuildContextFactory, generateDockerfile } from "./docker-backend"
 import type { DockerClientLike } from "./docker-backend"
-import { fakeBuildContext, makeDockerFake, makeContainerFake, dockerFrame } from "./test-helpers"
+import { fakeBuildContext, makeDockerFake } from "./test-helpers"
 
 describe("defaultBuildContextFactory", () => {
   test("produces a tar stream containing all bootstrap files and Dockerfile", async () => {
