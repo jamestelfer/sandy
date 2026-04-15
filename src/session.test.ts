@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { createSession } from "./session"
+import { createSession, validateSessionName } from "./session"
 
 const tmpDir = join(import.meta.dir, "../.tmp-test-session")
 
@@ -13,6 +13,31 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(join(import.meta.dir, ".."))
   rmSync(tmpDir, { recursive: true, force: true })
+})
+
+describe("validateSessionName", () => {
+  it("accepts valid humanId-style names", () => {
+    expect(() => validateSessionName("quick-brown-fox")).not.toThrow()
+    expect(() => validateSessionName("ab-cd")).not.toThrow()
+  })
+
+  it("rejects path traversal attempts", () => {
+    expect(() => validateSessionName("../../.ssh")).toThrow("invalid session name")
+    expect(() => validateSessionName("../evil")).toThrow("invalid session name")
+  })
+
+  it("rejects names with slashes", () => {
+    expect(() => validateSessionName("foo/bar")).toThrow("invalid session name")
+    expect(() => validateSessionName("/etc/shadow")).toThrow("invalid session name")
+  })
+
+  it("rejects single-word names (must match humanId two-word minimum)", () => {
+    expect(() => validateSessionName("singleword")).toThrow("invalid session name")
+  })
+
+  it("rejects empty string", () => {
+    expect(() => validateSessionName("")).toThrow("invalid session name")
+  })
 })
 
 describe("createSession", () => {
@@ -44,6 +69,10 @@ describe("createSession", () => {
     await createSession()
     const content = readFileSync(join(tmpDir, ".sandy", ".gitignore"), "utf8")
     expect(content).toBe("existing\n")
+  })
+
+  it("rejects path traversal in provided name", async () => {
+    await expect(createSession("../../.ssh")).rejects.toThrow("invalid session name")
   })
 
   it("uses the provided name when given", async () => {

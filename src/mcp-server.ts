@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs"
+import { resolve, sep } from "node:path"
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import type { Backend } from "./backend"
-import { createSession } from "./session"
+import { createSession, validateSessionName } from "./session"
 import type { ProgressCallback, RunOptions } from "./types"
 import { DEFAULT_REGION } from "./types"
 
@@ -43,6 +44,12 @@ interface ActiveSession {
   dir: string
 }
 
+// Matches standard, gov, and China region names e.g. us-east-1, us-gov-east-1, cn-north-1
+const regionSchema = z
+  .string()
+  .regex(/^[a-z]{2,3}(-[a-z]+)+-\d+$/, "invalid AWS region format")
+  .optional()
+
 export const handlerProgressCallback = (
   handlerContext: RequestHandlerExtra<ServerRequest, ServerNotification>,
 ): ProgressCallback => {
@@ -67,8 +74,21 @@ export const handlerProgressCallback = (
 export class SandyMcpServer {
   private activeSession: ActiveSession | null = null
   private resumedName: string | null = null
+  private readonly scriptsRoot: string
 
-  constructor(private backend: Backend) {}
+  constructor(
+    private backend: Backend,
+    scriptsRoot: string = process.cwd(),
+  ) {
+    this.scriptsRoot = scriptsRoot
+  }
+
+  private validateScriptPath(scriptPath: string): void {
+    const resolved = resolve(scriptPath)
+    if (!resolved.startsWith(this.scriptsRoot + sep)) {
+      throw new Error(`script path must be within the working directory: ${JSON.stringify(scriptPath)}`)
+    }
+  }
 
   // ── Resource handlers ────────────────────────────────────────────────────
 
@@ -119,6 +139,7 @@ export class SandyMcpServer {
   }
 
   handleResumeSession(sessionName: string): void {
+    validateSessionName(sessionName)
     this.resumedName = sessionName
     // Dir will be created lazily on next sandy_run or sandy_check
     this.activeSession = null
@@ -128,6 +149,7 @@ export class SandyMcpServer {
     params: SandyRunParams,
     onProgress?: ProgressCallback,
   ): Promise<SandyRunResult> {
+    this.validateScriptPath(params.script)
     const session = await this.ensureSession()
 
     const opts: RunOptions = {
@@ -186,7 +208,7 @@ export class SandyMcpServer {
         inputSchema: z.object({
           action: z.enum(["baseline", "connect"]).describe('"baseline" or "connect"'),
           imdsPort: z.number().optional().describe("IMDS port (required for connect)"),
-          region: z.string().optional().describe("AWS region (default: us-west-2)"),
+          region: regionSchema.describe("AWS region (default: us-west-2)"),
         }),
       },
       async ({ action, imdsPort, region }, ctx) => {
@@ -210,7 +232,7 @@ export class SandyMcpServer {
         inputSchema: z.object({
           script: z.string().describe("Path to the TypeScript script"),
           imdsPort: z.number().describe("IMDS server port on the host"),
-          region: z.string().optional().describe("AWS region (default: us-west-2)"),
+          region: regionSchema.describe("AWS region (default: us-west-2)"),
           args: z.array(z.string()).optional().describe("Arguments passed to the script"),
         }),
       },
@@ -228,7 +250,7 @@ export class SandyMcpServer {
     server.registerTool(
       "sandy_resume_session",
       {
-        description: "Set the active session name without validation",
+        description: "Set the active session name to resume a previous session",
         inputSchema: z.object({
           sessionName: z.string().describe("Session name to resume"),
         }),

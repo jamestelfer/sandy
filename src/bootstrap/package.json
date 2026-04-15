@@ -4,7 +4,7 @@
   "scripts": {
     "tsc": "tsc",
     "typecheck": "tsc",
-    "invoke": "node --permission --allow-fs-read=* --allow-fs-write=*",
+    "invoke": "node --permission --allow-fs-read=* --allow-fs-write=* --",
     "entrypoint": "tsc && pnpm run -s invoke"
   },
   "dependencies": {

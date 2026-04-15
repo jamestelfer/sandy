@@ -8,7 +8,7 @@ Sandy is a [Claude Code](https://claude.ai/code) skill that runs TypeScript scri
 
 AI agents that query AWS need SDK access but shouldn't get unrestricted shell access to the host. Sandy solves this by running each script in a fresh VM that:
 
-- **Restricts network access** to AWS endpoints only (`*.amazonaws.com`, `*.aws.amazon.com`)
+- **Restricts network access** to AWS endpoints only (`*.amazonaws.com`, `*.aws.amazon.com`) — Shuru backend only; Docker does not support domain-based egress filtering
 - **Blocks child processes** via Node.js `--permission` (no shelling out to AWS CLI or anything else)
 - **Never sees static credentials** -- the AWS SDK resolves credentials through an IMDS server on the host
 - **Is ephemeral** -- the VM is discarded after every run, leaving no persistent state
@@ -193,7 +193,7 @@ for await (const batch of listServiceArns("my-cluster")) {
 ### Constraints
 
 - **No `child_process`** -- `execSync`, `spawn`, `exec` all fail at runtime. Use SDK clients directly.
-- **No outbound network** except AWS endpoints. Fetching `example.com` or any non-AWS host will fail.
+- **No outbound network** except AWS endpoints (Shuru backend). Fetching `example.com` or any non-AWS host will fail. The Docker backend does not enforce this restriction — prefer Shuru for untrusted scripts.
 - **No persistent state** between runs. Each run starts from a clean snapshot.
 
 ## Snapshot Management

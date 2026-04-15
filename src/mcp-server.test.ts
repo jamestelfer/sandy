@@ -19,7 +19,7 @@ describe("sandy_run", () => {
 
   beforeEach(() => {
     backend = new DummyBackend()
-    server = new SandyMcpServer(backend)
+    server = new SandyMcpServer(backend, process.cwd())
   })
 
   test("dispatches to backend and returns structured result", async () => {
@@ -34,6 +34,18 @@ describe("sandy_run", () => {
     const call = findRun(backend)
     expect(call.opts.scriptPath).toBe("foo.ts")
     expect(call.opts.imdsPort).toBe(9001)
+  })
+
+  test("rejects script path outside the working directory", async () => {
+    await expect(server.handleSandyRun({ script: "/etc/shadow", imdsPort: 9001 })).rejects.toThrow(
+      "script path must be within the working directory",
+    )
+  })
+
+  test("rejects path traversal above working directory", async () => {
+    await expect(
+      server.handleSandyRun({ script: "../../outside.ts", imdsPort: 9001 }),
+    ).rejects.toThrow("script path must be within the working directory")
   })
 })
 
@@ -56,7 +68,7 @@ describe("session management", () => {
     expect(runs[0].opts.sessionDir).toBe(runs[1].opts.sessionDir)
   })
 
-  test("sandy_resume_session sets active session name without validation", async () => {
+  test("sandy_resume_session sets active session name for next run", async () => {
     server.handleResumeSession("my-custom-session")
     const result = await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 })
 
