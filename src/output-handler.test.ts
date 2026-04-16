@@ -29,7 +29,7 @@ describe("OutputHandler", () => {
     expect(messages).toEqual([])
   })
 
-  test("stdoutLine writes raw line to injected write function", () => {
+  test("stdoutLine writes non-progress line to injected write function", () => {
     const written: string[] = []
     const handler = new OutputHandler(
       () => {},
@@ -37,6 +37,16 @@ describe("OutputHandler", () => {
     )
     handler.stdoutLine("hello")
     expect(written).toEqual(["hello"])
+  })
+
+  test("stdoutLine does not write progress line to injected write function", () => {
+    const written: string[] = []
+    const handler = new OutputHandler(
+      () => {},
+      (line) => written.push(line),
+    )
+    handler.stdoutLine("[-->  compiling...")
+    expect(written).toEqual([])
   })
 
   test("stderrLine writes [err]-prefixed line to injected write function", () => {

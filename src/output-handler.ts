@@ -40,11 +40,12 @@ export class OutputHandler {
   }
 
   stdoutLine(line: string): void {
-    this.write(line)
     this.outputBuf += `${line}\n`
     const parsed = parseProgressLine(line)
     if (parsed.isProgress) {
       this.onProgress(parsed.message)
+    } else {
+      this.write(line)
     }
   }
 
