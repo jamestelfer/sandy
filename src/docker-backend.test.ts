@@ -64,6 +64,16 @@ describe("DockerBackend.imageCreate", () => {
     expect((buildImageCalls[0]?.opts as { t?: string })?.t).toBe("sandy:latest")
   })
 
+  test("tags sandy:layer-retention after successful build", async () => {
+    const { docker, tagCalls } = makeDockerFake()
+    const backend = new DockerBackend(docker, fakeBuildContext)
+    await backend.imageCreate(new OutputHandler(() => {}))
+    expect(tagCalls).toContainEqual({
+      from: "sandy:latest",
+      opts: { repo: "sandy", tag: "layer-retention" },
+    })
+  })
+
   test("forwards [-->-prefixed stream content as progress", async () => {
     // Build stream returning JSON with [-->-prefixed stream content
     const buildLine = JSON.stringify({ stream: "[-->  building layer\n" })
@@ -84,11 +94,25 @@ describe("DockerBackend.imageCreate", () => {
 })
 
 describe("DockerBackend.imageDelete", () => {
-  test("calls remove on sandy:latest", async () => {
-    const { docker, imageFake } = makeDockerFake()
+  test("without force: removes only sandy:latest", async () => {
+    const { docker, removedImages } = makeDockerFake()
     const backend = new DockerBackend(docker)
     await backend.imageDelete(new OutputHandler(() => {}))
-    expect(imageFake.removeCalls.length).toBe(1)
+    expect(removedImages).toEqual(["sandy:latest"])
+  })
+
+  test("without force: does not remove sandy:layer-retention", async () => {
+    const { docker, removedImages } = makeDockerFake()
+    const backend = new DockerBackend(docker)
+    await backend.imageDelete(new OutputHandler(() => {}), false)
+    expect(removedImages).not.toContain("sandy:layer-retention")
+  })
+
+  test("with force: removes sandy:latest and sandy:layer-retention", async () => {
+    const { docker, removedImages } = makeDockerFake()
+    const backend = new DockerBackend(docker)
+    await backend.imageDelete(new OutputHandler(() => {}), true)
+    expect(removedImages).toEqual(["sandy:latest", "sandy:layer-retention"])
   })
 })
 

@@ -61,6 +61,12 @@ describe("CLI image", () => {
     expect(backend.calls).toEqual([{ method: "imageDelete", force: false }])
   })
 
+  it("delete with force:true passes force=true to backend.imageDelete()", async () => {
+    const backend = new DummyBackend()
+    await runImage({ action: "delete", force: true }, backend)
+    expect(backend.calls).toEqual([{ method: "imageDelete", force: true }])
+  })
+
   it("forwards onProgress callback to backend.imageCreate()", async () => {
     const backend = new DummyBackend()
     backend.progressLines = ["step one"]

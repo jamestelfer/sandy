@@ -11,11 +11,13 @@ const TIMEOUT = 300_000
 
 describe("DockerBackend integration", () => {
   test.skipIf(SKIP)(
-    "imageCreate builds sandy:latest image",
+    "imageCreate builds sandy:latest image and tags sandy:layer-retention",
     async () => {
-      const backend = new DockerBackend(new Docker())
+      const docker = new Docker()
+      const backend = new DockerBackend(docker)
       await backend.imageCreate(noop)
       expect(await backend.imageExists(noop)).toBe(true)
+      await expect(docker.getImage("sandy:layer-retention").inspect()).resolves.toBeDefined()
     },
     TIMEOUT,
   )
@@ -53,7 +55,7 @@ describe("DockerBackend integration", () => {
 
   // Image-deletion tests run last so they don't force earlier tests to rebuild
   test.skipIf(SKIP)(
-    "imageDelete removes sandy:latest image",
+    "imageDelete removes sandy:latest but retains sandy:layer-retention",
     async () => {
       const docker = new Docker()
       const backend = new DockerBackend(docker)
@@ -68,6 +70,29 @@ describe("DockerBackend integration", () => {
       }
       await backend.imageDelete(noop)
       expect(await backend.imageExists(noop)).toBe(false)
+      // layer-retention tag persists — keeps build cache warm for next imageCreate
+      await expect(docker.getImage("sandy:layer-retention").inspect()).resolves.toBeDefined()
+    },
+    TIMEOUT,
+  )
+
+  // Force-delete removes both tags — run after soft-delete test to rebuild first
+  test.skipIf(SKIP)(
+    "imageDelete with force removes sandy:latest and sandy:layer-retention",
+    async () => {
+      const docker = new Docker()
+      const backend = new DockerBackend(docker)
+      try {
+        await docker.pruneContainers()
+      } catch {
+        /* ignore */
+      }
+      if (!(await backend.imageExists(noop))) {
+        await backend.imageCreate(noop)
+      }
+      await backend.imageDelete(noop, true)
+      expect(await backend.imageExists(noop)).toBe(false)
+      await expect(docker.getImage("sandy:layer-retention").inspect()).rejects.toThrow()
     },
     TIMEOUT,
   )
@@ -77,16 +102,18 @@ describe("DockerBackend integration", () => {
     async () => {
       const docker = new Docker()
       const backend = new DockerBackend(docker)
-      // Prune stopped containers then remove image
+      // Prune stopped containers then remove both image tags
       try {
         await docker.pruneContainers()
       } catch {
         /* ignore */
       }
-      try {
-        await docker.getImage("sandy:latest").remove()
-      } catch {
-        /* already absent */
+      for (const name of ["sandy:latest", "sandy:layer-retention"]) {
+        try {
+          await docker.getImage(name).remove()
+        } catch {
+          /* already absent */
+        }
       }
       expect(await backend.imageExists(noop)).toBe(false)
     },

@@ -136,12 +136,16 @@ export class SandyMcpServer {
     }
   }
 
-  async handleSandyImage(onProgress: ProgressCallback, action: "create" | "delete"): Promise<void> {
+  async handleSandyImage(
+    onProgress: ProgressCallback,
+    action: "create" | "delete",
+    force?: boolean,
+  ): Promise<void> {
     const handler = new OutputHandler(onProgress)
     if (action === "create") {
       await this.backend.imageCreate(handler)
     } else {
-      await this.backend.imageDelete(handler)
+      await this.backend.imageDelete(handler, force)
     }
   }
 
@@ -198,11 +202,17 @@ export class SandyMcpServer {
         description: "Create or delete the Sandy sandbox image",
         inputSchema: z.object({
           action: z.enum(["create", "delete"]).describe('"create" or "delete"'),
+          force: z
+            .boolean()
+            .optional()
+            .describe(
+              "Remove all cached layers for a clean rebuild, takes more time (delete action only)",
+            ),
         }),
       },
-      async ({ action }, ctx) => {
+      async ({ action, force }, ctx) => {
         const onProgress = handlerProgressCallback(ctx)
-        await this.handleSandyImage(onProgress, action)
+        await this.handleSandyImage(onProgress, action, force)
         return {
           content: [{ type: "text" as const, text: `Image ${action} complete.` }],
         }

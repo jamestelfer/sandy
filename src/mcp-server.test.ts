@@ -181,6 +181,11 @@ describe("sandy_image", () => {
     await server.handleSandyImage(() => {}, "delete")
     expect(backend.calls).toContainEqual({ method: "imageDelete", force: false })
   })
+
+  test("delete with force=true passes force=true to backend.imageDelete()", async () => {
+    await server.handleSandyImage(() => {}, "delete", true)
+    expect(backend.calls).toContainEqual({ method: "imageDelete", force: true })
+  })
 })
 
 describe("progress", () => {
