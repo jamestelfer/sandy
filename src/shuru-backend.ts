@@ -11,6 +11,10 @@ import { OutputTracker } from "./scan-output"
 import { buildRunEnv } from "./run-env"
 import { stageBootstrapFiles } from "./bootstrap-staging"
 
+// Shuru requires all mounted host paths to be within CWD. Use .sandy/tmp
+// (already gitignored) instead of the OS temp directory.
+const SHURU_TMP_BASE = path.resolve(".sandy", "tmp")
+
 export type ShellExecutor = (
   cmd: string[],
   opts?: { cwd?: string; handler?: OutputHandler },
@@ -79,6 +83,9 @@ const defaultExecutor: ShellExecutor = async (cmd, opts) => {
     readStream(proc.stderr, h ? (l) => h.stderrLine(l) : undefined),
     proc.exited,
   ])
+  if (exitCode !== 0) {
+    throw new Error(`${cmd.join(" ")} exited with code ${exitCode}: ${stderr}`)
+  }
   return { stdout, stderr, exitCode }
 }
 
@@ -102,7 +109,7 @@ export class ShuruBackend implements Backend {
   }
 
   async imageCreate(onProgress: ProgressCallback): Promise<void> {
-    await using staging = await makeTmpDir("sandy-shuru-bootstrap-")
+    await using staging = await makeTmpDir("sandy-shuru-bootstrap-", SHURU_TMP_BASE)
     await stageBootstrapFiles(staging.path)
 
     const handler = new OutputHandler(onProgress)
@@ -118,13 +125,14 @@ export class ShuruBackend implements Backend {
         "--",
         "sh",
         `${VM_BOOTSTRAP}/init.sh`,
+        "all",
       ],
       { handler },
     )
   }
 
   async run(opts: RunOptions, onProgress: ProgressCallback): Promise<RunResult> {
-    await using scriptDirObj = await resolveScriptDir(opts.scriptPath)
+    await using scriptDirObj = await resolveScriptDir(opts.scriptPath, SHURU_TMP_BASE)
     const scriptName = path.basename(opts.scriptPath, ".ts")
     const compiledPath = `/workspace/dist/scripts/${scriptName}.js`
     const imdsEndpoint = `http://10.0.0.1:${opts.imdsPort}`
