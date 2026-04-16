@@ -8,22 +8,16 @@ import type { ProgressCallback, RunOptions } from "./types"
 import { DEFAULT_REGION } from "./types"
 
 // Resources — embedded in binary by Bun at build time
-import scriptingGuidePath from "../isolate/skills/sandy/resources/scripting-guide.md" with {
-  type: "file",
-}
-import ec2DescribePath from "../isolate/skills/sandy/resources/examples/ec2_describe.ts" with {
-  type: "file",
-}
-import ecsServicesPath from "../isolate/skills/sandy/resources/examples/ecs_services.ts" with {
-  type: "file",
-}
+import scriptingGuidePath from "./mcp-resources/scripting-guide.md" with { type: "file" }
+import ec2DescribePath from "./mcp-resources/examples/ec2_describe.ts" with { type: "file" }
+import ecsServicesPath from "./mcp-resources/examples/ecs_services.ts" with { type: "file" }
 import type { ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types"
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol"
 
 const SCRIPTING_GUIDE = readFileSync(scriptingGuidePath, "utf-8")
 const EXAMPLES: Record<string, string> = {
-  ec2_describe: readFileSync(ec2DescribePath, "utf-8"),
-  ecs_services: readFileSync(ecsServicesPath, "utf-8"),
+  "ec2_describe.ts": readFileSync(ec2DescribePath, "utf-8"),
+  "ecs_services.ts": readFileSync(ecsServicesPath, "utf-8"),
 }
 
 export interface SandyRunParams {
@@ -294,12 +288,19 @@ export class SandyMcpServer {
     )
 
     const exampleTemplate = new ResourceTemplate("sandy://examples/{name}", {
-      list: undefined,
+      list: async () => ({
+        resources: Object.keys(EXAMPLES).map((name) => ({
+          uri: `sandy://examples/${name}`,
+          name,
+          description: `Example Sandy script: ${name}`,
+          mimeType: "text/plain",
+        })),
+      }),
     })
     server.registerResource(
       "examples",
       exampleTemplate,
-      { description: "Example Sandy scripts (ec2_describe, ecs_services)" },
+      { description: "Example Sandy scripts (ec2_describe.ts, ecs_services.ts)" },
       (uri, { name }) => ({
         contents: [
           {

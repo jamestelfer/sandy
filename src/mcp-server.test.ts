@@ -106,13 +106,13 @@ describe("resources", () => {
   })
 
   test("examples resource returns ec2_describe content", () => {
-    const content = server.handleExampleResource("ec2_describe")
+    const content = server.handleExampleResource("ec2_describe.ts")
     expect(content).toContain("EC2Client")
     expect(content).toContain("DescribeInstancesCommand")
   })
 
   test("examples resource returns ecs_services content", () => {
-    const content = server.handleExampleResource("ecs_services")
+    const content = server.handleExampleResource("ecs_services.ts")
     expect(content).toContain("ECSClient")
     expect(content).toContain("ListServicesCommand")
   })
