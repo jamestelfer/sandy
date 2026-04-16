@@ -6,4 +6,4 @@
 set -eu
 
 cd /workspace
-pnpm run -s entrypoint -- "$@"
+pnpm run -s entrypoint "$@"
