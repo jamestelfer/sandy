@@ -7,8 +7,12 @@ export interface TmpDir {
   [Symbol.asyncDispose](): Promise<void>
 }
 
-export async function makeTmpDir(prefix: string): Promise<TmpDir> {
-  const dirPath = await fs.mkdtemp(path.join(os.tmpdir(), prefix))
+export async function makeTmpDir(prefix: string, baseDir?: string): Promise<TmpDir> {
+  const base = baseDir ?? os.tmpdir()
+  if (baseDir) {
+    await fs.mkdir(base, { recursive: true })
+  }
+  const dirPath = await fs.mkdtemp(path.join(base, prefix))
   return {
     path: dirPath,
     [Symbol.asyncDispose]: async () => {

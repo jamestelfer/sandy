@@ -15,10 +15,10 @@ const CHECK_SCRIPTS: Record<string, string> = {
 
 // For __baseline__ and __connect__, create a temp dir with the appropriate check script.
 // Normal script paths return a no-op disposable pointing to the script's parent dir.
-export async function resolveScriptDir(scriptPath: string): Promise<TmpDir> {
+export async function resolveScriptDir(scriptPath: string, tmpBaseDir?: string): Promise<TmpDir> {
   const script = CHECK_SCRIPTS[scriptPath]
   if (script !== undefined) {
-    const tmp = await makeTmpDir("sandy-check-")
+    const tmp = await makeTmpDir("sandy-check-", tmpBaseDir)
     await fs.writeFile(`${tmp.path}/${scriptPath}.ts`, script)
     return tmp
   }
