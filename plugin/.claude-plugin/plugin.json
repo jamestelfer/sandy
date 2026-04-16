@@ -1,0 +1,8 @@
+{
+  "name": "sandy",
+  "version": "0.2.0",
+  "description": "Sandy: sandboxed TypeScript execution for AWS queries via MCP",
+  "author": {
+    "name": "James Telfer"
+  }
+}

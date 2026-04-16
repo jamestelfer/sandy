@@ -1,79 +1,61 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with code in this repository.
 
 ## What is Sandy
 
-Sandy is a Claude Code skill that runs TypeScript scripts inside disposable Shuru microVMs with AWS SDK access via IMDS. It's designed for AI agents to safely execute read-only AWS queries without exposing credentials. The project is structured as a Claude plugin (`/.claude-plugin/marketplace.json`) containing a single skill at `isolate/skills/sandy/`.
+Sandy runs TypeScript scripts inside sandboxed environments (Shuru microVMs or Docker containers) with AWS SDK access via IMDS, for AI agents to safely execute read-only AWS queries without exposing credentials. Built on Bun — uses Bun as runtime, test runner, and binary compiler.
+
+Two entry points: **CLI** (`sandy`) for direct use, **MCP server** (`sandy mcp`) for AI agent use via Model Context Protocol.
 
 ## Project Layout
 
-All source lives under `isolate/skills/sandy/`:
-
-- `scripts/sandy` — Bash orchestration script (entry point for all operations)
-- `scripts/bootstrap/` — VM initialization (`init.sh`, `package.json`, `tsconfig.json`)
-- `scripts/checks/` — Health check TypeScript files (`baseline.ts`, `connect.ts`)
-- `resources/examples/` — Reference script implementations
-- `SKILL.md` — Comprehensive skill documentation (the authoritative reference)
-
-## Commands
-
-All commands run through the `sandy` Bash script. There is no Makefile, no npm workspace at the root, and no CI/CD pipeline.
-
-```bash
-# One-time VM snapshot setup
-sandy snapshot create
-sandy snapshot list
-sandy snapshot delete
-
-# Health checks
-sandy check baseline                          # packages + file I/O (no AWS)
-sandy check connect --imds-port <port>        # AWS IMDS connectivity
-
-# Run a script
-sandy run --imds-port <port> --script <path> [--region <region>] [--session <id>] [-- args...]
+```
+src/          Backend implementations, MCP server, CLI handlers, shared utilities
+src/cli/      One file per CLI subcommand (config, image, check, run, mcp)
+src/bootstrap/ Files embedded in the binary and staged into the sandbox at runtime
+plans/        Implementation phase plans
 ```
 
-There is no linting or formatting tooling. The only code quality step is `tsc` (TypeScript type checking), which runs automatically as part of `sandy run` before script execution.
+Unit tests (`*.test.ts`) sit alongside source. Integration tests (`*.integration.test.ts`) skip unless `INTEGRATION=true`.
 
-There is no test framework. The `check baseline` and `check connect` commands serve as manual verification.
+## Dev Commands
+
+```bash
+bun run agent       # lint:fix + format:fix + build + test — full CI cycle
+bun test            # unit tests only
+bun run build       # compile binary to dist/sandy
+bun run lint:fix    # auto-fix lint
+bun run format:fix  # auto-fix formatting
+```
+
+## Code Style (Biome)
+
+2-space indent, no semicolons, double quotes, trailing commas, mandatory curly braces, line width 100. Config: `biome.json`.
 
 ## Architecture
 
-```
-Agent calls: sandy run --script user_script.ts --imds-port <port>
-  |
-  v
-sandy (Bash) — validates checkpoint exists, parses flags
-  |
-  v
-Shuru (ephemeral VM) — mounts scripts read-only, output dir read-write
-  |
-  v
-Inside VM:
-  1. tsc — type-checks all scripts; errors stop execution
-  2. node --permission — runs compiled JS (blocks child_process, restricts network)
-  3. AWS SDK resolves credentials via IMDS at http://10.0.0.1:<port>
-```
+### Backend abstraction
 
-Key constraints enforced by the VM:
-- **No child processes** — Node's `--permission` flag blocks `child_process`. Use SDK clients directly, not AWS CLI.
-- **Restricted network** — Only `*.amazonaws.com` and `*.aws.amazon.com` allowed.
-- **Ephemeral** — Each run gets a fresh VM from a snapshot. No state persists between runs.
-- **No static credentials** — AWS SDK resolves credentials via IMDS (IMDSv2 only).
+All sandbox operations go through `Backend` (`src/backend.ts`): `imageCreate`, `imageDelete`, `imageExists`, `run` — each accepting an `onProgress` callback. `ShuruBackend` and `DockerBackend` are the real implementations; `DummyBackend` is the permanent test double.
 
-Output files go to `process.env.SANDY_OUTPUT` inside the VM, synced back to `.sandy/<session>/` on the host.
+### CLI vs MCP entry paths
 
-## Scripting Conventions
+Both paths select the same backend from config and call the same `Backend` interface. They differ in how they deliver output:
 
-**Mandatory: async generators for all AWS iteration.** Every paginated AWS call and batch-describe loop must be an `async function*` generator that yields results incrementally. Do not accumulate results into arrays. This ensures progress is visible immediately, partial results survive failures, and callers control iteration.
+- **CLI** (`src/main.ts`) — `onProgress` writes bold text to stderr; `src/cli/<cmd>.ts` handles each subcommand
+- **MCP** (`src/mcp-server.ts`) — `onProgress` sends `notifications/progress`; holds one `ActiveSession` in memory; exposes tools `sandy_image`, `sandy_check`, `sandy_run`, `sandy_resume_session` and resources `sandy://scripting-guide`, `sandy://examples/{name}`
 
-Other conventions (from SKILL.md):
-- Show terse progress to stdout so the user knows the script is alive
-- Wrap outer-loop iterations in try/catch to provide partial results on failure
-- Write JSON chunks to `SANDY_OUTPUT` as you go to preserve results before failures
-- Use `process.argv.slice(2)` for script arguments
+### Output/progress flow
 
-## Dependencies
+All subprocess stdout + stderr flow through `OutputHandler` → written to **process stderr** (keeps stdio free for the MCP protocol). Lines prefixed `[-->` are stripped and forwarded to `ProgressCallback`. Backends are modality-agnostic — only the callback differs between CLI and MCP.
 
-The VM snapshot includes ~150 AWS SDK v3 service clients (all `@aws-sdk/client-*` at `latest`) plus utility libraries: `arquero`, `asciichart`, `console-table-printer`, `@fast-csv/format`, `jmespath`. Full list in `scripts/bootstrap/package.json`. Runtime is Node.js 24 with pnpm.
+### Bootstrap files
+
+`src/bootstrap/` files are embedded in the binary via Bun's `with { type: "file" }` import syntax. Both backends copy them to a temp staging dir and mount it into the sandbox as `/tmp/bootstrap/`. `init.sh` sets up the Node.js workspace at `/workspace/` inside the sandbox.
+
+## Testing
+
+Use `DummyBackend` in CLI and MCP tests — not mocks. It records calls in `backend.calls`, returns configurable results via `backend.runResult` / `backend.imageExistsResult`, and fires `onProgress` for each string in `backend.progressLines`. This exercises real dispatch paths.
+
+Test isolation: config tests set `process.env.XDG_CONFIG_HOME` to a temp dir; session tests `chdir` to a temp dir. Both restore in `afterEach`.

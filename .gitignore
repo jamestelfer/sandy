@@ -1,0 +1,19 @@
+node_modules
+dist
+.bunli
+.claude/settings.local.json
+
+# Sandbox environment bind-mount artifacts
+.bash_profile
+.bashrc
+.gitconfig
+.gitmodules
+.profile
+.ripgreprc
+.zprofile
+.zshrc
+.idea
+.lsp.json
+.mcp.json
+.vscode
+
