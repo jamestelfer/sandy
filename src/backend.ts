@@ -1,8 +1,9 @@
-import type { ProgressCallback, RunOptions, RunResult } from "./types"
+import type { OutputHandler } from "./output-handler"
+import type { RunOptions, RunResult } from "./types"
 
 export interface Backend {
-  imageCreate(onProgress: ProgressCallback): Promise<void>
-  imageDelete(onProgress: ProgressCallback): Promise<void>
-  imageExists(onProgress: ProgressCallback): Promise<boolean>
-  run(opts: RunOptions, onProgress: ProgressCallback): Promise<RunResult>
+  imageCreate(handler: OutputHandler): Promise<void>
+  imageDelete(handler: OutputHandler, force?: boolean): Promise<void>
+  imageExists(handler: OutputHandler): Promise<boolean>
+  run(opts: RunOptions, handler: OutputHandler): Promise<RunResult>
 }

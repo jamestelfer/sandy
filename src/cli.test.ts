@@ -58,7 +58,7 @@ describe("CLI image", () => {
   it("delete dispatches to backend.imageDelete()", async () => {
     const backend = new DummyBackend()
     await runImage({ action: "delete" }, backend)
-    expect(backend.calls).toEqual([{ method: "imageDelete" }])
+    expect(backend.calls).toEqual([{ method: "imageDelete", force: false }])
   })
 
   it("forwards onProgress callback to backend.imageCreate()", async () => {

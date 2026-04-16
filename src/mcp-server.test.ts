@@ -179,7 +179,7 @@ describe("sandy_image", () => {
 
   test("delete dispatches to backend.imageDelete()", async () => {
     await server.handleSandyImage(() => {}, "delete")
-    expect(backend.calls).toContainEqual({ method: "imageDelete" })
+    expect(backend.calls).toContainEqual({ method: "imageDelete", force: false })
   })
 })
 

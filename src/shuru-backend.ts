@@ -3,9 +3,9 @@ import { makeTmpDir } from "./tmpdir"
 import type { StartOptions } from "@superhq/shuru"
 import { Sandbox } from "@superhq/shuru"
 import type { Backend } from "./backend"
-import type { ProgressCallback, RunOptions, RunResult } from "./types"
+import type { RunOptions, RunResult } from "./types"
 import { VM_BOOTSTRAP, VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "./types"
-import { OutputHandler } from "./output-handler"
+import type { OutputHandler } from "./output-handler"
 import { resolveScriptDir } from "./check-scripts"
 import { OutputTracker } from "./scan-output"
 import { buildRunEnv } from "./run-env"
@@ -95,7 +95,7 @@ export class ShuruBackend implements Backend {
     private sandboxFactory: SandboxFactory = defaultSandboxFactory,
   ) {}
 
-  async imageExists(_onProgress: ProgressCallback): Promise<boolean> {
+  async imageExists(_handler: OutputHandler): Promise<boolean> {
     // imageExists is a silent probe — no subprocess output, callback intentionally unused
     const { stdout } = await this.executor(["shuru", "checkpoint", "list"])
     return stdout
@@ -103,16 +103,14 @@ export class ShuruBackend implements Backend {
       .some((line) => line === CHECKPOINT_NAME || line.startsWith(`${CHECKPOINT_NAME} `))
   }
 
-  async imageDelete(onProgress: ProgressCallback): Promise<void> {
-    const handler = new OutputHandler(onProgress)
+  async imageDelete(handler: OutputHandler, _force?: boolean): Promise<void> {
     await this.executor(["shuru", "checkpoint", "delete", CHECKPOINT_NAME], { handler })
   }
 
-  async imageCreate(onProgress: ProgressCallback): Promise<void> {
+  async imageCreate(handler: OutputHandler): Promise<void> {
     await using staging = await makeTmpDir("sandy-shuru-bootstrap-", SHURU_TMP_BASE)
     await stageBootstrapFiles(staging.path)
 
-    const handler = new OutputHandler(onProgress)
     await this.executor(
       [
         "shuru",
@@ -131,7 +129,7 @@ export class ShuruBackend implements Backend {
     )
   }
 
-  async run(opts: RunOptions, onProgress: ProgressCallback): Promise<RunResult> {
+  async run(opts: RunOptions, handler: OutputHandler): Promise<RunResult> {
     await using scriptDirObj = await resolveScriptDir(opts.scriptPath, SHURU_TMP_BASE)
     const scriptName = path.basename(opts.scriptPath, ".ts")
     const compiledPath = `/workspace/dist/scripts/${scriptName}.js`
@@ -157,7 +155,6 @@ export class ShuruBackend implements Backend {
     const spawnCmd = ["sh", "-l", "/workspace/entrypoint", compiledPath, ...(opts.scriptArgs ?? [])]
 
     const tracker = await OutputTracker.create(opts.sessionDir)
-    const handler = new OutputHandler(onProgress)
 
     try {
       const proc = await sb.spawn(spawnCmd, { env: spawnEnv })
