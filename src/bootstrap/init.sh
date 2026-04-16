@@ -13,14 +13,14 @@ readonly BOOTSTRAP=/tmp/bootstrap
 readonly CERT_FILE="${BOOTSTRAP}/certs/nscacert.pem"
 
 prerequisites() {
-  echo "[--> prerequisites"
+  echo "[--> install prerequisites"
   apt-get update -qq
   apt-get install -y --no-install-recommends ca-certificates
   apt-get clean -y
 }
 
 certificates() {
-  echo "[--> certificates"
+  echo "[--> add additional root certificates (if Netskope is in use)"
   if [ -f "${CERT_FILE}" ]; then
     echo "Installing Netskope MitM certificates..."
     mkdir -p /usr/local/share/ca-certificates
@@ -39,7 +39,7 @@ certificates() {
 }
 
 nodejs() {
-  echo "[--> nodejs"
+  echo "[--> install Node.js"
   readonly NODE_VERSION=v24.14.1
   readonly NODE_ARCH=linux-arm64
   readonly NODE_URL="https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-${NODE_ARCH}.tar.xz"
@@ -50,13 +50,13 @@ nodejs() {
 }
 
 setup_pnpm() {
-  echo "[--> pnpm"
+  echo "[--> install pnpm"
   corepack enable
   corepack prepare pnpm@latest --activate
 }
 
 workspace() {
-  echo "[--> workspace"
+  echo "[--> setup workspace runtime environment"
   mkdir -p /workspace
   cp "${BOOTSTRAP}/package.json" /workspace/
   cp "${BOOTSTRAP}/tsconfig.json" /workspace/
@@ -66,7 +66,7 @@ workspace() {
 }
 
 profiles() {
-  echo "[--> profiles"
+  echo "[--> setup profile scripts for environment configuration"
   for f in "${BOOTSTRAP}"/*.sh; do
     [ "$(basename "${f}")" = "init.sh" ] && continue
     cp "${f}" /etc/profile.d/
@@ -74,7 +74,7 @@ profiles() {
 }
 
 dependencies() {
-  echo "[--> dependencies"
+  echo "[--> install workspace dependencies"
   cd /workspace
   pnpm install
 }
