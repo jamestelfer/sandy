@@ -111,14 +111,70 @@ describe("CLI image", () => {
 })
 
 describe("CLI check", () => {
+  it("when image does not exist, baseline does not call backend.run()", async () => {
+    const backend = new DummyBackend()
+    const prevExitCode = process.exitCode
+    try {
+      await runBaseline(backend)
+      expect(backend.calls.find((c) => c.method === "run")).toBeUndefined()
+    } finally {
+      process.exitCode = prevExitCode ?? 0
+    }
+  })
+
+  it("when image does not exist, baseline sets exit code 1", async () => {
+    const backend = new DummyBackend()
+    const prevExitCode = process.exitCode
+    try {
+      await runBaseline(backend)
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = prevExitCode ?? 0
+    }
+  })
+
+  it("when image does not exist, baseline writes message directing image create to stderr", async () => {
+    const backend = new DummyBackend()
+    const prevExitCode = process.exitCode
+    const stderrLines: string[] = []
+    const originalWrite = process.stderr.write.bind(process.stderr)
+    process.stderr.write = (chunk: string | Uint8Array) => {
+      stderrLines.push(chunk.toString())
+      return true
+    }
+    try {
+      await runBaseline(backend)
+      expect(stderrLines.join("")).toContain("image create")
+    } finally {
+      process.stderr.write = originalWrite
+      process.exitCode = prevExitCode ?? 0
+    }
+  })
+
+  it("when image does not exist, connect does not call backend.run()", async () => {
+    const backend = new DummyBackend()
+    const prevExitCode = process.exitCode
+    try {
+      await runConnect({ imdsPort: 9001, region: "us-west-2" }, backend)
+      expect(backend.calls.find((c) => c.method === "run")).toBeUndefined()
+    } finally {
+      process.exitCode = prevExitCode ?? 0
+    }
+  })
+
   it("baseline dispatches to backend.run()", async () => {
     const backend = new DummyBackend()
+    backend.imageExistsResult = true
     await runBaseline(backend)
-    expect(backend.calls[0]).toMatchObject({ method: "run", opts: { scriptPath: "__baseline__" } })
+    expect(backend.calls.find((c) => c.method === "run")).toMatchObject({
+      method: "run",
+      opts: { scriptPath: "__baseline__" },
+    })
   })
 
   it("baseline does not set exit code on success", async () => {
     const backend = new DummyBackend()
+    backend.imageExistsResult = true
     backend.runResult = { exitCode: 0, output: "", outputFiles: [] }
     const prevExitCode = process.exitCode
     await runBaseline(backend)
@@ -127,6 +183,7 @@ describe("CLI check", () => {
 
   it("baseline sets exit code 1 on non-zero container exit", async () => {
     const backend = new DummyBackend()
+    backend.imageExistsResult = true
     backend.runResult = { exitCode: 1, output: "", outputFiles: [] }
     const prevExitCode = process.exitCode
     await runBaseline(backend)
@@ -136,8 +193,9 @@ describe("CLI check", () => {
 
   it("connect dispatches to backend.run() with imdsPort", async () => {
     const backend = new DummyBackend()
+    backend.imageExistsResult = true
     await runConnect({ imdsPort: 9001, region: "us-west-2" }, backend)
-    expect(backend.calls[0]).toMatchObject({
+    expect(backend.calls.find((c) => c.method === "run")).toMatchObject({
       method: "run",
       opts: { scriptPath: "__connect__", imdsPort: 9001 },
     })
@@ -145,6 +203,7 @@ describe("CLI check", () => {
 
   it("baseline forwards onProgress to backend.run()", async () => {
     const backend = new DummyBackend()
+    backend.imageExistsResult = true
     backend.progressLines = ["checking baseline"]
     const received: string[] = []
     await runBaseline(backend, (msg) => received.push(msg))
@@ -153,6 +212,7 @@ describe("CLI check", () => {
 
   it("connect forwards onProgress to backend.run()", async () => {
     const backend = new DummyBackend()
+    backend.imageExistsResult = true
     backend.progressLines = ["checking connect"]
     const received: string[] = []
     await runConnect({ imdsPort: 9001, region: "us-west-2" }, backend, (msg) => received.push(msg))

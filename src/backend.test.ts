@@ -55,12 +55,12 @@ describe("DummyBackend", () => {
     expect(received).toEqual(["line 1", "line 2"])
   })
 
-  it("calls onProgress for each configured progress line from imageExists", async () => {
+  it("imageExists is a silent probe — does not fire onProgress", async () => {
     const backend = new DummyBackend()
     backend.progressLines = ["line 1", "line 2"]
     const received: string[] = []
     await backend.imageExists((msg) => received.push(msg))
-    expect(received).toEqual(["line 1", "line 2"])
+    expect(received).toEqual([])
   })
 
   it("calls onProgress for each configured progress line", async () => {

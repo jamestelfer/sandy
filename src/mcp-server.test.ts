@@ -131,7 +131,23 @@ describe("sandy_check", () => {
     server = new SandyMcpServer(backend)
   })
 
+  test("when image does not exist, does not call backend.run()", async () => {
+    await server.handleSandyCheck(() => {}, "baseline")
+    expect(backend.calls.find((c) => c.method === "run")).toBeUndefined()
+  })
+
+  test("when image does not exist, returns non-zero exitCode", async () => {
+    const result = await server.handleSandyCheck(() => {}, "baseline")
+    expect(result.exitCode).not.toBe(0)
+  })
+
+  test("when image does not exist, output directs use of sandy_image tool", async () => {
+    const result = await server.handleSandyCheck(() => {}, "baseline")
+    expect(result.output).toContain("sandy_image")
+  })
+
   test("baseline dispatches run with __baseline__ scriptPath and imdsPort 0", async () => {
+    backend.imageExistsResult = true
     await server.handleSandyCheck(() => {}, "baseline")
     const run = findRun(backend)
     expect(run.opts.scriptPath).toBe("__baseline__")
@@ -139,6 +155,7 @@ describe("sandy_check", () => {
   })
 
   test("connect dispatches run with __connect__ scriptPath and given imdsPort", async () => {
+    backend.imageExistsResult = true
     await server.handleSandyCheck(() => {}, "connect", 9001)
     const run = findRun(backend)
     expect(run.opts.scriptPath).toBe("__connect__")
@@ -185,6 +202,7 @@ describe("progress", () => {
   })
 
   test("handleSandyCheck forwards backend progress via onProgress", async () => {
+    backend.imageExistsResult = true
     backend.progressLines = ["checking IMDS"]
     const received: string[] = []
 

@@ -86,7 +86,9 @@ export class SandyMcpServer {
   private validateScriptPath(scriptPath: string): void {
     const resolved = resolve(scriptPath)
     if (!resolved.startsWith(this.scriptsRoot + sep)) {
-      throw new Error(`script path must be within the working directory: ${JSON.stringify(scriptPath)}`)
+      throw new Error(
+        `script path must be within the working directory: ${JSON.stringify(scriptPath)}`,
+      )
     }
   }
 
@@ -112,6 +114,14 @@ export class SandyMcpServer {
     imdsPort?: number,
     region?: string,
   ): Promise<SandyRunResult> {
+    const imageExists = await this.backend.imageExists(onProgress)
+    if (!imageExists) {
+      return {
+        exitCode: 1,
+        output: "No image found. Use the sandy_image tool with action 'create' to build one first.",
+        sessionName: "",
+      }
+    }
     const scriptPath = action === "baseline" ? "__baseline__" : "__connect__"
     const port = imdsPort ?? 0
     const session = await this.ensureSession()

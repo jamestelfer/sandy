@@ -27,11 +27,9 @@ export class DummyBackend implements Backend {
     }
   }
 
-  async imageExists(onProgress: ProgressCallback): Promise<boolean> {
+  async imageExists(_onProgress: ProgressCallback): Promise<boolean> {
+    // imageExists is a silent probe — no progress output, matching real backends
     this.calls.push({ method: "imageExists" })
-    for (const line of this.progressLines) {
-      onProgress(line)
-    }
     return this.imageExistsResult
   }
 

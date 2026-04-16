@@ -1,3 +1,4 @@
+import { basename } from "node:path"
 import type { CommandModule } from "yargs"
 import type { Backend } from "../backend"
 import { OutputHandler } from "../output-handler"
@@ -17,6 +18,13 @@ async function runCheck(
   label: string,
 ): Promise<void> {
   const handler = new OutputHandler(onProgress)
+  const imageExists = await backend.imageExists(onProgress)
+  if (!imageExists) {
+    const exe = basename(process.argv[1])
+    handler.stderrLine(`sandy: no image found — run '${exe} image create' first`)
+    process.exitCode = 1
+    return
+  }
   const session = await createSession()
   const result = await backend.run(
     { ...opts, session: session.name, sessionDir: session.dir },
