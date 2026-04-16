@@ -3,6 +3,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { ShuruBackend } from "./shuru-backend"
 import type { SandboxFactory } from "./shuru-backend"
+import { OutputHandler } from "./output-handler"
 import type { RunOptions } from "./types"
 import { makeSandboxFactory, makeExecutor } from "./test-helpers"
 
@@ -18,14 +19,14 @@ describe("ShuruBackend.run", () => {
   test("starts sandbox from the sandy checkpoint", async () => {
     const { factory, startOptsCalls } = makeSandboxFactory()
     const backend = new ShuruBackend(undefined, factory)
-    await backend.run(baseRunOpts, () => {})
+    await backend.run(baseRunOpts, new OutputHandler(() => {}))
     expect(startOptsCalls[0]?.from).toBe("sandy")
   })
 
   test("mounts script dir read-only and session dir read-write", async () => {
     const { factory, startOptsCalls } = makeSandboxFactory()
     const backend = new ShuruBackend(undefined, factory)
-    await backend.run(baseRunOpts, () => {})
+    await backend.run(baseRunOpts, new OutputHandler(() => {}))
 
     const mounts = startOptsCalls[0]?.mounts ?? {}
     // scriptPath /home/user/scripts/hello.ts → scriptDir /home/user/scripts
@@ -36,7 +37,7 @@ describe("ShuruBackend.run", () => {
   test("exposes IMDS port and restricts network to AWS domains", async () => {
     const { factory, startOptsCalls } = makeSandboxFactory()
     const backend = new ShuruBackend(undefined, factory)
-    await backend.run({ ...baseRunOpts, imdsPort: 9001 }, () => {})
+    await backend.run({ ...baseRunOpts, imdsPort: 9001 }, new OutputHandler(() => {}))
 
     const opts = startOptsCalls[0]
     expect(opts?.exposeHost).toContain("9001")
@@ -49,7 +50,10 @@ describe("ShuruBackend.run", () => {
   test("sets IMDS endpoint and all AWS env vars in spawn call", async () => {
     const { factory, spawnCalls } = makeSandboxFactory()
     const backend = new ShuruBackend(undefined, factory)
-    await backend.run({ ...baseRunOpts, imdsPort: 9001, region: "ap-southeast-2" }, () => {})
+    await backend.run(
+      { ...baseRunOpts, imdsPort: 9001, region: "ap-southeast-2" },
+      new OutputHandler(() => {}),
+    )
 
     const env = spawnCalls[0]?.env ?? {}
     expect(env.AWS_EC2_METADATA_SERVICE_ENDPOINT).toBe("http://10.0.0.1:9001")
@@ -62,14 +66,14 @@ describe("ShuruBackend.run", () => {
   test("defaults to us-west-2 when region is not provided", async () => {
     const { factory, spawnCalls } = makeSandboxFactory()
     const backend = new ShuruBackend(undefined, factory)
-    await backend.run({ ...baseRunOpts, region: undefined }, () => {})
+    await backend.run({ ...baseRunOpts, region: undefined }, new OutputHandler(() => {}))
     expect(spawnCalls[0]?.env?.AWS_REGION).toBe("us-west-2")
   })
 
   test("spawns entrypoint with compiled script path derived from scriptPath basename", async () => {
     const { factory, spawnCalls } = makeSandboxFactory()
     const backend = new ShuruBackend(undefined, factory)
-    await backend.run(baseRunOpts, () => {})
+    await backend.run(baseRunOpts, new OutputHandler(() => {}))
 
     const cmd = spawnCalls[0]?.cmd ?? []
     expect(cmd.join(" ")).toContain("/workspace/entrypoint")
@@ -79,7 +83,7 @@ describe("ShuruBackend.run", () => {
   test("appends script args after the compiled path", async () => {
     const { factory, spawnCalls } = makeSandboxFactory()
     const backend = new ShuruBackend(undefined, factory)
-    await backend.run({ ...baseRunOpts, scriptArgs: ["--foo", "bar"] }, () => {})
+    await backend.run({ ...baseRunOpts, scriptArgs: ["--foo", "bar"] }, new OutputHandler(() => {}))
 
     const cmd = spawnCalls[0]?.cmd ?? []
     expect(cmd).toContain("--foo")
@@ -93,7 +97,7 @@ describe("ShuruBackend.run", () => {
     const backend = new ShuruBackend(undefined, factory)
 
     const progress: string[] = []
-    await backend.run(baseRunOpts, (msg) => progress.push(msg))
+    await backend.run(baseRunOpts, new OutputHandler((msg) => progress.push(msg)))
 
     expect(progress).toContain("compiling...")
     expect(progress.join("\n")).not.toContain("normal output line")
@@ -102,7 +106,7 @@ describe("ShuruBackend.run", () => {
   test("collects all output into RunResult and captures exit code", async () => {
     const { factory } = makeSandboxFactory({ exitCode: 2, stdoutLines: ["line one", "line two"] })
     const backend = new ShuruBackend(undefined, factory)
-    const result = await backend.run(baseRunOpts, () => {})
+    const result = await backend.run(baseRunOpts, new OutputHandler(() => {}))
 
     expect(result.output).toContain("line one")
     expect(result.output).toContain("line two")
@@ -141,7 +145,7 @@ describe("ShuruBackend.run", () => {
       }
     }
     const backend = new ShuruBackend(undefined, factory)
-    const result = await backend.run(baseRunOpts, () => {})
+    const result = await backend.run(baseRunOpts, new OutputHandler(() => {}))
     expect(result.output).toContain("hello")
   })
 
@@ -166,7 +170,10 @@ describe("ShuruBackend.run", () => {
       })
 
       const backend = new ShuruBackend(undefined, factory)
-      const result = await backend.run({ ...baseRunOpts, sessionDir: tmpDir }, () => {})
+      const result = await backend.run(
+        { ...baseRunOpts, sessionDir: tmpDir },
+        new OutputHandler(() => {}),
+      )
       expect(result.outputFiles).toContain("result.json")
       expect(result.outputFiles).not.toContain("pre-existing.json")
     } finally {
@@ -179,7 +186,7 @@ describe("ShuruBackend.run", () => {
     const backend = new ShuruBackend(undefined, factory)
     const result = await backend.run(
       { ...baseRunOpts, sessionDir: "/nonexistent/path/that/does/not/exist" },
-      () => {},
+      new OutputHandler(() => {}),
     )
     expect(result.outputFiles).toEqual([])
   })
@@ -199,7 +206,7 @@ describe("ShuruBackend.run", () => {
       },
     })
     const backend = new ShuruBackend(undefined, factory)
-    await backend.run(baseRunOpts, () => {})
+    await backend.run(baseRunOpts, new OutputHandler(() => {}))
     expect(stopped).toBe(true)
   })
 })
@@ -209,13 +216,13 @@ describe("ShuruBackend.imageCreate", () => {
     const { executor } = makeExecutor()
     const backend = new ShuruBackend(executor)
     // Cert file doesn't exist — must not throw, just skip
-    await expect(backend.imageCreate(() => {})).resolves.toBeUndefined()
+    await expect(backend.imageCreate(new OutputHandler(() => {}))).resolves.toBeUndefined()
   })
 
   test("calls shuru checkpoint create sandy with --allow-net and bootstrap mount", async () => {
     const { executor, calls } = makeExecutor()
     const backend = new ShuruBackend(executor)
-    await backend.imageCreate(() => {})
+    await backend.imageCreate(new OutputHandler(() => {}))
 
     const cmd = calls[0]
     expect(cmd.slice(0, 4)).toEqual(["shuru", "checkpoint", "create", "sandy"])
@@ -234,7 +241,7 @@ describe("ShuruBackend.imageCreate", () => {
     const { executor } = makeExecutor({}, ["[-->  checkpoint step 1", "normal line"])
     const backend = new ShuruBackend(executor)
     const progress: string[] = []
-    await backend.imageCreate((msg) => progress.push(msg))
+    await backend.imageCreate(new OutputHandler((msg) => progress.push(msg)))
     expect(progress).toContain("checkpoint step 1")
     expect(progress.join("\n")).not.toContain("normal line")
   })
@@ -252,7 +259,7 @@ describe("ShuruBackend.imageDelete", () => {
     const { executor } = makeExecutor({}, ["[-->  deleting checkpoint"])
     const backend = new ShuruBackend(executor)
     const progress: string[] = []
-    await backend.imageDelete((msg) => progress.push(msg))
+    await backend.imageDelete(new OutputHandler((msg) => progress.push(msg)))
     expect(progress).toContain("deleting checkpoint")
   })
 })

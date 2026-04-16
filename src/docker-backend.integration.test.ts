@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import Docker from "dockerode"
 import { DockerBackend } from "./docker-backend"
+import { OutputHandler } from "./output-handler"
 import { makeTmpDir } from "./tmpdir"
+
+const noop = new OutputHandler(() => {})
 
 const SKIP = !process.env.INTEGRATION
 const TIMEOUT = 300_000
@@ -11,8 +14,8 @@ describe("DockerBackend integration", () => {
     "imageCreate builds sandy:latest image",
     async () => {
       const backend = new DockerBackend(new Docker())
-      await backend.imageCreate()
-      expect(await backend.imageExists()).toBe(true)
+      await backend.imageCreate(noop)
+      expect(await backend.imageExists(noop)).toBe(true)
     },
     TIMEOUT,
   )
@@ -21,8 +24,8 @@ describe("DockerBackend integration", () => {
     "run executes script and returns stdout",
     async () => {
       const backend = new DockerBackend(new Docker())
-      if (!(await backend.imageExists())) {
-        await backend.imageCreate()
+      if (!(await backend.imageExists(noop))) {
+        await backend.imageCreate(noop)
       }
 
       const path = await import("node:path")
@@ -41,7 +44,7 @@ describe("DockerBackend integration", () => {
           session: "integration-test",
           sessionDir: sessionDir.path,
         },
-        () => {},
+        noop,
       )
       expect(result.exitCode).toBe(0)
     },
@@ -60,11 +63,11 @@ describe("DockerBackend integration", () => {
       } catch {
         /* ignore */
       }
-      if (!(await backend.imageExists())) {
-        await backend.imageCreate()
+      if (!(await backend.imageExists(noop))) {
+        await backend.imageCreate(noop)
       }
-      await backend.imageDelete()
-      expect(await backend.imageExists()).toBe(false)
+      await backend.imageDelete(noop)
+      expect(await backend.imageExists(noop)).toBe(false)
     },
     TIMEOUT,
   )
@@ -85,7 +88,7 @@ describe("DockerBackend integration", () => {
       } catch {
         /* already absent */
       }
-      expect(await backend.imageExists()).toBe(false)
+      expect(await backend.imageExists(noop)).toBe(false)
     },
     TIMEOUT,
   )

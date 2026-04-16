@@ -31,6 +31,7 @@ export function makeImageFake(config: { inspectThrows?: boolean } = {}): {
     remove: async () => {
       removeCalls.push("remove")
     },
+    tag: async () => {},
   }
   return { image, removeCalls }
 }

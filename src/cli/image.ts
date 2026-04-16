@@ -15,11 +15,11 @@ export async function runImage(
   const handler = new OutputHandler(onProgress)
   switch (argv.action) {
     case "create":
-      await backend.imageCreate(onProgress)
+      await backend.imageCreate(handler)
       handler.stdoutLine("image created")
       break
     case "delete":
-      await backend.imageDelete(onProgress)
+      await backend.imageDelete(handler)
       handler.stdoutLine("image deleted")
       break
   }

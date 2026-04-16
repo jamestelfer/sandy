@@ -3,6 +3,7 @@ import { resolve, sep } from "node:path"
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import type { Backend } from "./backend"
+import { OutputHandler } from "./output-handler"
 import { createSession, validateSessionName } from "./session"
 import type { ProgressCallback, RunOptions } from "./types"
 import { DEFAULT_REGION } from "./types"
@@ -108,7 +109,8 @@ export class SandyMcpServer {
     imdsPort?: number,
     region?: string,
   ): Promise<SandyRunResult> {
-    const imageExists = await this.backend.imageExists(onProgress)
+    const handler = new OutputHandler(onProgress)
+    const imageExists = await this.backend.imageExists(handler)
     if (!imageExists) {
       return {
         exitCode: 1,
@@ -126,7 +128,7 @@ export class SandyMcpServer {
       session: session.name,
       sessionDir: session.dir,
     }
-    const result = await this.backend.run(opts, onProgress)
+    const result = await this.backend.run(opts, handler)
     return {
       exitCode: result.exitCode,
       output: result.output,
@@ -135,10 +137,11 @@ export class SandyMcpServer {
   }
 
   async handleSandyImage(onProgress: ProgressCallback, action: "create" | "delete"): Promise<void> {
+    const handler = new OutputHandler(onProgress)
     if (action === "create") {
-      await this.backend.imageCreate(onProgress)
+      await this.backend.imageCreate(handler)
     } else {
-      await this.backend.imageDelete(onProgress)
+      await this.backend.imageDelete(handler)
     }
   }
 
@@ -165,7 +168,8 @@ export class SandyMcpServer {
       scriptArgs: params.args,
     }
 
-    const result = await this.backend.run(opts, onProgress ?? (() => {}))
+    const handler = new OutputHandler(onProgress ?? (() => {}))
+    const result = await this.backend.run(opts, handler)
 
     return {
       exitCode: result.exitCode,
