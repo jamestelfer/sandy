@@ -4,11 +4,12 @@
  */
 import { describe, expect, test } from "bun:test"
 import { ShuruBackend } from "./shuru-backend"
+import { OutputHandler } from "./output-handler"
 
 const INTEGRATION = process.env.INTEGRATION === "true"
 const TIMEOUT = 300_000
 
-const noop = () => {}
+const noop = new OutputHandler(() => {})
 
 describe("ShuruBackend (integration)", () => {
   test.skipIf(!INTEGRATION)(

@@ -1,18 +1,23 @@
 import { describe, expect, test } from "bun:test"
 import Docker from "dockerode"
 import { DockerBackend } from "./docker-backend"
+import { OutputHandler } from "./output-handler"
 import { makeTmpDir } from "./tmpdir"
+
+const noop = new OutputHandler(() => {})
 
 const SKIP = !process.env.INTEGRATION
 const TIMEOUT = 300_000
 
 describe("DockerBackend integration", () => {
   test.skipIf(SKIP)(
-    "imageCreate builds sandy:latest image",
+    "imageCreate builds sandy:latest image and tags sandy:layer-retention",
     async () => {
-      const backend = new DockerBackend(new Docker())
-      await backend.imageCreate()
-      expect(await backend.imageExists()).toBe(true)
+      const docker = new Docker()
+      const backend = new DockerBackend(docker)
+      await backend.imageCreate(noop)
+      expect(await backend.imageExists(noop)).toBe(true)
+      await expect(docker.getImage("sandy:layer-retention").inspect()).resolves.toBeDefined()
     },
     TIMEOUT,
   )
@@ -21,8 +26,8 @@ describe("DockerBackend integration", () => {
     "run executes script and returns stdout",
     async () => {
       const backend = new DockerBackend(new Docker())
-      if (!(await backend.imageExists())) {
-        await backend.imageCreate()
+      if (!(await backend.imageExists(noop))) {
+        await backend.imageCreate(noop)
       }
 
       const path = await import("node:path")
@@ -41,7 +46,7 @@ describe("DockerBackend integration", () => {
           session: "integration-test",
           sessionDir: sessionDir.path,
         },
-        () => {},
+        noop,
       )
       expect(result.exitCode).toBe(0)
     },
@@ -50,7 +55,7 @@ describe("DockerBackend integration", () => {
 
   // Image-deletion tests run last so they don't force earlier tests to rebuild
   test.skipIf(SKIP)(
-    "imageDelete removes sandy:latest image",
+    "imageDelete removes sandy:latest but retains sandy:layer-retention",
     async () => {
       const docker = new Docker()
       const backend = new DockerBackend(docker)
@@ -60,11 +65,34 @@ describe("DockerBackend integration", () => {
       } catch {
         /* ignore */
       }
-      if (!(await backend.imageExists())) {
-        await backend.imageCreate()
+      if (!(await backend.imageExists(noop))) {
+        await backend.imageCreate(noop)
       }
-      await backend.imageDelete()
-      expect(await backend.imageExists()).toBe(false)
+      await backend.imageDelete(noop)
+      expect(await backend.imageExists(noop)).toBe(false)
+      // layer-retention tag persists — keeps build cache warm for next imageCreate
+      await expect(docker.getImage("sandy:layer-retention").inspect()).resolves.toBeDefined()
+    },
+    TIMEOUT,
+  )
+
+  // Force-delete removes both tags — run after soft-delete test to rebuild first
+  test.skipIf(SKIP)(
+    "imageDelete with force removes sandy:latest and sandy:layer-retention",
+    async () => {
+      const docker = new Docker()
+      const backend = new DockerBackend(docker)
+      try {
+        await docker.pruneContainers()
+      } catch {
+        /* ignore */
+      }
+      if (!(await backend.imageExists(noop))) {
+        await backend.imageCreate(noop)
+      }
+      await backend.imageDelete(noop, true)
+      expect(await backend.imageExists(noop)).toBe(false)
+      await expect(docker.getImage("sandy:layer-retention").inspect()).rejects.toThrow()
     },
     TIMEOUT,
   )
@@ -74,18 +102,20 @@ describe("DockerBackend integration", () => {
     async () => {
       const docker = new Docker()
       const backend = new DockerBackend(docker)
-      // Prune stopped containers then remove image
+      // Prune stopped containers then remove both image tags
       try {
         await docker.pruneContainers()
       } catch {
         /* ignore */
       }
-      try {
-        await docker.getImage("sandy:latest").remove()
-      } catch {
-        /* already absent */
+      for (const name of ["sandy:latest", "sandy:layer-retention"]) {
+        try {
+          await docker.getImage(name).remove()
+        } catch {
+          /* already absent */
+        }
       }
-      expect(await backend.imageExists()).toBe(false)
+      expect(await backend.imageExists(noop)).toBe(false)
     },
     TIMEOUT,
   )

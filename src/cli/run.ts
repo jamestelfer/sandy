@@ -32,7 +32,7 @@ export async function runRun(
       sessionDir: session.dir,
       scriptArgs: argv["--"],
     },
-    onProgress,
+    handler,
   )
 
   if (result.exitCode !== 0) {

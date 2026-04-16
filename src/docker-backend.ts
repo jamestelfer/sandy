@@ -6,8 +6,7 @@ import { makeTmpDir } from "./tmpdir"
 import type { Backend } from "./backend"
 import type { RunOptions, RunResult } from "./types"
 import { VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "./types"
-import type { ProgressCallback } from "./types"
-import { OutputHandler } from "./output-handler"
+import type { OutputHandler } from "./output-handler"
 import { resolveScriptDir } from "./check-scripts"
 import { OutputTracker } from "./scan-output"
 import { buildRunEnv } from "./run-env"
@@ -21,6 +20,7 @@ const DOCKERFILE = readFileSync(dockerfilePath, "utf-8")
 export interface ImageLike {
   inspect(): Promise<unknown>
   remove(): Promise<unknown>
+  tag(opts: { repo: string; tag: string }): Promise<void>
 }
 
 export interface ContainerLike {
@@ -40,6 +40,7 @@ export interface DockerClientLike {
 export type BuildContextFactory = () => Promise<NodeJS.ReadableStream & AsyncDisposable>
 
 const IMAGE_NAME = "sandy:latest"
+const LAYER_RETENTION_IMAGE = "sandy:layer-retention"
 
 export async function defaultBuildContextFactory(): Promise<
   NodeJS.ReadableStream & AsyncDisposable
@@ -103,7 +104,7 @@ export class DockerBackend implements Backend {
     private buildContext: BuildContextFactory = defaultBuildContextFactory,
   ) {}
 
-  async imageExists(_onProgress: ProgressCallback): Promise<boolean> {
+  async imageExists(_handler: OutputHandler): Promise<boolean> {
     try {
       await this.docker.getImage(IMAGE_NAME).inspect()
       return true
@@ -112,14 +113,16 @@ export class DockerBackend implements Backend {
     }
   }
 
-  async imageDelete(_onProgress: ProgressCallback): Promise<void> {
+  async imageDelete(_handler: OutputHandler, force = false): Promise<void> {
     await this.docker.getImage(IMAGE_NAME).remove()
+    if (force) {
+      await this.docker.getImage(LAYER_RETENTION_IMAGE).remove()
+    }
   }
 
-  async imageCreate(onProgress: ProgressCallback): Promise<void> {
+  async imageCreate(handler: OutputHandler): Promise<void> {
     await using context = await this.buildContext()
     const stream = await this.docker.buildImage(context, { t: IMAGE_NAME })
-    const handler = new OutputHandler(onProgress)
     // Parse build output JSON, feed stream content through OutputHandler (stderr + progress)
     await new Promise<void>((resolve, reject) => {
       const onData = (chunk: Buffer) => {
@@ -149,9 +152,10 @@ export class DockerBackend implements Backend {
       })
       stream.on("error", reject)
     })
+    await this.docker.getImage(IMAGE_NAME).tag({ repo: "sandy", tag: "layer-retention" })
   }
 
-  async run(opts: RunOptions, onProgress: ProgressCallback): Promise<RunResult> {
+  async run(opts: RunOptions, handler: OutputHandler): Promise<RunResult> {
     await using scriptDirObj = await resolveScriptDir(opts.scriptPath)
     const scriptName = path.basename(opts.scriptPath, ".ts")
     const compiledPath = `/workspace/dist/scripts/${scriptName}.js`
@@ -177,7 +181,6 @@ export class DockerBackend implements Backend {
     })
 
     const tracker = await OutputTracker.create(opts.sessionDir)
-    const handler = new OutputHandler(onProgress)
 
     try {
       await container.start()

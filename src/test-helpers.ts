@@ -31,6 +31,7 @@ export function makeImageFake(config: { inspectThrows?: boolean } = {}): {
     remove: async () => {
       removeCalls.push("remove")
     },
+    tag: async () => {},
   }
   return { image, removeCalls }
 }
@@ -73,15 +74,27 @@ export function makeDockerFake(
   buildImageCalls: Array<{ opts: object }>
   createContainerCalls: Array<{ opts: object }>
   imageFake: ReturnType<typeof makeImageFake>
+  removedImages: string[]
+  tagCalls: Array<{ from: string; opts: { repo: string; tag: string } }>
   lastContainer: () => ReturnType<typeof makeContainerFake>
 } {
   const buildImageCalls: Array<{ opts: object }> = []
   const createContainerCalls: Array<{ opts: object }> = []
   const imageFake = makeImageFake(config.imageConfig)
+  const removedImages: string[] = []
+  const tagCalls: Array<{ from: string; opts: { repo: string; tag: string } }> = []
   let lastContainer: ReturnType<typeof makeContainerFake> | null = null
 
   const docker: DockerClientLike = {
-    getImage: (_name: string) => imageFake.image,
+    getImage: (name: string): ImageLike => ({
+      inspect: () => imageFake.image.inspect(),
+      remove: async () => {
+        removedImages.push(name)
+      },
+      tag: async (opts) => {
+        tagCalls.push({ from: name, opts })
+      },
+    }),
     buildImage: async (
       _context: NodeJS.ReadableStream,
       opts: object,
@@ -101,6 +114,8 @@ export function makeDockerFake(
     buildImageCalls,
     createContainerCalls,
     imageFake,
+    removedImages,
+    tagCalls,
     lastContainer: () => {
       if (!lastContainer) {
         throw new Error("createContainer was not called")

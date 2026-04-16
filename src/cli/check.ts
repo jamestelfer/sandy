@@ -18,7 +18,7 @@ async function runCheck(
   label: string,
 ): Promise<void> {
   const handler = new OutputHandler(onProgress)
-  const imageExists = await backend.imageExists(onProgress)
+  const imageExists = await backend.imageExists(handler)
   if (!imageExists) {
     const exe = basename(process.argv[1])
     handler.stderrLine(`sandy: no image found — run '${exe} image create' first`)
@@ -28,7 +28,7 @@ async function runCheck(
   const session = await createSession()
   const result = await backend.run(
     { ...opts, session: session.name, sessionDir: session.dir },
-    onProgress,
+    handler,
   )
   if (result.exitCode !== 0) {
     handler.stderrLine(`sandy: ${label} check failed`)

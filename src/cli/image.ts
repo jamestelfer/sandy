@@ -5,6 +5,7 @@ import type { ProgressCallback } from "../types"
 
 export interface ImageArgs {
   action: "create" | "delete"
+  force?: boolean
 }
 
 export async function runImage(
@@ -15,11 +16,11 @@ export async function runImage(
   const handler = new OutputHandler(onProgress)
   switch (argv.action) {
     case "create":
-      await backend.imageCreate(onProgress)
+      await backend.imageCreate(handler)
       handler.stdoutLine("image created")
       break
     case "delete":
-      await backend.imageDelete(onProgress)
+      await backend.imageDelete(handler, argv.force ?? false)
       handler.stdoutLine("image deleted")
       break
   }
@@ -30,10 +31,16 @@ export function makeImageCommand(backend: Backend, onProgress: ProgressCallback)
     command: ["image <action>", "snapshot <action>"],
     describe: "Manage the sandbox image",
     builder: (y) =>
-      y.positional("action", {
-        choices: ["create", "delete"] as const,
-        demandOption: true,
-      }),
+      y
+        .positional("action", {
+          choices: ["create", "delete"] as const,
+          demandOption: true,
+        })
+        .option("force", {
+          type: "boolean",
+          default: false,
+          describe: "Remove all cached layers for a clean rebuild, takes more time",
+        }),
     handler: async (argv) => runImage(argv as unknown as ImageArgs, backend, onProgress),
   }
 }
