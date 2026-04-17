@@ -18,7 +18,7 @@ export async function runMcp(
     server.server.oninitialized = () => {
       const capabilities = server.server.getClientCapabilities()
       const version = server.server.getClientVersion()
-      logger.info({version, capabilities}, "Client attributes")
+      logger.info({ version, capabilities }, "Client attributes")
     }
 
     const transport = new StdioServerTransport()
