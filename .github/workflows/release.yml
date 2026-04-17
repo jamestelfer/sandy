@@ -75,7 +75,7 @@ jobs:
       - name: Update homebrew tap
         if: ${{ steps.version.outputs.prerelease == 'false' }}
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ secrets.HOMEBREW_GITHUB_TOKEN }}
           TAG: ${{ steps.version.outputs.tag }}
           VERSION: ${{ steps.version.outputs.version }}
           TAP_REPO: jamestelfer/homebrew-tap
