@@ -13,6 +13,7 @@ export class DummyBackend implements Backend {
   imageExistsResult = false
   runResult: RunResult = { exitCode: 0, output: "", outputFiles: [] }
   progressLines: string[] = []
+  stdoutLines: string[] = []
 
   async imageCreate(handler: OutputHandler): Promise<void> {
     this.calls.push({ method: "imageCreate" })
@@ -38,6 +39,9 @@ export class DummyBackend implements Backend {
     this.calls.push({ method: "run", opts })
     for (const line of this.progressLines) {
       handler.stdoutLine(`[-->${line}`)
+    }
+    for (const line of this.stdoutLines) {
+      handler.stdoutLine(line)
     }
     return { ...this.runResult }
   }

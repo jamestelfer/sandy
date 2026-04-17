@@ -7,7 +7,7 @@ describe("resolveScriptDir", () => {
   test("__baseline__ creates a temp dir containing the baseline script", async () => {
     await using dir = await resolveScriptDir("__baseline__")
     const content = await fs.readFile(path.join(dir.path, "__baseline__.ts"), "utf8")
-    expect(content).toContain("sandy: baseline OK")
+    expect(content).toContain("Baseline checks complete")
   })
 
   test("__connect__ creates a temp dir containing the connect script", async () => {

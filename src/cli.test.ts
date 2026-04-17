@@ -7,6 +7,7 @@ import { runBaseline, runConnect } from "./cli/check"
 import { runRun } from "./cli/run"
 import { runMcp } from "./cli/mcp"
 import { DummyBackend } from "./dummy-backend"
+import { noopLogger } from "./logger"
 
 const tmpDir = join(import.meta.dir, "../.tmp-test-cli")
 
@@ -324,7 +325,7 @@ describe("CLI run", () => {
 describe("CLI mcp", () => {
   it("starts MCP server and returns 0", async () => {
     const backend = new DummyBackend()
-    const exitCode = await runMcp(backend)
+    const exitCode = await runMcp(backend, console.error, noopLogger())
     expect(exitCode).toBe(0)
   })
 })
