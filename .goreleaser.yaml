@@ -1,0 +1,54 @@
+# Alternative release pipeline using GoReleaser's bun builder.
+# Triggered manually via .github/workflows/release-goreleaser.yml to compare
+# against the inline workflow in release.yml.
+version: 2
+
+project_name: sandy
+
+before:
+  hooks:
+    - bun install --frozen-lockfile
+
+builds:
+  - id: sandy
+    builder: bun
+    binary: sandy
+    main: src/main.ts
+    targets:
+      - linux-x64
+      - linux-arm64
+      - darwin-x64
+      - darwin-arm64
+
+archives:
+  - id: sandy
+    ids:
+      - sandy
+    formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{- if eq .Arch "amd64" }}x64{{- else }}{{ .Arch }}{{- end }}
+
+checksum:
+  name_template: "{{ .ProjectName }}-{{ .Version }}-checksums.txt"
+
+release:
+  github:
+    owner: jamestelfer
+    name: sandy
+  prerelease: auto
+
+homebrew_casks:
+  - name: sandy
+    ids:
+      - sandy
+    directory: Casks
+    repository:
+      owner: jamestelfer
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_GITHUB_TOKEN }}"
+    homepage: https://github.com/jamestelfer/sandy
+    description: Sandboxed TypeScript runtime with AWS SDK access for AI agents
+    commit_msg_template: "sandy {{ .Version }}"
+    skip_upload: auto
