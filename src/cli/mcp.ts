@@ -14,6 +14,13 @@ export async function runMcp(
     logger.info("MCP server starting")
     const sandy = new SandyMcpServer(backend, process.cwd(), logger)
     const server = sandy.createMcpServer()
+
+    server.server.oninitialized = () => {
+      const capabilities = server.server.getClientCapabilities()
+      const version = server.server.getClientVersion()
+      logger.info({version, capabilities}, "Client attributes")
+    }
+
     const transport = new StdioServerTransport()
     await server.connect(transport)
     return 0
