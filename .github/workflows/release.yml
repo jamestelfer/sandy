@@ -8,14 +8,123 @@ on:
 permissions:
   contents: write
 
+env:
+  BUN_VERSION: "1.3.12"
+  TARGETS: "linux-x64 linux-arm64 darwin-x64 darwin-arm64"
+
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: AryaLabsHQ/bunli-releaser@46167b587d929c1d25caf1de7f422360543c0e40 # v1
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          brew-tap: jamestelfer/homebrew-tap
-          brew-token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - run: bun install --frozen-lockfile
+
+      - name: Resolve version
+        id: version
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          version="${tag#v}"
+          prerelease=false
+          if [[ "$version" == *-* ]]; then
+            prerelease=true
+          fi
+          {
+            echo "tag=${tag}"
+            echo "version=${version}"
+            echo "prerelease=${prerelease}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build binaries
+        run: |
+          set -euo pipefail
+          mkdir -p dist/release
+          version="${{ steps.version.outputs.version }}"
+          for target in ${TARGETS}; do
+            echo "::group::Build sandy-${version}-${target}"
+            stage="dist/stage/${target}"
+            mkdir -p "${stage}"
+            bun build --compile --target="bun-${target}" src/main.ts --outfile "${stage}/sandy"
+            tar -czf "dist/release/sandy-${version}-${target}.tar.gz" -C "${stage}" sandy
+            echo "::endgroup::"
+          done
+          (cd dist/release && sha256sum sandy-${version}-*.tar.gz > sandy-${version}-checksums.txt)
+          ls -la dist/release/
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          args=(--title "${TAG}" --generate-notes)
+          if [[ "${PRERELEASE}" == "true" ]]; then
+            args+=(--prerelease)
+          fi
+          gh release create "${TAG}" "${args[@]}" \
+            dist/release/sandy-${VERSION}-*.tar.gz \
+            dist/release/sandy-${VERSION}-checksums.txt
+
+      - name: Update homebrew tap
+        if: ${{ steps.version.outputs.prerelease == 'false' }}
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+          TAP_REPO: jamestelfer/homebrew-tap
+          CASK_PATH: Casks/sandy.rb
+        run: |
+          set -euo pipefail
+
+          sha_for() {
+            awk -v f="sandy-${VERSION}-$1.tar.gz" '$2==f {print $1}' \
+              dist/release/sandy-${VERSION}-checksums.txt
+          }
+
+          darwin_arm64_sha=$(sha_for darwin-arm64)
+          darwin_x64_sha=$(sha_for darwin-x64)
+          base_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+
+          work=$(mktemp -d)
+          git clone --depth=1 "https://x-access-token:${GH_TOKEN}@github.com/${TAP_REPO}.git" "${work}"
+          mkdir -p "${work}/$(dirname "${CASK_PATH}")"
+
+          cat > "${work}/${CASK_PATH}" <<EOF
+          cask "sandy" do
+            version "${VERSION}"
+
+            on_arm do
+              sha256 "${darwin_arm64_sha}"
+              url "${base_url}/sandy-${VERSION}-darwin-arm64.tar.gz"
+            end
+            on_intel do
+              sha256 "${darwin_x64_sha}"
+              url "${base_url}/sandy-${VERSION}-darwin-x64.tar.gz"
+            end
+
+            name "Sandy"
+            desc "Sandboxed TypeScript runtime with AWS SDK access for AI agents"
+            homepage "https://github.com/${GITHUB_REPOSITORY}"
+
+            binary "sandy"
+
+            zap trash: "~/.config/sandy"
+          end
+          EOF
+
+          cd "${work}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${CASK_PATH}"
+          if git diff --cached --quiet; then
+            echo "Cask unchanged"
+            exit 0
+          fi
+          git commit -m "sandy ${VERSION}"
+          git push origin HEAD
