@@ -7,6 +7,8 @@ import { OutputHandler } from "./output-handler"
 import { createSession, validateSessionName } from "./session"
 import type { ProgressCallback, RunOptions } from "./types"
 import { DEFAULT_REGION } from "./types"
+import type { Logger } from "./logger"
+import { noopLogger } from "./logger"
 
 // Resources — embedded in binary by Bun at build time
 import scriptingGuidePath from "./mcp-resources/scripting-guide.md" with { type: "file" }
@@ -74,6 +76,7 @@ export class SandyMcpServer {
   constructor(
     private backend: Backend,
     scriptsRoot: string = process.cwd(),
+    private readonly logger: Logger = noopLogger(),
   ) {
     this.scriptsRoot = scriptsRoot
   }
@@ -85,6 +88,16 @@ export class SandyMcpServer {
         `script path must be within the working directory: ${JSON.stringify(scriptPath)}`,
       )
     }
+  }
+
+  private createOutputHandler(onProgress?: ProgressCallback): OutputHandler {
+    const progress = onProgress ?? (() => {})
+    if (this.logger.isLevelEnabled("debug")) {
+      return new OutputHandler(progress, (line) => {
+        this.logger.debug({ source: "output" }, line)
+      })
+    }
+    return new OutputHandler(progress)
   }
 
   // ── Resource handlers ────────────────────────────────────────────────────
@@ -109,30 +122,44 @@ export class SandyMcpServer {
     imdsPort?: number,
     region?: string,
   ): Promise<SandyRunResult> {
-    const handler = new OutputHandler(onProgress)
-    const imageExists = await this.backend.imageExists(handler)
-    if (!imageExists) {
-      return {
-        exitCode: 1,
-        output: "No image found. Use the sandy_image tool with action 'create' to build one first.",
-        sessionName: "",
+    const log = this.logger.child({ tool: "sandy_check" })
+
+    try {
+      log.info({ action, imdsPort, region }, "invoked")
+
+      const handler = this.createOutputHandler(onProgress)
+      const imageExists = await this.backend.imageExists(handler)
+      if (!imageExists) {
+        log.error("no image found")
+        return {
+          exitCode: 1,
+          output:
+            "No image found. Use the sandy_image tool with action 'create' to build one first.",
+          sessionName: "",
+        }
       }
-    }
-    const scriptPath = action === "baseline" ? "__baseline__" : "__connect__"
-    const port = imdsPort ?? 0
-    const session = await this.ensureSession()
-    const opts: RunOptions = {
-      scriptPath,
-      imdsPort: port,
-      region: region ?? DEFAULT_REGION,
-      session: session.name,
-      sessionDir: session.dir,
-    }
-    const result = await this.backend.run(opts, handler)
-    return {
-      exitCode: result.exitCode,
-      output: result.output,
-      sessionName: session.name,
+      const scriptPath = action === "baseline" ? "__baseline__" : "__connect__"
+      const port = imdsPort ?? 0
+      const session = await this.ensureSession()
+      const opts: RunOptions = {
+        scriptPath,
+        imdsPort: port,
+        region: region ?? DEFAULT_REGION,
+        session: session.name,
+        sessionDir: session.dir,
+      }
+      const result = await this.backend.run(opts, handler)
+
+      log.info({ exitCode: result.exitCode, session: session.name }, "complete")
+
+      return {
+        exitCode: result.exitCode,
+        output: result.output,
+        sessionName: session.name,
+      }
+    } catch (err) {
+      log.error({ err }, "failed")
+      throw err
     }
   }
 
@@ -141,16 +168,28 @@ export class SandyMcpServer {
     action: "create" | "delete",
     force?: boolean,
   ): Promise<void> {
-    const handler = new OutputHandler(onProgress)
-    if (action === "create") {
-      await this.backend.imageCreate(handler)
-    } else {
-      await this.backend.imageDelete(handler, force)
+    const log = this.logger.child({ tool: "sandy_image" })
+
+    try {
+      log.info({ action, force }, "invoked")
+
+      const handler = this.createOutputHandler(onProgress)
+      if (action === "create") {
+        await this.backend.imageCreate(handler)
+      } else {
+        await this.backend.imageDelete(handler, force)
+      }
+
+      log.info({ action }, "complete")
+    } catch (err) {
+      log.error({ err }, "failed")
+      throw err
     }
   }
 
   handleResumeSession(sessionName: string): void {
     validateSessionName(sessionName)
+    this.logger.info({ session: sessionName }, "session resume requested")
     this.resumedName = sessionName
     // Dir will be created lazily on next sandy_run or sandy_check
     this.activeSession = null
@@ -160,33 +199,46 @@ export class SandyMcpServer {
     params: SandyRunParams,
     onProgress?: ProgressCallback,
   ): Promise<SandyRunResult> {
-    this.validateScriptPath(params.script)
-    const session = await this.ensureSession()
+    const log = this.logger.child({ tool: "sandy_run" })
 
-    const opts: RunOptions = {
-      scriptPath: params.script,
-      imdsPort: params.imdsPort,
-      region: params.region ?? DEFAULT_REGION,
-      session: session.name,
-      sessionDir: session.dir,
-      scriptArgs: params.args,
-    }
+    try {
+      log.info({ script: params.script, region: params.region }, "invoked")
 
-    const handler = new OutputHandler(onProgress ?? (() => {}))
-    const result = await this.backend.run(opts, handler)
+      this.validateScriptPath(params.script)
+      const session = await this.ensureSession()
 
-    return {
-      exitCode: result.exitCode,
-      output: result.output,
-      sessionName: session.name,
+      const opts: RunOptions = {
+        scriptPath: params.script,
+        imdsPort: params.imdsPort,
+        region: params.region ?? DEFAULT_REGION,
+        session: session.name,
+        sessionDir: session.dir,
+        scriptArgs: params.args,
+      }
+
+      const handler = this.createOutputHandler(onProgress)
+      const result = await this.backend.run(opts, handler)
+
+      log.info({ exitCode: result.exitCode, session: session.name }, "complete")
+
+      return {
+        exitCode: result.exitCode,
+        output: result.output,
+        sessionName: session.name,
+      }
+    } catch (err) {
+      log.error({ err }, "failed")
+      throw err
     }
   }
 
   private async ensureSession(): Promise<ActiveSession> {
     if (!this.activeSession) {
+      const resumed = this.resumedName !== null
       const session = await createSession(this.resumedName ?? undefined)
       this.resumedName = null
       this.activeSession = session
+      this.logger.info({ session: session.name, resumed }, "session created")
     }
     return this.activeSession
   }
@@ -274,6 +326,7 @@ export class SandyMcpServer {
         }),
       },
       async ({ sessionName }) => {
+        this.logger.info({ tool: "sandy_resume_session", session: sessionName }, "invoked")
         this.handleResumeSession(sessionName)
         return {
           content: [

@@ -6,7 +6,9 @@
     "sandy": "./dist/sandy"
   },
   "scripts": {
-    "build": "bun build --compile --target=bun src/main.ts --outfile dist/sandy",
+    "build": "bun run --silent build-binary && bun run --silent resign",
+    "build-binary": "bun build --compile --target=bun src/main.ts --outfile dist/sandy",
+    "resign": "./bin/resign.sh",
     "build:all": "bunli build",
     "test": "bun test",
     "lint": "biome lint .",
@@ -24,7 +26,6 @@
     "@superhq/shuru": "^0.4.2",
     "dockerode": "^4.0.10",
     "human-id": "^4.0.0",
-    "pino": "^10.3.1",
     "yargs": "^18.0.0"
   },
   "devDependencies": {

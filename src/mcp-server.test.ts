@@ -1,4 +1,7 @@
-import { describe, test, expect, beforeEach } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach } from "bun:test"
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs"
+import { join } from "node:path"
+import { createLogger } from "./logger"
 import { DummyBackend } from "./dummy-backend"
 import { SandyMcpServer, handlerProgressCallback } from "./mcp-server"
 import type { RunOptions } from "./types"
@@ -288,5 +291,188 @@ describe("handlerProgressCallback", () => {
     await cb("msg")
 
     expect((sent[0]?.params as { progressToken: unknown }).progressToken).toBe(42)
+  })
+})
+
+describe("logging", () => {
+  interface LogRecord {
+    timestamp: string
+    level: string
+    msg: string
+    fields: Record<string, string>
+    stack: string[]
+  }
+
+  const LOG_LINE_RE = /^(?<timestamp>\S+) (?<level>debug|info |warn |error) (?<rest>.*)$/
+
+  function parseLogFile(content: string): LogRecord[] {
+    const rawLines = content.split("\n")
+    const records: LogRecord[] = []
+    let current: LogRecord | null = null
+    for (const line of rawLines) {
+      if (line.length === 0) {
+        continue
+      }
+      if (line.startsWith("  ")) {
+        if (current) {
+          current.stack.push(line.slice(2))
+        }
+        continue
+      }
+      const match = LOG_LINE_RE.exec(line)
+      if (!match?.groups) {
+        continue
+      }
+      const { timestamp, level, rest } = match.groups
+      // rest = "<msg> [k=v k=v ...]"
+      const fields: Record<string, string> = {}
+      const tokens: string[] = []
+      let remaining = rest
+      while (true) {
+        const m = remaining.match(/ ([A-Za-z_][A-Za-z0-9_]*)=((?:"(?:\\.|[^"\\])*")|[^ ]+)$/)
+        if (!m) {
+          break
+        }
+        tokens.unshift(m[0])
+        remaining = remaining.slice(0, m.index)
+      }
+      const msg = remaining
+      for (const tok of tokens) {
+        const kv = tok.match(/ ([A-Za-z_][A-Za-z0-9_]*)=(.*)$/)
+        if (!kv) {
+          continue
+        }
+        const [, k, vRaw] = kv
+        let v = vRaw
+        if (v.startsWith(`"`) && v.endsWith(`"`)) {
+          try {
+            v = JSON.parse(v)
+          } catch {
+            // leave as-is
+          }
+        }
+        fields[k] = v
+      }
+      current = { timestamp, level: level.trim(), msg, fields, stack: [] }
+      records.push(current)
+    }
+    return records
+  }
+
+  function setup(level: string = "info") {
+    const logDir = join(import.meta.dir, "../.tmp-test-mcp-log")
+    rmSync(logDir, { recursive: true, force: true })
+    mkdirSync(logDir, { recursive: true })
+    process.env.XDG_STATE_HOME = logDir
+
+    const logger = createLogger(level)
+    const backend = new DummyBackend()
+    const server = new SandyMcpServer(backend, process.cwd(), logger)
+
+    function logLines(): LogRecord[] {
+      const logFile = join(logDir, "sandy", "mcp.log")
+      if (!existsSync(logFile)) {
+        return []
+      }
+      return parseLogFile(readFileSync(logFile, "utf-8"))
+    }
+
+    return { backend, server, logDir, logLines }
+  }
+
+  afterEach(() => {
+    const logDir = join(import.meta.dir, "../.tmp-test-mcp-log")
+    rmSync(logDir, { recursive: true, force: true })
+    delete process.env.XDG_STATE_HOME
+  })
+
+  test("handleSandyRun logs invocation and completion", async () => {
+    const { server, logLines } = setup()
+    await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 })
+
+    const logs = logLines()
+    expect(logs.some((l) => l.fields.tool === "sandy_run" && l.msg === "invoked")).toBe(true)
+    expect(logs.some((l) => l.fields.tool === "sandy_run" && l.msg === "complete")).toBe(true)
+  })
+
+  test("handleSandyImage logs invocation and completion (action create)", async () => {
+    const { server, logLines } = setup()
+    await server.handleSandyImage(() => {}, "create")
+
+    const logs = logLines()
+    expect(logs.some((l) => l.fields.tool === "sandy_image" && l.msg === "invoked")).toBe(true)
+    expect(logs.some((l) => l.fields.tool === "sandy_image" && l.msg === "complete")).toBe(true)
+  })
+
+  test("handleSandyCheck logs invocation and completion (imageExistsResult = true)", async () => {
+    const { backend, server, logLines } = setup()
+    backend.imageExistsResult = true
+    await server.handleSandyCheck(() => {}, "baseline")
+
+    const logs = logLines()
+    expect(logs.some((l) => l.fields.tool === "sandy_check" && l.msg === "invoked")).toBe(true)
+    expect(logs.some((l) => l.fields.tool === "sandy_check" && l.msg === "complete")).toBe(true)
+  })
+
+  test("handleSandyCheck logs error when no image found (imageExistsResult = false)", async () => {
+    const { backend, server, logLines } = setup()
+    backend.imageExistsResult = false
+    await server.handleSandyCheck(() => {}, "baseline")
+
+    const logs = logLines()
+    expect(logs.some((l) => l.msg === "no image found" && l.level === "error")).toBe(true)
+  })
+
+  test("ensureSession logs session creation on first tool call", async () => {
+    const { server, logLines } = setup()
+    await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 })
+
+    const logs = logLines()
+    const sessionLog = logs.find((l) => l.msg === "session created")
+    expect(sessionLog?.fields.session).toBeTruthy()
+  })
+
+  test("handler error is logged before re-throwing", async () => {
+    const { server, logLines } = setup()
+    try {
+      await server.handleSandyRun({ script: "/etc/shadow", imdsPort: 9001 })
+    } catch {
+      // expected to throw
+    }
+
+    const logs = logLines()
+    expect(logs.some((l) => l.fields.tool === "sandy_run" && l.level === "error")).toBe(true)
+  })
+
+  test("output lines logged at debug level when logger level is debug", async () => {
+    const { backend, server, logLines } = setup("debug")
+    backend.stdoutLines = ["hello from sandbox"]
+
+    await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 })
+
+    const lines = logLines()
+    expect(lines.some((l) => l.fields.source === "output" && l.msg === "hello from sandbox")).toBe(
+      true,
+    )
+  })
+
+  test("output lines not logged when logger level is info", async () => {
+    const { backend, server, logLines } = setup("info")
+    backend.stdoutLines = ["hello from sandbox"]
+
+    await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 })
+
+    const lines = logLines()
+    expect(lines.some((l) => l.fields.source === "output")).toBe(false)
+  })
+
+  test("handleResumeSession logs session resume requested", () => {
+    const { server, logLines } = setup()
+    server.handleResumeSession("my-session")
+
+    const logs = logLines()
+    expect(
+      logs.some((l) => l.msg === "session resume requested" && l.fields.session === "my-session"),
+    ).toBe(true)
   })
 })
