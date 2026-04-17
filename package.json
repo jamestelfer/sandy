@@ -6,7 +6,9 @@
     "sandy": "./dist/sandy"
   },
   "scripts": {
-    "build": "bun build --compile --target=bun src/main.ts --outfile dist/sandy",
+    "build": "bun run --silent build-binary && bun run --silent resign",
+    "build-binary": "bun build --compile --target=bun src/main.ts --outfile dist/sandy",
+    "resign": "./bin/resign.sh",
     "build:all": "bunli build",
     "test": "bun test",
     "lint": "biome lint .",
