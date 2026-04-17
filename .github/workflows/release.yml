@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: AryaLabsHQ/bunli-releaser@v1
+      - uses: AryaLabsHQ/bunli-releaser@46167b587d929c1d25caf1de7f422360543c0e40 # v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           brew-tap: jamestelfer/homebrew-tap
