@@ -50,6 +50,20 @@ for await (const batch of listThings(client)) {
 }
 ```
 
+## Library documentation
+
+Fetch current docs with context7:
+
+| Library | context7 ID |
+|---------|------------|
+| arquero | `/uwdata/arquero` |
+| asciichart | `/kroitor/asciichart` |
+| AWS SDK JS v3 | `/aws/aws-sdk-js-v3` |
+| fast-csv | `/c2fo/fast-csv` |
+| JMESPath JS | `/jmespath/jmespath.js` |
+
+`console-table-printer` has no context7 entry — the README is the primary documentation.
+
 ## Examples
 
 Working examples are available as MCP resources under `sandy://examples/`:
@@ -59,10 +73,10 @@ Working examples are available as MCP resources under `sandy://examples/`:
 
 ## Progress reporting
 
-Import the `progress` function from the `sandy` module to report status to the user. Progress messages are forwarded as notifications and stripped from normal script output.
+Import the `progress` function from the `sandy` module to report status to the user. Progress messages are forwarded as notifications and stripped from normal script output. Keep messages terse — findings are signal, status lines are context.
 
 ```typescript
-import { progress } from "sandy"
+import { progress } from "../sandy.js"
 
 progress("fetching EC2 instances...")
 progress("processing page 3 of results")

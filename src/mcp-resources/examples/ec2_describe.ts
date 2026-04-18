@@ -1,7 +1,7 @@
 import { EC2Client, DescribeInstancesCommand, type Instance } from "@aws-sdk/client-ec2"
 import { search } from "jmespath"
 import { Table } from "console-table-printer"
-import { progress } from "sandy"
+import { progress } from "../sandy.js"
 
 const args = process.argv.slice(2)
 if (args.length < 2) {

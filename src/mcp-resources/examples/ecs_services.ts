@@ -5,7 +5,7 @@ import {
   type Service,
 } from "@aws-sdk/client-ecs"
 import { Table } from "console-table-printer"
-import { progress } from "sandy"
+import { progress } from "../sandy.js"
 
 const args = process.argv.slice(2)
 if (args.length < 1) {

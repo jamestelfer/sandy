@@ -1,8 +1,0 @@
-{
-  "name": "isolate",
-  "version": "1.1.1",
-  "description": "Sandboxing and other tooling for AWS queries",
-  "author": {
-    "name": "James Telfer"
-  }
-}
