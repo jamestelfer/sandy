@@ -138,33 +138,53 @@ Fetch current docs with context7:
 2. A failure on page N doesn't discard pages 1–(N-1).
 3. Callers stay in control of when to stop.
 
-**Pattern — paginated list with batched describe:**
+**Default pattern — paginated list yielding individual items:**
 
 ```typescript
-// Generator: yields items one page at a time
-async function* listThings(client: SomeClient): AsyncGenerator<Thing[]> {
+async function* listThings(client: SomeClient): AsyncGenerator<Thing> {
   let nextToken: string | undefined;
   do {
     const resp = await client.send(new ListThingsCommand({ NextToken: nextToken }));
-    const items = resp.Things ?? [];
-    if (items.length > 0) yield items;
+    for (const item of resp.Things ?? []) {
+      yield item;
+    }
     nextToken = resp.NextToken;
   } while (nextToken);
 }
 
-// Generator: enriches batches, yields individual enriched items
+for await (const thing of listThings(client)) {
+  table.addRow({ /* ... */ });
+}
+```
+
+**Batched describe pattern — when a downstream API accepts multiple IDs:**
+
+Only yield arrays when the next stage needs the batch boundary (e.g. to pass ARNs to a bulk describe call). The outer consumer still sees individual items.
+
+```typescript
+// Yields batches because describeThings needs them as input groups
+async function* listThingIds(client: SomeClient): AsyncGenerator<string[]> {
+  let nextToken: string | undefined;
+  do {
+    const resp = await client.send(new ListThingsCommand({ NextToken: nextToken }));
+    const ids = (resp.Things ?? []).map(t => t.id!);
+    if (ids.length > 0) yield ids;
+    nextToken = resp.NextToken;
+  } while (nextToken);
+}
+
+// Consumes ID batches, yields individual enriched items
 async function* describeThings(client: SomeClient): AsyncGenerator<ThingDetail> {
-  for await (const batch of listThings(client)) {
-    const resp = await client.send(new DescribeThingsCommand({ Ids: batch.map(t => t.id!) }));
+  for await (const idBatch of listThingIds(client)) {
+    const resp = await client.send(new DescribeThingsCommand({ Ids: idBatch }));
     for (const detail of resp.Details ?? []) {
       yield detail;
     }
   }
 }
 
-// Caller: consumes the stream
+// Caller always iterates individual items
 for await (const detail of describeThings(client)) {
-  console.log(detail.name);
   table.addRow({ /* ... */ });
 }
 ```

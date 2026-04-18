@@ -32,21 +32,22 @@ Credentials resolved via IMDS. No static credentials needed — obtain an IMDS p
 
 ## Mandatory: async generators for all AWS iteration
 
-Every paginated AWS call MUST be an `async function*` generator. Do not accumulate results into arrays.
+Every paginated AWS call MUST be an `async function*` generator that yields individual items. Do not accumulate results into arrays.
 
 ```typescript
-async function* listThings(client: SomeClient): AsyncGenerator<Thing[]> {
+async function* listThings(client: SomeClient): AsyncGenerator<Thing> {
   let nextToken: string | undefined;
   do {
     const resp = await client.send(new ListThingsCommand({ NextToken: nextToken }));
-    const items = resp.Things ?? [];
-    if (items.length > 0) yield items;
+    for (const item of resp.Things ?? []) {
+      yield item;
+    }
     nextToken = resp.NextToken;
   } while (nextToken);
 }
 
-for await (const batch of listThings(client)) {
-  // process batch
+for await (const thing of listThings(client)) {
+  // use thing directly
 }
 ```
 
