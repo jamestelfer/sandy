@@ -2,6 +2,21 @@
 
 This file provides guidance to Claude Code when working with code in this repository.
 
+## Voice
+
+Apply these rules to all prose, commit messages, PR descriptions, and user-facing text.
+
+- Technical-professional register. Use terms directly without over-explanation.
+- Guides: second person, imperative mood. Start instructions with the verb.
+- Reference: third person, declarative mood. Describe what things are and do.
+- No first person ("I", "we") anywhere except `Acknowledgements`.
+- No filler ("Let's dive in", "It's important to note", "As mentioned earlier").
+- No hedging ("You might want to consider", "It's generally a good idea").
+- No rhetorical questions. State the information instead.
+- No apologetic framing ("This might seem complicated, but…").
+- Sentences under 20 words where possible. Single-sentence paragraphs are fine.
+- British/Australian spelling ("favour", "organise", "colour", "licence" as noun).
+
 ## What is Sandy
 
 Sandy runs TypeScript scripts inside sandboxed environments (Shuru microVMs or Docker containers) with AWS SDK access via IMDS, for AI agents to safely execute read-only AWS queries without exposing credentials. Built on Bun — uses Bun as runtime, test runner, and binary compiler.

@@ -1,237 +1,196 @@
 # Sandy
 
-Sandboxed TypeScript execution for AWS queries using ephemeral microVMs.
+**Sandy runs TypeScript AWS queries inside a disposable sandbox, giving AI coding agents full SDK access and cross-account aggregation with no host credentials exposed.**
 
-Sandy is a [Claude Code](https://claude.ai/code) skill that runs TypeScript scripts inside disposable [Shuru](https://github.com/nicholasgasior/shuru) microVMs. Scripts get a pre-built Node.js environment with 150+ AWS SDK v3 service clients, and credentials are resolved via IMDS -- no static keys enter the VM.
+Sandy is for AI coding agents — Claude Code and peers — running against multi-account AWS estates, and the humans who drive them. Agents describe an investigation in natural language. Sandy executes the generated TypeScript in a fresh microVM or container. The script uses the full AWS SDK to gather and collate results, then returns only what the agent needs. The sandbox and IMDS flow exist because agents should not hold host-level credentials or reach AWS directly.
+
+```mermaid
+flowchart LR
+    subgraph AgentBox["Agent sandbox"]
+        A["Coding agent"]
+    end
+
+    subgraph Host["Host (outside agent sandbox)"]
+        direction TB
+        CLI["sandy run<br/>(CLI)"]
+        MCP["sandy mcp<br/>(MCP server)"]
+        IMDS["imds-broker<br/>(MCP)"]
+    end
+
+    subgraph Sandbox["Ephemeral sandbox<br/>(Shuru microVM or Docker container)"]
+        N["Node.js +<br/>AWS SDK v3"]
+    end
+
+    AWS((("AWS APIs")))
+
+    A -- "Bash: sandy run" --> CLI
+    A -- "MCP: sandy_run" --> MCP
+    A -- "MCP: start_server" --> IMDS
+    CLI -- "spawn, mount script" --> N
+    MCP -- "spawn, mount script" --> N
+    N -- "IMDS: GET credentials" --> IMDS
+    N -- "HTTPS to *.amazonaws.com" --> AWS
+
+    classDef consumer fill:#e6f3ff,stroke:#2b6cb0,color:#1a365d
+    classDef core fill:#fefcbf,stroke:#b7791f,color:#5f370e
+    classDef sandboxed fill:#e9f7ef,stroke:#276749,color:#22543d
+    classDef external fill:#fce4ec,stroke:#b83280,color:#702459
+    class A consumer
+    class CLI,MCP,IMDS core
+    class N sandboxed
+    class AWS external
+```
+
+## How to use it
+
+- **As an MCP server** — `sandy mcp`, registered automatically by the Claude Code plugin. Exposes the `sandy_image`, `sandy_check`, `sandy_run`, and `sandy_resume_session` tools, plus the `sandy://scripting-guide` resource for script-authoring guidance.
+- **As a CLI** — `sandy run --script path/to/script.ts --imds-port <port>`. Same backends, same guarantees. Suited to scripted workflows and agents that prefer driving binaries through a shell rather than MCP.
+
+Both modes select from the same `Backend` implementation and share every runtime constraint.
 
 ## Why
 
-AI agents that query AWS need SDK access but shouldn't get unrestricted shell access to the host. Sandy solves this by running each script in a fresh VM that:
+Two workarounds dominate AI-agent access to AWS today, and both have sharp edges.
 
-- **Restricts network access** to AWS endpoints only (`*.amazonaws.com`, `*.aws.amazon.com`) — Shuru backend only; Docker does not support domain-based egress filtering
-- **Blocks child processes** via Node.js `--permission` (no shelling out to AWS CLI or anything else)
-- **Never sees static credentials** -- the AWS SDK resolves credentials through an IMDS server on the host
-- **Is ephemeral** -- the VM is discarded after every run, leaving no persistent state
+- **Published AWS MCP servers** expose a per-API-call surface against a single account. The agent issues many calls and collates the results itself, burning tokens on glue work. Sandy runs the aggregation inside the sandbox with the full AWS SDK v3, returns only what the agent asked for, and reaches any account available through `imds-broker`.
+- **Unrestricted shell plus the `aws` CLI** is fast but gives the agent host-level access and visibility into static credentials. Sandy keeps the agent inside its own sandbox, routes credentials through IMDS into the microVM, and blocks child processes inside the VM via Node's permission model.
 
-## How It Fits Together
+## Installation
 
-The agent hosts both the sandy skill and the imds-broker MCP outside its own sandbox. To run a query, the agent starts an IMDS server via the MCP, then passes the server port and script path to the sandy skill. Sandy launches a Shuru VM with the script mounted, and the VM's AWS SDK fetches credentials from the IMDS server to talk to AWS.
+Three install paths, ordered by likely popularity.
 
-```mermaid
-sequenceDiagram
-    box Sandbox
-        participant A as Agent
-    end
+### Claude Code plugin
 
-    box Host
-        participant M as imds-broker
-        participant S as sandy
-    end
+Install Sandy through the Claude Code plugin marketplace. The plugin registers the MCP server and ships the agent-facing skill documentation.
 
-    box MicroVM
-        participant V as node
-    end
-
-    participant W as AWS
-
-    A->>M: start_server
-    M-->>A: port
-
-    A->>A: write script
-
-    A->>S: sandy run
-
-    S->>V: shuru run
-
-    V->>M: GET credentials
-    M-->>V: temp creds
-
-    V->>W: SDK calls
-    W-->>V: responses
-
-    V-->>S: output
-    S-->>A: results
+```
+/plugin install sandy
 ```
 
-**Boundaries:**
-- The **agent sandbox** restricts filesystem access, network egress, and command execution. The agent can write scripts and read results but cannot access `~/.aws` or call AWS directly.
-- The **sandy skill and imds-broker MCP** are hosted by the agent but run **outside the sandbox**. Sandy needs host access to invoke Shuru; the MCP serves credentials via IMDS on localhost.
-- The **Shuru microVM** is ephemeral and isolated. Network is restricted to AWS endpoints, `child_process` is blocked by Node's permission model, and the VM is discarded after each run. Credentials are fetched via IMDS and never written to disk.
+### Prebuilt binary
 
-## Prerequisites
-
-- [Shuru](https://github.com/nicholasgasior/shuru) -- ephemeral microVM manager (arm64 Linux VMs on macOS)
-- [Claude Code](https://claude.ai/code) -- Sandy is installed as a Claude Code skill/plugin
-- [imds-broker](https://github.com/jamestelfer/imds-broker) MCP -- serves AWS credentials via IMDS on the host
-
-## Configuration
-
-Sandy works best when Claude Code is running in sandbox mode. The recommended `settings.local.json`:
-
-```json
-{
-  "permissions": {
-    "allow": [
-      "Bash(/full/path/to/isolate/skills/sandy/scripts/sandy:*)"
-    ],
-    "deny": []
-  },
-  "sandbox": {
-    "enabled": true,
-    "autoAllowBashIfSandboxed": true,
-    "excludedCommands": [
-      "${CLAUDE_SKILL_DIR}/scripts/sandy *"
-    ]
-  }
-}
-```
-
-> **Note:** `permissions.allow` requires the full absolute path to the `sandy` script -- `${CLAUDE_SKILL_DIR}` is not expanded in permission statements. `excludedCommands` does support the variable.
-
-What this does:
-
-- **`sandbox.enabled: true`** -- the agent runs inside Claude Code's sandbox, restricting filesystem and network access. The agent can write scripts and read results, but cannot reach AWS or `~/.aws` directly.
-- **`sandbox.excludedCommands`** -- the `sandy` script itself must run _outside_ the sandbox. It needs host access to invoke Shuru, mount directories, and manage snapshots.
-- **`permissions.allow`** -- auto-approves all `sandy` subcommands so the agent doesn't prompt on every run. Must use the full path to the script.
-- **`sandbox.autoAllowBashIfSandboxed`** -- lets the sandboxed agent run bash commands freely (they're already restricted by the sandbox).
-
-### Network egress
-
-With the sandbox enabled, the agent's own network access is restricted by Claude Code. The only path to AWS is through Sandy's VM, which further restricts egress to `*.amazonaws.com` and `*.aws.amazon.com`.
-
-### Credential isolation
-
-The sandbox should deny access to `~/.aws` so the agent cannot read AWS credentials, profiles, or configuration files directly. Credentials flow exclusively through the imds-broker MCP into the Shuru VM via IMDS.
-
-## Setup
-
-Create the VM snapshot (one-time, or after changing bootstrap dependencies):
+Grab the latest release from [GitHub Releases](https://github.com/jamestelfer/sandy/releases), or install via the Homebrew tap:
 
 ```bash
-sandy snapshot create
+brew install jamestelfer/tap/sandy
 ```
 
-This downloads Node.js 24, installs pnpm, and runs `pnpm install` for all AWS SDK clients and utility libraries inside the VM. The resulting snapshot is used as the base for all future runs.
+### Build from source
 
-Verify the environment:
+Requires Bun 1.3 or newer.
 
 ```bash
-# Check packages and file I/O (no AWS credentials needed)
-sandy check baseline
-
-# Check AWS connectivity (requires an IMDS port)
-sandy check connect --imds-port <port>
+git clone https://github.com/jamestelfer/sandy
+cd sandy
+bun install
+bun run build
+./dist/sandy --help
 ```
 
-Both commands exit 0 and print a table on success.
+### Prerequisites
+
+- [Shuru](https://github.com/nicholasgasior/shuru) or Docker — select with `sandy config` (defaults to Shuru)
+- [imds-broker](https://github.com/jamestelfer/imds-broker) — serves AWS credentials via IMDS on the host
+- Claude Code (optional, required only for the plugin install path)
+
+Create the sandbox image once, then verify the environment:
+
+```bash
+sandy image create
+sandy check baseline                        # no AWS credentials needed
+sandy check connect --imds-port <port>      # verifies AWS connectivity
+```
 
 ## Usage
+
+### Via MCP
+
+The Claude Code plugin launches `sandy mcp` and exposes four tools plus one resource. Start an IMDS server from the agent (through the `imds-broker` MCP), then call `sandy_run` with the port and the script:
+
+```
+sandy_image(action: "create")
+sandy_check(action: "baseline")
+sandy_run(script: "…", imdsPort: 9001, region: "us-west-2")
+```
+
+Progress streams via `notifications/progress`. Session state persists for the lifetime of the MCP process and resumes with `sandy_resume_session`.
+
+Read `sandy://scripting-guide` from the MCP server for the full scripting contract.
+
+### Via CLI
 
 ```bash
 sandy run \
   --imds-port <port> \
   --script path/to/script.ts \
   --session <id> \
-  -- [args...]
+  -- [script args...]
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--imds-port <port>` | Yes | IMDS server port on the host |
-| `--script <path>` | Yes | Path to TypeScript file |
-| `--region <region>` | No | AWS region (default: `us-west-2`) |
-| `--session <id>` | No | Session ID for grouping output |
-| `--output-dir <dir>` | No | Override host output directory |
-| `-- [args...]` | No | Arguments passed to the script via `process.argv` |
+| `--imds-port <port>` | Yes | Port of the `imds-broker` IMDS server on the host |
+| `--script <path>` | Yes | Path to the TypeScript file to execute |
+| `--region <region>` | No | AWS region (default `us-west-2`) |
+| `--session <id>` | No | Session identifier; groups output under `.sandy/<id>/` |
+| `--output-dir <dir>` | No | Override the host output directory |
+| `-- [args...]` | No | Arguments forwarded to the script via `process.argv` |
 
-### What happens on `sandy run`
+Script output written to `/workspace/output` inside the sandbox syncs back to `.sandy/<session>/` on the host.
 
-1. The script directory is mounted read-only into the VM at `/workspace/scripts/`
-2. `tsc` type-checks all TypeScript files -- type errors stop execution before any AWS calls
-3. `node --permission` runs the compiled JavaScript with filesystem access but no child processes
-4. The AWS SDK resolves credentials via IMDS at `http://10.0.0.1:<port>`
-5. Output written to `process.env.SANDY_OUTPUT` is synced back to `.sandy/<session>/` on the host
+### Writing scripts
 
-## Writing Scripts
+Scripts are TypeScript with access to every `@aws-sdk/client-*` package, plus `arquero`, `asciichart`, `console-table-printer`, `@fast-csv/format`, and `jmespath`. Two patterns are mandatory.
 
-Scripts are standard TypeScript with access to all `@aws-sdk/client-*` packages and several utility libraries (`arquero`, `asciichart`, `console-table-printer`, `@fast-csv/format`, `jmespath`).
-
-### Async generators for AWS iteration
-
-All paginated AWS calls must use `async function*` generators. This ensures progress is visible immediately, partial results survive failures, and callers control iteration.
+- **Use `async function*` generators for paginated AWS calls.** Progress appears immediately, partial results survive failures, and callers decide when to stop.
+- **Call the SDK directly.** No `child_process`. No shelling out to `aws`.
 
 ```typescript
-import { ECSClient, ListServicesCommand } from "@aws-sdk/client-ecs";
+import { ECSClient, ListServicesCommand } from "@aws-sdk/client-ecs"
 
-const ecs = new ECSClient({ region: process.env.AWS_REGION });
+const ecs = new ECSClient({ region: process.env.AWS_REGION })
 
 async function* listServiceArns(cluster: string): AsyncGenerator<string[]> {
-  let nextToken: string | undefined;
+  let nextToken: string | undefined
   do {
-    const resp = await ecs.send(
-      new ListServicesCommand({ cluster, nextToken })
-    );
-    const arns = resp.serviceArns ?? [];
-    if (arns.length > 0) yield arns;
-    nextToken = resp.nextToken;
-  } while (nextToken);
+    const resp = await ecs.send(new ListServicesCommand({ cluster, nextToken }))
+    const arns = resp.serviceArns ?? []
+    if (arns.length > 0) yield arns
+    nextToken = resp.nextToken
+  } while (nextToken)
 }
 
 for await (const batch of listServiceArns("my-cluster")) {
-  console.log(`Got ${batch.length} services`);
+  console.log(`Got ${batch.length} services`)
 }
 ```
 
-### Environment
+Full guide: `sandy://scripting-guide` via MCP, or [`src/mcp-resources/scripting-guide.md`](src/mcp-resources/scripting-guide.md) in-repo.
 
-| Variable | Value |
-|----------|-------|
-| `AWS_REGION` | Set via `--region` flag |
-| `SANDY_OUTPUT` | `/workspace/output` (write results here) |
-| Working directory | `/workspace` |
+## How it works
 
-### Constraints
+Sandy compiles to a single Bun binary with the bootstrap filesystem, scripting guide, and example scripts embedded at build time. The binary hosts both the CLI and the MCP server. Both dispatch through the same `Backend` abstraction (`imageCreate`, `imageDelete`, `imageExists`, `run`).
 
-- **No `child_process`** -- `execSync`, `spawn`, `exec` all fail at runtime. Use SDK clients directly.
-- **No outbound network** except AWS endpoints (Shuru backend). Fetching `example.com` or any non-AWS host will fail. The Docker backend does not enforce this restriction — prefer Shuru for untrusted scripts.
-- **No persistent state** between runs. Each run starts from a clean snapshot.
+On `sandy run`, the active backend stages the bootstrap directory, mounts the script directory read-only into the sandbox, runs `tsc` for type-checking, then invokes `node --permission` on the compiled JavaScript. The AWS SDK resolves credentials from `http://10.0.0.1:<imds-port>` — served by `imds-broker` on the host — so no credential ever touches VM disk. Subprocess stdout and stderr stream through one `OutputHandler` to host stderr; lines prefixed `[-->` are stripped and forwarded as progress (bold text for the CLI, `notifications/progress` for MCP). The sandbox is discarded on exit.
 
-## Snapshot Management
+Backends are modality-agnostic. Swapping Shuru for Docker changes where the process runs and which egress policy applies. The progress protocol, mount layout, and bootstrap contract stay identical.
 
-```bash
-sandy snapshot create   # Build the VM snapshot
-sandy snapshot list     # List available Shuru checkpoints
-sandy snapshot delete   # Remove the sandy snapshot
-```
+## Caveats
 
-Recreate the snapshot after modifying `scripts/bootstrap/package.json` or `scripts/bootstrap/init.sh`.
+- **Shuru runs on macOS and arm64 Linux only.** Use the Docker backend on x86_64 Linux or in CI.
+- **Docker does not enforce domain-based egress filtering.** The Shuru backend restricts egress to `*.amazonaws.com` and `*.aws.amazon.com`; Docker does not. Prefer Shuru for scripts from untrusted sources.
+- **Credentials depend on `imds-broker`.** Sandy does not issue or cache credentials. The broker must be reachable on the IMDS port you pass in.
+- **One MCP session at a time.** The MCP server holds a single active session in memory. Resume with `sandy_resume_session`; parallel sessions are not supported.
+- **No persistent state between runs.** Each run starts from a clean sandbox image. Recreate the image after editing `src/bootstrap/` files.
+- **Skill packaging is in transition.** A single `sandy` skill ships today. The planned split into peer `sandy-cli` and `sandy-mcp` skills is not yet released.
 
-## Project Structure
+## Acknowledgements
 
-```
-.claude-plugin/
-  marketplace.json          # Claude plugin marketplace registration
-isolate/
-  .claude-plugin/
-    plugin.json             # Plugin metadata (version, description)
-  skills/sandy/
-    SKILL.md                # Skill documentation (shown to Claude Code)
-    scripts/
-      sandy                 # Main orchestration script (Bash)
-      bootstrap/
-        init.sh             # VM initialization (Node.js, pnpm, deps)
-        package.json        # AWS SDK clients + utility libraries
-        tsconfig.json       # TypeScript compiler config
-      checks/
-        baseline.ts         # Package & file I/O verification
-        connect.ts          # AWS IMDS connectivity verification
-    resources/
-      examples.md           # Example script documentation
-      examples/
-        ec2_describe.ts     # EC2 instance lookup by tag
-        ecs_services.ts     # ECS service enumeration
-```
+- [Shuru](https://github.com/nicholasgasior/shuru) — ephemeral microVM runtime
+- [Bun](https://bun.com) — runtime, test runner, and single-binary compiler
+- [Model Context Protocol SDK](https://github.com/modelcontextprotocol/typescript-sdk)
+- [Claude Code](https://claude.ai/code) — the primary agent Sandy was designed with
 
 ## License
 
-Apache 2.0 -- see [LICENSE](LICENSE).
+Apache 2.0 — see [LICENSE](LICENSE).
