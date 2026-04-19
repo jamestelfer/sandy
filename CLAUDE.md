@@ -26,10 +26,13 @@ Two entry points: **CLI** (`sandy`) for direct use, **MCP server** (`sandy mcp`)
 ## Project Layout
 
 ```
-src/          Backend implementations, MCP server, CLI handlers, shared utilities
-src/cli/      One file per CLI subcommand (config, image, check, run, mcp)
-src/bootstrap/ Files embedded in the binary and staged into the sandbox at runtime
-plans/        Implementation phase plans
+src/            Backend implementations, MCP server, CLI handlers, shared utilities
+src/cli/        One file per CLI subcommand (config, image, check, run, mcp)
+embedded/       Files packed into embedded.tar and loaded via memfs at runtime
+embedded/bootstrap/  Bootstrap files staged into the sandbox during image creation
+embedded/checks/     Baseline and connect check scripts
+embedded/skills/     CLI and MCP skill definitions and resources
+plans/          Implementation phase plans
 ```
 
 Unit tests (`*.test.ts`) sit alongside source. Integration tests (`*.integration.test.ts`) skip unless `INTEGRATION=true`.
