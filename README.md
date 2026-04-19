@@ -57,29 +57,48 @@ Two workarounds dominate AI-agent access to AWS today, and both have sharp edges
 
 ## Installation
 
-Three install paths, ordered by likely popularity.
+<details>
+<summary><strong>Homebrew (macOS)</strong></summary>
 
-### Claude Code plugin
-
-Install Sandy through the Claude Code plugin marketplace. The plugin registers the MCP server and ships the agent-facing skill documentation.
-
-```
-/plugin install sandy
-```
-
-### Prebuilt binary
-
-Grab the latest release from [GitHub Releases](https://github.com/jamestelfer/sandy/releases), or install via the Homebrew tap:
-
-```bash
+```sh
 brew install jamestelfer/tap/sandy
 ```
 
-### Build from source
+</details>
+
+<details>
+<summary><strong>mise</strong></summary>
+
+[mise](https://mise.jdx.dev/) installs directly from GitHub Releases via the [github backend](https://mise.jdx.dev/dev-tools/backends/github.html):
+
+```sh
+mise use -g github:jamestelfer/sandy
+```
+
+</details>
+
+<details>
+<summary><strong>npm</strong></summary>
+
+```sh
+npm install -g @jamestelfer/sandy
+```
+
+</details>
+
+<details>
+<summary><strong>Manual download</strong></summary>
+
+Pre-built binaries for Linux and macOS (amd64/arm64) are on the [releases page](https://github.com/jamestelfer/sandy/releases). Download the archive for your OS and architecture, extract, and place the binary on your `PATH`.
+
+</details>
+
+<details>
+<summary><strong>Build from source</strong></summary>
 
 Requires Bun 1.3 or newer.
 
-```bash
+```sh
 git clone https://github.com/jamestelfer/sandy
 cd sandy
 bun install
@@ -87,11 +106,21 @@ bun run build
 ./dist/sandy --help
 ```
 
+</details>
+
+### Claude Code plugin
+
+The Claude Code plugin configures an agent to use Sandy as an MCP server and ships the agent-facing skill documentation. It does not install the binary — install via one of the methods above first.
+
+```
+/plugin install sandy
+```
+
 ### Prerequisites
 
 - [Shuru](https://github.com/nicholasgasior/shuru) or Docker — select with `sandy config` (defaults to Shuru)
 - [imds-broker](https://github.com/jamestelfer/imds-broker) — serves AWS credentials via IMDS on the host
-- Claude Code (optional, required only for the plugin install path)
+- Claude Code (optional, required only for the plugin)
 
 Create the sandbox image once, then verify the environment:
 
