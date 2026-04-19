@@ -18,3 +18,18 @@ describe("embedded SKILL.md content", () => {
     expect(existsSync(join(import.meta.dir, "./mcp-resources"))).toBe(false)
   })
 })
+
+describe("skill sync contract", () => {
+  const canonicalPath = join(import.meta.dir, "../embedded/skills/mcp/SKILL.md")
+  const pluginPath = join(import.meta.dir, "../plugin/skills/sandy/SKILL.md")
+
+  test("embedded MCP skill and plugin skill have identical content", () => {
+    const canonical = readFileSync(canonicalPath, "utf-8")
+    const plugin = readFileSync(pluginPath, "utf-8")
+    expect(canonical).toBe(plugin)
+  })
+
+  test("canonical skill is embedded/skills/mcp/SKILL.md", () => {
+    expect(existsSync(canonicalPath)).toBe(true)
+  })
+})
