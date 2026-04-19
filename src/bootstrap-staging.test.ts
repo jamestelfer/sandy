@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import { stageBootstrapFiles } from "./bootstrap-staging"
+import { getEmbeddedFS } from "./embedded-fs"
 
 const noopLogger = () => {}
 
@@ -67,5 +68,19 @@ describe("stageBootstrapFiles", () => {
       await fs.rm(tmpDir, { recursive: true, force: true })
     }
     expect(stderrLines.join("")).not.toContain("Netskope")
+  })
+
+  test("staged file content matches embedded FS source", async () => {
+    const tmpDir = path.join(import.meta.dir, "../.tmp-test-bootstrap-staging-content")
+    await fs.mkdir(tmpDir, { recursive: true })
+    try {
+      await stageBootstrapFiles(tmpDir, noopLogger)
+      const memfs = await getEmbeddedFS()
+      const embeddedInit = memfs.readFileSync("/bootstrap/init.sh", "utf-8") as string
+      const stagedInit = await fs.readFile(path.join(tmpDir, "init.sh"), "utf-8")
+      expect(stagedInit).toBe(embeddedInit)
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true })
+    }
   })
 })
