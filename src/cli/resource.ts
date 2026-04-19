@@ -1,4 +1,4 @@
-import type { CommandModule } from "yargs"
+import type { ArgumentsCamelCase, CommandModule } from "yargs"
 import { listEmbeddedResourceUris, readEmbeddedResource } from "../embedded-fs"
 
 export interface ResourceArgs {
@@ -19,11 +19,11 @@ export async function runResource(
   print(content)
 }
 
-const resourceCommand: CommandModule = {
+const resourceCommand: CommandModule<Record<string, never>, ResourceArgs> = {
   command: "resource [url]",
   describe: "List or read embedded Sandy resources",
   builder: (y) => y.positional("url", { type: "string" }),
-  handler: async (argv) => runResource(argv as ResourceArgs),
+  handler: async (argv: ArgumentsCamelCase<ResourceArgs>) => runResource(argv),
 }
 
 export default resourceCommand
