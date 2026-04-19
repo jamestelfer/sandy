@@ -103,6 +103,10 @@ export class SandyMcpServer {
     return readEmbeddedResource(uri)
   }
 
+  async handlePrime(): Promise<string> {
+    return this.readResourceByUri("sandy://skills/mcp/SKILL.md")
+  }
+
   // ── Tool handlers ────────────────────────────────────────────────────────
 
   async handleSandyCheck(
@@ -326,6 +330,17 @@ export class SandyMcpServer {
           ],
         }
       },
+    )
+
+    server.registerTool(
+      "prime",
+      {
+        description: "Return the MCP SKILL.md content",
+        inputSchema: z.object({}),
+      },
+      async () => ({
+        content: [{ type: "text" as const, text: await this.handlePrime() }],
+      }),
     )
 
     const skillTemplate = new ResourceTemplate("sandy://skills/{channel}/SKILL.md", {

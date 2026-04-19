@@ -126,6 +126,13 @@ describe("resources", () => {
     expect(content).toContain("EC2Client")
     expect(content).toContain("DescribeInstancesCommand")
   })
+
+  test("prime returns MCP skill content", async () => {
+    const content = await server.handlePrime()
+
+    expect(content).toContain("Sandy MCP skill")
+    expect(content).toContain("sandy://skills/mcp/resources/scripting-guide.md")
+  })
 })
 
 describe("sandy_check", () => {
