@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs"
+import * as nodeFs from "node:fs/promises"
 import { Readable } from "node:stream"
 import { createFsFromVolume, Volume } from "memfs"
 import tar from "tar-fs"
@@ -72,4 +73,28 @@ export async function readEmbeddedResource(uri: string): Promise<string> {
   const path = embeddedPathFromUri(uri)
   const memfs = await getEmbeddedFS()
   return memfs.readFileSync(`/${path}`, "utf-8") as string
+}
+
+// Recursively copy a directory from a memfs source to a real filesystem destination.
+// Source entries are read from the memfs instance; destination files are written
+// via node:fs/promises. Throws if the source path does not exist.
+export async function copyDirectoryRecursive(
+  sourceFs: MemFs,
+  sourcePath: string,
+  destPath: string,
+): Promise<void> {
+  const entries = sourceFs.readdirSync(sourcePath, { withFileTypes: true })
+
+  for (const entry of entries) {
+    const srcEntry = sourcePath === "/" ? `/${entry.name}` : `${sourcePath}/${entry.name}`
+    const destEntry = `${destPath}/${entry.name}`
+
+    if (entry.isDirectory()) {
+      await nodeFs.mkdir(destEntry, { recursive: true })
+      await copyDirectoryRecursive(sourceFs, srcEntry, destEntry)
+    } else {
+      const content = sourceFs.readFileSync(srcEntry) as Buffer
+      await nodeFs.writeFile(destEntry, content)
+    }
+  }
 }
