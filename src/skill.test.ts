@@ -17,6 +17,14 @@ describe("embedded SKILL.md content", () => {
   test("legacy src/mcp-resources directory is removed", () => {
     expect(existsSync(join(import.meta.dir, "./mcp-resources"))).toBe(false)
   })
+
+  test("legacy src/bootstrap directory is removed", () => {
+    expect(existsSync(join(import.meta.dir, "./bootstrap"))).toBe(false)
+  })
+
+  test("legacy src/checks directory is removed", () => {
+    expect(existsSync(join(import.meta.dir, "./checks"))).toBe(false)
+  })
 })
 
 describe("skill sync contract", () => {

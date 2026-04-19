@@ -210,8 +210,8 @@ Backends are modality-agnostic. Swapping Shuru for Docker changes where the proc
 - **Docker does not enforce domain-based egress filtering.** The Shuru backend restricts egress to `*.amazonaws.com` and `*.aws.amazon.com`; Docker does not. Prefer Shuru for scripts from untrusted sources.
 - **Credentials depend on `imds-broker`.** Sandy does not issue or cache credentials. The broker must be reachable on the IMDS port you pass in.
 - **One MCP session at a time.** The MCP server holds a single active session in memory. Resume with `sandy_resume_session`; parallel sessions are not supported.
-- **No persistent state between runs.** Each run starts from a clean sandbox image. Recreate the image after editing `src/bootstrap/` files.
-- **Skill packaging is in transition.** A single `sandy` skill ships today. The planned split into peer `sandy-cli` and `sandy-mcp` skills is not yet released.
+- **No persistent state between runs.** Each run starts from a clean sandbox image. Recreate the image after editing `embedded/bootstrap/` files.
+- **Skill source of truth.** `embedded/skills/mcp/SKILL.md` is canonical for MCP skill content. `plugin/skills/sandy/SKILL.md` must stay synchronised; a test enforces equality.
 
 ## Acknowledgements
 

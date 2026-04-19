@@ -28,5 +28,7 @@ describe("embedded pack step", () => {
     const listing = execSync("tar -tf embedded.tar", { cwd: repoRoot, encoding: "utf-8" })
     expect(listing).toContain("skills/cli/SKILL.md")
     expect(listing).toContain("skills/mcp/SKILL.md")
+    expect(listing).toContain("bootstrap/init.sh")
+    expect(listing).toContain("checks/baseline.ts")
   })
 })
