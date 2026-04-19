@@ -102,26 +102,29 @@ describe("resources", () => {
     server = new SandyMcpServer(new DummyBackend())
   })
 
-  test("scripting-guide resource returns embedded content", () => {
-    const content = server.handleScriptingGuideResource()
+  test("lists embedded MCP resources", async () => {
+    const uris = await server.listResourceUris()
+
+    expect(uris).toContain("sandy://skills/mcp/SKILL.md")
+    expect(uris).toContain("sandy://skills/mcp/resources/scripting-guide.md")
+  })
+
+  test("reads embedded scripting guide content by URI", async () => {
+    const content = await server.readResourceByUri(
+      "sandy://skills/mcp/resources/scripting-guide.md",
+    )
+
     expect(content).toContain("async function*")
     expect(content).toContain("SANDY_OUTPUT")
   })
 
-  test("examples resource returns ec2_describe content", () => {
-    const content = server.handleExampleResource("ec2_describe.ts")
+  test("reads embedded example content by URI", async () => {
+    const content = await server.readResourceByUri(
+      "sandy://skills/mcp/resources/examples/ec2_describe.ts",
+    )
+
     expect(content).toContain("EC2Client")
     expect(content).toContain("DescribeInstancesCommand")
-  })
-
-  test("examples resource returns ecs_services content", () => {
-    const content = server.handleExampleResource("ecs_services.ts")
-    expect(content).toContain("ECSClient")
-    expect(content).toContain("ListServicesCommand")
-  })
-
-  test("examples resource throws for unknown name", () => {
-    expect(() => server.handleExampleResource("unknown")).toThrow()
   })
 })
 

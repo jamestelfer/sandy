@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs"
 import { resolve, sep } from "node:path"
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
@@ -9,19 +8,13 @@ import type { ProgressCallback, RunOptions } from "./types"
 import { DEFAULT_REGION } from "./types"
 import type { Logger } from "./logger"
 import { noopLogger } from "./logger"
-
-// Resources — embedded in binary by Bun at build time
-import scriptingGuidePath from "./mcp-resources/scripting-guide.md" with { type: "file" }
-import ec2DescribePath from "./mcp-resources/examples/ec2_describe.ts" with { type: "file" }
-import ecsServicesPath from "./mcp-resources/examples/ecs_services.ts" with { type: "file" }
+import { listEmbeddedResourceUris, readEmbeddedResource } from "./embedded-fs"
 import type { ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types"
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol"
 
-const SCRIPTING_GUIDE = readFileSync(scriptingGuidePath, "utf-8")
-const EXAMPLES: Record<string, string> = {
-  "ec2_describe.ts": readFileSync(ec2DescribePath, "utf-8"),
-  "ecs_services.ts": readFileSync(ecsServicesPath, "utf-8"),
-}
+const SKILL_CHANNELS = ["cli", "mcp"] as const
+const RESOURCE_FILES = ["scripting-guide.md", "examples.md"] as const
+const EXAMPLE_FILES = ["ec2_describe.ts", "ecs_services.ts"] as const
 
 export interface SandyRunParams {
   script: string
@@ -102,16 +95,12 @@ export class SandyMcpServer {
 
   // ── Resource handlers ────────────────────────────────────────────────────
 
-  handleScriptingGuideResource(): string {
-    return SCRIPTING_GUIDE
+  async listResourceUris(): Promise<string[]> {
+    return listEmbeddedResourceUris()
   }
 
-  handleExampleResource(name: string): string {
-    const content = EXAMPLES[name]
-    if (!content) {
-      throw new Error(`Unknown example: ${name}. Available: ${Object.keys(EXAMPLES).join(", ")}`)
-    }
-    return content
+  async readResourceByUri(uri: string): Promise<string> {
+    return readEmbeddedResource(uri)
   }
 
   // ── Tool handlers ────────────────────────────────────────────────────────
@@ -339,40 +328,82 @@ export class SandyMcpServer {
       },
     )
 
+    const skillTemplate = new ResourceTemplate("sandy://skills/{channel}/SKILL.md", {
+      list: async () => ({
+        resources: SKILL_CHANNELS.map((channel) => ({
+          uri: `sandy://skills/${channel}/SKILL.md`,
+          name: `${channel} SKILL.md`,
+          mimeType: "text/markdown",
+        })),
+      }),
+    })
+
     server.registerResource(
-      "scripting-guide",
-      "sandy://scripting-guide",
-      { description: "Sandy scripting conventions and available packages" },
-      (_uri) => ({
+      "skills",
+      skillTemplate,
+      { description: "Embedded skill entry files" },
+      async (uri) => ({
         contents: [
           {
-            uri: "sandy://scripting-guide",
-            text: this.handleScriptingGuideResource(),
+            uri: uri.href,
+            text: await this.readResourceByUri(uri.href),
             mimeType: "text/markdown",
           },
         ],
       }),
     )
 
-    const exampleTemplate = new ResourceTemplate("sandy://examples/{name}", {
+    const resourceTemplate = new ResourceTemplate("sandy://skills/{channel}/resources/{name}", {
       list: async () => ({
-        resources: Object.keys(EXAMPLES).map((name) => ({
-          uri: `sandy://examples/${name}`,
-          name,
-          description: `Example Sandy script: ${name}`,
-          mimeType: "text/plain",
-        })),
+        resources: SKILL_CHANNELS.flatMap((channel) =>
+          RESOURCE_FILES.map((name) => ({
+            uri: `sandy://skills/${channel}/resources/${name}`,
+            name,
+            mimeType: "text/markdown",
+          })),
+        ),
       }),
     })
+
     server.registerResource(
-      "examples",
-      exampleTemplate,
-      { description: "Example Sandy scripts (ec2_describe.ts, ecs_services.ts)" },
-      (uri, { name }) => ({
+      "skill-resources",
+      resourceTemplate,
+      { description: "Embedded skill resource files" },
+      async (uri) => ({
         contents: [
           {
             uri: uri.href,
-            text: this.handleExampleResource(name as string),
+            text: await this.readResourceByUri(uri.href),
+            mimeType: "text/markdown",
+          },
+        ],
+      }),
+    )
+
+    const examplesTemplate = new ResourceTemplate(
+      "sandy://skills/{channel}/resources/examples/{name}",
+      {
+        list: async () => ({
+          resources: SKILL_CHANNELS.flatMap((channel) =>
+            EXAMPLE_FILES.map((name) => ({
+              uri: `sandy://skills/${channel}/resources/examples/${name}`,
+              name,
+              mimeType: "text/plain",
+            })),
+          ),
+        }),
+      },
+    )
+
+    server.registerResource(
+      "skill-examples",
+      examplesTemplate,
+      { description: "Embedded skill example scripts" },
+      async (uri) => ({
+        contents: [
+          {
+            uri: uri.href,
+            text: await this.readResourceByUri(uri.href),
             mimeType: "text/plain",
           },
         ],
