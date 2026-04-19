@@ -6,6 +6,8 @@ import { makeImageCommand } from "./cli/image"
 import { makeCheckCommand } from "./cli/check"
 import { makeRunCommand } from "./cli/run"
 import { makeMcpCommand } from "./cli/mcp"
+import resourceCommand from "./cli/resource"
+import primeCommand from "./cli/prime"
 import { ShuruBackend } from "./shuru-backend"
 import { DockerBackend } from "./docker-backend"
 import Docker from "dockerode"
@@ -37,6 +39,8 @@ async function main(): Promise<void> {
     .command(makeCheckCommand(backend, onProgress))
     .command(makeRunCommand(backend, onProgress))
     .command(makeMcpCommand(backend))
+    .command(resourceCommand)
+    .command(primeCommand)
     .demandCommand(1, "Specify a command")
     .strict()
     .help()

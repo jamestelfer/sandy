@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import { resolveScriptDir } from "./check-scripts"
+import { getEmbeddedFS } from "./embedded-fs"
 
 describe("resolveScriptDir", () => {
   test("__baseline__ creates a temp dir containing the baseline script", async () => {
@@ -39,5 +40,13 @@ describe("resolveScriptDir", () => {
     await using dir = await resolveScriptDir(scriptPath)
     // disposal must not throw and must not remove anything
     expect(dir.path).toBe("/some/real")
+  })
+
+  test("baseline script content matches embedded FS source", async () => {
+    await using dir = await resolveScriptDir("__baseline__")
+    const staged = await fs.readFile(path.join(dir.path, "__baseline__.ts"), "utf8")
+    const memfs = await getEmbeddedFS()
+    const embedded = memfs.readFileSync("/checks/baseline.ts", "utf-8") as string
+    expect(staged).toBe(embedded)
   })
 })

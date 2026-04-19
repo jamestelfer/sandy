@@ -66,10 +66,10 @@ Fetch current docs with context7:
 
 ## Examples
 
-Working examples are available as MCP resources under `sandy://examples/`:
+Working examples are available as embedded resources:
 
-- `ec2_describe.ts` — Describe EC2 instances with filtering and table output
-- `ecs_services.ts` — List ECS services across clusters
+- `sandy resource sandy://skills/cli/resources/examples/ec2_describe.ts` — Describe EC2 instances with filtering and table output
+- `sandy resource sandy://skills/cli/resources/examples/ecs_services.ts` — List ECS services across clusters
 
 ## Progress reporting
 
