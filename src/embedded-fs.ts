@@ -3,9 +3,61 @@ import * as nodeFs from "node:fs/promises"
 import { Readable } from "node:stream"
 import { createFsFromVolume, Volume } from "memfs"
 import tar from "tar-fs"
+import type { ExtractOptions } from "tar-fs"
 import tarPath from "../embedded.tar" with { type: "file" }
 
 type MemFs = ReturnType<typeof createFsFromVolume>
+
+// Surface area tar-fs extract calls on opts.fs at runtime.
+// Derived from tar-fs source inspection: these are all callback-style node:fs methods
+// that tar-fs invokes during extraction.
+interface TarExtractFs {
+  mkdir: typeof import("node:fs").mkdir
+  createWriteStream: typeof import("node:fs").createWriteStream
+  symlink: typeof import("node:fs").symlink
+  link: typeof import("node:fs").link
+  unlink: typeof import("node:fs").unlink
+  chmod: typeof import("node:fs").chmod
+  chown: typeof import("node:fs").chown
+  stat: typeof import("node:fs").stat
+  lstat: typeof import("node:fs").lstat
+  utimes: typeof import("node:fs").utimes
+  realpath: typeof import("node:fs").realpath
+}
+
+function isTarExtractFs(candidate: unknown): candidate is TarExtractFs {
+  if (typeof candidate !== "object" || candidate === null) {
+    return false
+  }
+  const required = [
+    "mkdir",
+    "createWriteStream",
+    "symlink",
+    "link",
+    "unlink",
+    "chmod",
+    "chown",
+    "stat",
+    "lstat",
+    "utimes",
+    "realpath",
+  ] as const
+  return required.every((fn) => typeof (candidate as Record<string, unknown>)[fn] === "function")
+}
+
+function isString(value: string | Buffer): value is string {
+  return typeof value === "string"
+}
+
+function isBuffer(value: string | Buffer): value is Buffer {
+  return Buffer.isBuffer(value)
+}
+
+function assertStringName(entry: { name: string | Buffer }): asserts entry is { name: string } {
+  if (typeof entry.name !== "string") {
+    throw new Error("expected string directory entry name")
+  }
+}
 
 let embeddedFsPromise: Promise<MemFs> | null = null
 
@@ -20,9 +72,13 @@ async function initEmbeddedFS(): Promise<MemFs> {
   const volume = new Volume()
   const memfs = createFsFromVolume(volume)
 
+  if (!isTarExtractFs(memfs)) {
+    throw new Error("memfs does not satisfy tar-fs extract filesystem contract")
+  }
+
   await new Promise<void>((resolve, reject) => {
     Readable.from(readFileSync(tarPath))
-      .pipe(tar.extract("/", { fs: memfs as unknown as typeof import("node:fs") }))
+      .pipe(tar.extract("/", { fs: memfs } as ExtractOptions & { fs: TarExtractFs }))
       .on("finish", resolve)
       .on("error", reject)
   })
@@ -52,6 +108,7 @@ function listFilesRecursive(fs: MemFs, currentPath: string): string[] {
   const files: string[] = []
 
   for (const entry of entries) {
+    assertStringName(entry)
     const entryPath = currentPath === "/" ? `/${entry.name}` : `${currentPath}/${entry.name}`
     if (entry.isDirectory()) {
       files.push(...listFilesRecursive(fs, entryPath))
@@ -72,7 +129,18 @@ export async function listEmbeddedResourceUris(): Promise<string[]> {
 export async function readEmbeddedResource(uri: string): Promise<string> {
   const path = embeddedPathFromUri(uri)
   const memfs = await getEmbeddedFS()
-  return memfs.readFileSync(`/${path}`, "utf-8") as string
+  try {
+    const raw = memfs.readFileSync(`/${path}`, "utf-8")
+    if (!isString(raw)) {
+      throw new Error(`expected string content for ${uri}, got Buffer`)
+    }
+    return raw
+  } catch (err: unknown) {
+    if (err instanceof Error && "code" in err && (err as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new Error(`embedded resource not found: ${uri}`)
+    }
+    throw err
+  }
 }
 
 // Recursively copy a directory from a memfs source to a real filesystem destination.
@@ -86,6 +154,7 @@ export async function copyDirectoryRecursive(
   const entries = sourceFs.readdirSync(sourcePath, { withFileTypes: true })
 
   for (const entry of entries) {
+    assertStringName(entry)
     const srcEntry = sourcePath === "/" ? `/${entry.name}` : `${sourcePath}/${entry.name}`
     const destEntry = `${destPath}/${entry.name}`
 
@@ -93,8 +162,11 @@ export async function copyDirectoryRecursive(
       await nodeFs.mkdir(destEntry, { recursive: true })
       await copyDirectoryRecursive(sourceFs, srcEntry, destEntry)
     } else {
-      const content = sourceFs.readFileSync(srcEntry) as Buffer
-      await nodeFs.writeFile(destEntry, content)
+      const raw = sourceFs.readFileSync(srcEntry)
+      if (!isBuffer(raw)) {
+        throw new Error(`expected Buffer content for ${srcEntry}, got string`)
+      }
+      await nodeFs.writeFile(destEntry, raw)
     }
   }
 }

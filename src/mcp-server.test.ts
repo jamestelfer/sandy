@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { createLogger } from "./logger"
 import { DummyBackend } from "./dummy-backend"
 import { SandyMcpServer, handlerProgressCallback } from "./mcp-server"
+import { listEmbeddedResourceUris, readEmbeddedResource } from "./embedded-fs"
 import type { RunOptions } from "./types"
 
 type RunCall = { method: "run"; opts: RunOptions }
@@ -103,23 +104,21 @@ describe("resources", () => {
   })
 
   test("lists embedded MCP resources", async () => {
-    const uris = await server.listResourceUris()
+    const uris = await listEmbeddedResourceUris()
 
     expect(uris).toContain("sandy://skills/mcp/SKILL.md")
     expect(uris).toContain("sandy://skills/mcp/resources/scripting-guide.md")
   })
 
   test("reads embedded scripting guide content by URI", async () => {
-    const content = await server.readResourceByUri(
-      "sandy://skills/mcp/resources/scripting-guide.md",
-    )
+    const content = await readEmbeddedResource("sandy://skills/mcp/resources/scripting-guide.md")
 
     expect(content).toContain("async function*")
     expect(content).toContain("SANDY_OUTPUT")
   })
 
   test("reads embedded example content by URI", async () => {
-    const content = await server.readResourceByUri(
+    const content = await readEmbeddedResource(
       "sandy://skills/mcp/resources/examples/ec2_describe.ts",
     )
 

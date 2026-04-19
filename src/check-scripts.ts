@@ -16,8 +16,11 @@ export async function resolveScriptDir(scriptPath: string, tmpBaseDir?: string):
   if (embeddedFile !== undefined) {
     const memfs = await getEmbeddedFS()
     const tmp = await makeTmpDir("sandy-check-", tmpBaseDir)
-    const content = memfs.readFileSync(`/checks/${embeddedFile}`, "utf-8") as string
-    await fs.writeFile(`${tmp.path}/${scriptPath}.ts`, content)
+    const raw = memfs.readFileSync(`/checks/${embeddedFile}`, "utf-8")
+    if (typeof raw !== "string") {
+      throw new Error(`expected string content for /checks/${embeddedFile}, got Buffer`)
+    }
+    await fs.writeFile(`${tmp.path}/${scriptPath}.ts`, raw)
     return tmp
   }
   return { path: path.dirname(path.resolve(scriptPath)), [Symbol.asyncDispose]: async () => {} }

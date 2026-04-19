@@ -12,10 +12,6 @@ import { listEmbeddedResourceUris, readEmbeddedResource } from "./embedded-fs"
 import type { ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types"
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol"
 
-const SKILL_CHANNELS = ["cli", "mcp"] as const
-const RESOURCE_FILES = ["scripting-guide.md", "examples.md"] as const
-const EXAMPLE_FILES = ["ec2_describe.ts", "ecs_services.ts"] as const
-
 export interface SandyRunParams {
   script: string
   imdsPort: number
@@ -61,6 +57,13 @@ export const handlerProgressCallback = (
   }
 }
 
+function mimeTypeForUri(uri: string): string {
+  if (uri.endsWith(".ts")) {
+    return "text/plain"
+  }
+  return "text/markdown"
+}
+
 export class SandyMcpServer {
   private activeSession: ActiveSession | null = null
   private resumedName: string | null = null
@@ -95,16 +98,8 @@ export class SandyMcpServer {
 
   // ── Resource handlers ────────────────────────────────────────────────────
 
-  async listResourceUris(): Promise<string[]> {
-    return listEmbeddedResourceUris()
-  }
-
-  async readResourceByUri(uri: string): Promise<string> {
-    return readEmbeddedResource(uri)
-  }
-
   async handlePrime(): Promise<string> {
-    return this.readResourceByUri("sandy://skills/mcp/SKILL.md")
+    return readEmbeddedResource("sandy://skills/mcp/SKILL.md")
   }
 
   // ── Tool handlers ────────────────────────────────────────────────────────
@@ -343,83 +338,26 @@ export class SandyMcpServer {
       }),
     )
 
-    const skillTemplate = new ResourceTemplate("sandy://skills/{channel}/SKILL.md", {
+    const embeddedTemplate = new ResourceTemplate("sandy://{+path}", {
       list: async () => ({
-        resources: SKILL_CHANNELS.map((channel) => ({
-          uri: `sandy://skills/${channel}/SKILL.md`,
-          name: `${channel} SKILL.md`,
-          mimeType: "text/markdown",
+        resources: (await listEmbeddedResourceUris()).map((uri) => ({
+          uri,
+          name: uri.replace("sandy://", ""),
+          mimeType: mimeTypeForUri(uri),
         })),
       }),
     })
 
     server.registerResource(
-      "skills",
-      skillTemplate,
-      { description: "Embedded skill entry files" },
+      "embedded",
+      embeddedTemplate,
+      { description: "All embedded Sandy resources" },
       async (uri) => ({
         contents: [
           {
             uri: uri.href,
-            text: await this.readResourceByUri(uri.href),
-            mimeType: "text/markdown",
-          },
-        ],
-      }),
-    )
-
-    const resourceTemplate = new ResourceTemplate("sandy://skills/{channel}/resources/{name}", {
-      list: async () => ({
-        resources: SKILL_CHANNELS.flatMap((channel) =>
-          RESOURCE_FILES.map((name) => ({
-            uri: `sandy://skills/${channel}/resources/${name}`,
-            name,
-            mimeType: "text/markdown",
-          })),
-        ),
-      }),
-    })
-
-    server.registerResource(
-      "skill-resources",
-      resourceTemplate,
-      { description: "Embedded skill resource files" },
-      async (uri) => ({
-        contents: [
-          {
-            uri: uri.href,
-            text: await this.readResourceByUri(uri.href),
-            mimeType: "text/markdown",
-          },
-        ],
-      }),
-    )
-
-    const examplesTemplate = new ResourceTemplate(
-      "sandy://skills/{channel}/resources/examples/{name}",
-      {
-        list: async () => ({
-          resources: SKILL_CHANNELS.flatMap((channel) =>
-            EXAMPLE_FILES.map((name) => ({
-              uri: `sandy://skills/${channel}/resources/examples/${name}`,
-              name,
-              mimeType: "text/plain",
-            })),
-          ),
-        }),
-      },
-    )
-
-    server.registerResource(
-      "skill-examples",
-      examplesTemplate,
-      { description: "Embedded skill example scripts" },
-      async (uri) => ({
-        contents: [
-          {
-            uri: uri.href,
-            text: await this.readResourceByUri(uri.href),
-            mimeType: "text/plain",
+            text: await readEmbeddedResource(uri.href),
+            mimeType: mimeTypeForUri(uri.href),
           },
         ],
       }),

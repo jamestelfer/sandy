@@ -6,7 +6,7 @@ export async function runPrime(print: (line: string) => void = console.log): Pro
   print(content)
 }
 
-const primeCommand: CommandModule = {
+const primeCommand: CommandModule<Record<string, never>, Record<string, never>> = {
   command: "prime",
   describe: "Print the Sandy CLI skill content",
   handler: async () => runPrime(),
