@@ -43,12 +43,24 @@ homebrew_casks:
     ids:
       - sandy
     directory: Casks
+    homepage: https://github.com/jamestelfer/sandy
+    description: Sandboxed TypeScript runtime with AWS SDK access for AI agents
+    url:
+      verified: github.com/jamestelfer/sandy
     repository:
       owner: jamestelfer
       name: homebrew-tap
       branch: main
       token: "{{ .Env.HOMEBREW_GITHUB_TOKEN }}"
-    homepage: https://github.com/jamestelfer/sandy
-    description: Sandboxed TypeScript runtime with AWS SDK access for AI agents
+    binaries:
+      - sandy
     commit_msg_template: "sandy {{ .Version }}"
     skip_upload: auto
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/sandy"]
+            system_command "/usr/bin/codesign", args: ["--remove-signature", "#{staged_path}/sandy"], print_stderr: false, must_succeed: false
+            system_command "/usr/bin/codesign", args: ["-s", "-", "--force", "#{staged_path}/sandy"]
+          end
