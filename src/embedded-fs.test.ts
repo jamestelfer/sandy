@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import * as fs from "node:fs/promises"
+import * as path from "node:path"
 import {
+  copyDirectoryRecursive,
   embeddedPathFromUri,
   getEmbeddedFS,
   listEmbeddedResourceUris,
@@ -36,5 +40,45 @@ describe("embedded filesystem", () => {
   test("normalises URI path", () => {
     expect(embeddedPathFromUri("sandy://skills/mcp/SKILL.md")).toBe("skills/mcp/SKILL.md")
     expect(embeddedPathFromUri("sandy:///skills/mcp/SKILL.md")).toBe("skills/mcp/SKILL.md")
+  })
+})
+
+describe("copyDirectoryRecursive", () => {
+  test("copies files preserving content exactly", async () => {
+    const memfs = await getEmbeddedFS()
+    const destDir = path.join(import.meta.dir, "../.tmp-test-copy-recursive")
+    await fs.mkdir(destDir, { recursive: true })
+    try {
+      await copyDirectoryRecursive(memfs, "/bootstrap", destDir)
+      const original = memfs.readFileSync("/bootstrap/init.sh", "utf-8") as string
+      const copied = readFileSync(path.join(destDir, "init.sh"), "utf-8")
+      expect(copied).toBe(original)
+    } finally {
+      await fs.rm(destDir, { recursive: true, force: true })
+    }
+  })
+
+  test("copies nested directory structures", async () => {
+    const memfs = await getEmbeddedFS()
+    const destDir = path.join(import.meta.dir, "../.tmp-test-copy-recursive-nested")
+    await fs.mkdir(destDir, { recursive: true })
+    try {
+      await copyDirectoryRecursive(memfs, "/skills/mcp", destDir)
+      const content = readFileSync(path.join(destDir, "resources/scripting-guide.md"), "utf-8")
+      expect(content).toContain("SANDY_OUTPUT")
+    } finally {
+      await fs.rm(destDir, { recursive: true, force: true })
+    }
+  })
+
+  test("throws on missing source path", async () => {
+    const memfs = await getEmbeddedFS()
+    const destDir = path.join(import.meta.dir, "../.tmp-test-copy-recursive-missing")
+    await fs.mkdir(destDir, { recursive: true })
+    try {
+      await expect(copyDirectoryRecursive(memfs, "/nonexistent", destDir)).rejects.toThrow()
+    } finally {
+      await fs.rm(destDir, { recursive: true, force: true })
+    }
   })
 })
