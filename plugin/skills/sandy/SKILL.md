@@ -12,7 +12,7 @@ Sandy executes TypeScript scripts in disposable sandboxed environments (Shuru mi
 Before running scripts, read the scripting guide:
 
 ```
-resource: sandy://scripting-guide
+resource: sandy://skills/mcp/resources/scripting-guide.md
 ```
 
 This contains the runtime environment, available AWS SDK packages, scripting constraints, and mandatory patterns.
@@ -78,19 +78,19 @@ Read these before writing scripts:
 
 | Resource | Content |
 |----------|---------|
-| `sandy://scripting-guide` | Runtime environment, packages, constraints, async generator pattern |
-| `sandy://examples/ec2_describe` | Example: describe EC2 instances with pagination |
-| `sandy://examples/ecs_services` | Example: list ECS services with running/desired counts |
+| `sandy://skills/mcp/resources/scripting-guide.md` | Runtime environment, packages, constraints, async generator pattern |
+| `sandy://skills/mcp/resources/examples/ec2_describe.ts` | Example: describe EC2 instances with pagination |
+| `sandy://skills/mcp/resources/examples/ecs_services.ts` | Example: list ECS services with running/desired counts |
 
 ```
-resource: sandy://scripting-guide
-resource: sandy://examples/ec2_describe
-resource: sandy://examples/ecs_services
+resource: sandy://skills/mcp/resources/scripting-guide.md
+resource: sandy://skills/mcp/resources/examples/ec2_describe.ts
+resource: sandy://skills/mcp/resources/examples/ecs_services.ts
 ```
 
 ## Typical workflow
 
-1. Read `sandy://scripting-guide` to understand constraints and patterns
+1. Read `sandy://skills/mcp/resources/scripting-guide.md` to understand constraints and patterns
 2. Start IMDS server via `imds-broker`
 3. `sandy_image(action: "create")` if image not yet built
 4. `sandy_check(action: "connect", imdsPort: <port>)` to verify connectivity

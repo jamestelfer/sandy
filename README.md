@@ -43,7 +43,7 @@ flowchart LR
 
 ## How to use it
 
-- **As an MCP server** — `sandy mcp`, registered automatically by the Claude Code plugin. Exposes the `sandy_image`, `sandy_check`, `sandy_run`, and `sandy_resume_session` tools, plus the `sandy://scripting-guide` resource for script-authoring guidance.
+- **As an MCP server** — `sandy mcp`, registered automatically by the Claude Code plugin. Exposes the `sandy_image`, `sandy_check`, `sandy_run`, `sandy_resume_session`, and `prime` tools, plus embedded `sandy://skills/mcp/...` resources for script-authoring guidance.
 - **As a CLI** — `sandy run --script path/to/script.ts --imds-port <port>`. Same backends, same guarantees. Suited to scripted workflows and agents that prefer driving binaries through a shell rather than MCP.
 
 Both modes select from the same `Backend` implementation and share every runtime constraint.
@@ -144,7 +144,7 @@ sandy_run(script: "…", imdsPort: 9001, region: "us-west-2")
 
 Progress streams via `notifications/progress`. Session state persists for the lifetime of the MCP process and resumes with `sandy_resume_session`.
 
-Read `sandy://scripting-guide` from the MCP server for the full scripting contract.
+Read `sandy://skills/mcp/resources/scripting-guide.md` from the MCP server for the full scripting contract.
 
 ### Via CLI
 
@@ -194,7 +194,7 @@ for await (const batch of listServiceArns("my-cluster")) {
 }
 ```
 
-Full guide: `sandy://scripting-guide` via MCP, or [`src/mcp-resources/scripting-guide.md`](src/mcp-resources/scripting-guide.md) in-repo.
+Full guide: `sandy://skills/mcp/resources/scripting-guide.md` via MCP, or `sandy resource sandy://skills/cli/resources/scripting-guide.md` via CLI.
 
 ## How it works
 
