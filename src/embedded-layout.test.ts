@@ -13,6 +13,14 @@ const requiredFiles = [
   "embedded/skills/mcp/resources/scripting-guide.md",
   "embedded/skills/mcp/resources/examples/ec2_describe.ts",
   "embedded/skills/mcp/resources/examples/ecs_services.ts",
+  "embedded/bootstrap/init.sh",
+  "embedded/bootstrap/node_certs.sh",
+  "embedded/bootstrap/package.json",
+  "embedded/bootstrap/tsconfig.json",
+  "embedded/bootstrap/entrypoint",
+  "embedded/bootstrap/sandy.ts",
+  "embedded/checks/baseline.ts",
+  "embedded/checks/connect.ts",
 ]
 
 describe("embedded content layout", () => {
@@ -30,5 +38,24 @@ describe("embedded content layout", () => {
 
     expect(content).toContain("SANDY_OUTPUT")
     expect(content).toContain("async function*")
+  })
+
+  test("bootstrap files are present under embedded/bootstrap", () => {
+    const bootstrapFiles = [
+      "init.sh",
+      "node_certs.sh",
+      "package.json",
+      "tsconfig.json",
+      "entrypoint",
+      "sandy.ts",
+    ]
+    for (const name of bootstrapFiles) {
+      expect(existsSync(join(repoRoot, "embedded/bootstrap", name))).toBe(true)
+    }
+  })
+
+  test("check scripts are present under embedded/checks", () => {
+    expect(existsSync(join(repoRoot, "embedded/checks/baseline.ts"))).toBe(true)
+    expect(existsSync(join(repoRoot, "embedded/checks/connect.ts"))).toBe(true)
   })
 })
