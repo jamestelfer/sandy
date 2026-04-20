@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs"
 import { resolve, sep } from "node:path"
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
@@ -9,19 +8,9 @@ import type { ProgressCallback, RunOptions } from "./types"
 import { DEFAULT_REGION } from "./types"
 import type { Logger } from "./logger"
 import { noopLogger } from "./logger"
-
-// Resources — embedded in binary by Bun at build time
-import scriptingGuidePath from "./mcp-resources/scripting-guide.md" with { type: "file" }
-import ec2DescribePath from "./mcp-resources/examples/ec2_describe.ts" with { type: "file" }
-import ecsServicesPath from "./mcp-resources/examples/ecs_services.ts" with { type: "file" }
+import { listEmbeddedResourceUris, readEmbeddedResource } from "./embedded-fs"
 import type { ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types"
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol"
-
-const SCRIPTING_GUIDE = readFileSync(scriptingGuidePath, "utf-8")
-const EXAMPLES: Record<string, string> = {
-  "ec2_describe.ts": readFileSync(ec2DescribePath, "utf-8"),
-  "ecs_services.ts": readFileSync(ecsServicesPath, "utf-8"),
-}
 
 export interface SandyRunParams {
   script: string
@@ -68,6 +57,21 @@ export const handlerProgressCallback = (
   }
 }
 
+function mimeTypeForUri(uri: string): string {
+  const dot = uri.lastIndexOf(".")
+  const ext = dot >= 0 ? uri.slice(dot) : ""
+  switch (ext) {
+    case ".md":
+      return "text/markdown"
+    case ".ts":
+      return "text/plain"
+    case ".json":
+      return "application/json"
+    default:
+      return "application/octet-stream"
+  }
+}
+
 export class SandyMcpServer {
   private activeSession: ActiveSession | null = null
   private resumedName: string | null = null
@@ -102,16 +106,8 @@ export class SandyMcpServer {
 
   // ── Resource handlers ────────────────────────────────────────────────────
 
-  handleScriptingGuideResource(): string {
-    return SCRIPTING_GUIDE
-  }
-
-  handleExampleResource(name: string): string {
-    const content = EXAMPLES[name]
-    if (!content) {
-      throw new Error(`Unknown example: ${name}. Available: ${Object.keys(EXAMPLES).join(", ")}`)
-    }
-    return content
+  async handlePrime(): Promise<string> {
+    return readEmbeddedResource("sandy://skills/mcp/SKILL.md")
   }
 
   // ── Tool handlers ────────────────────────────────────────────────────────
@@ -138,7 +134,7 @@ export class SandyMcpServer {
           sessionName: "",
         }
       }
-      const scriptPath = action === "baseline" ? "__baseline__" : "__connect__"
+      const scriptPath = action === "baseline" ? "baseline" : "connect"
       const port = imdsPort ?? 0
       const session = await this.ensureSession()
       const opts: RunOptions = {
@@ -339,41 +335,37 @@ export class SandyMcpServer {
       },
     )
 
-    server.registerResource(
-      "scripting-guide",
-      "sandy://scripting-guide",
-      { description: "Sandy scripting conventions and available packages" },
-      (_uri) => ({
-        contents: [
-          {
-            uri: "sandy://scripting-guide",
-            text: this.handleScriptingGuideResource(),
-            mimeType: "text/markdown",
-          },
-        ],
+    server.registerTool(
+      "prime",
+      {
+        description: "Return the MCP SKILL.md content",
+        inputSchema: z.object({}),
+      },
+      async () => ({
+        content: [{ type: "text" as const, text: await this.handlePrime() }],
       }),
     )
 
-    const exampleTemplate = new ResourceTemplate("sandy://examples/{name}", {
+    const embeddedTemplate = new ResourceTemplate("sandy://{+path}", {
       list: async () => ({
-        resources: Object.keys(EXAMPLES).map((name) => ({
-          uri: `sandy://examples/${name}`,
-          name,
-          description: `Example Sandy script: ${name}`,
-          mimeType: "text/plain",
+        resources: (await listEmbeddedResourceUris()).map((uri) => ({
+          uri,
+          name: uri.replace("sandy://", ""),
+          mimeType: mimeTypeForUri(uri),
         })),
       }),
     })
+
     server.registerResource(
-      "examples",
-      exampleTemplate,
-      { description: "Example Sandy scripts (ec2_describe.ts, ecs_services.ts)" },
-      (uri, { name }) => ({
+      "embedded",
+      embeddedTemplate,
+      { description: "All embedded Sandy resources" },
+      async (uri) => ({
         contents: [
           {
             uri: uri.href,
-            text: this.handleExampleResource(name as string),
-            mimeType: "text/plain",
+            text: await readEmbeddedResource(uri.href),
+            mimeType: mimeTypeForUri(uri.href),
           },
         ],
       }),

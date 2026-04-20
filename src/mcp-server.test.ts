@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { createLogger } from "./logger"
 import { DummyBackend } from "./dummy-backend"
 import { SandyMcpServer, handlerProgressCallback } from "./mcp-server"
+import { listEmbeddedResourceUris, readEmbeddedResource } from "./embedded-fs"
 import type { RunOptions } from "./types"
 
 type RunCall = { method: "run"; opts: RunOptions }
@@ -102,26 +103,34 @@ describe("resources", () => {
     server = new SandyMcpServer(new DummyBackend())
   })
 
-  test("scripting-guide resource returns embedded content", () => {
-    const content = server.handleScriptingGuideResource()
+  test("lists embedded MCP resources", async () => {
+    const uris = await listEmbeddedResourceUris()
+
+    expect(uris).toContain("sandy://skills/mcp/SKILL.md")
+    expect(uris).toContain("sandy://skills/mcp/resources/scripting-guide.md")
+  })
+
+  test("reads embedded scripting guide content by URI", async () => {
+    const content = await readEmbeddedResource("sandy://skills/mcp/resources/scripting-guide.md")
+
     expect(content).toContain("async function*")
     expect(content).toContain("SANDY_OUTPUT")
   })
 
-  test("examples resource returns ec2_describe content", () => {
-    const content = server.handleExampleResource("ec2_describe.ts")
+  test("reads embedded example content by URI", async () => {
+    const content = await readEmbeddedResource(
+      "sandy://skills/mcp/resources/examples/ec2_describe.ts",
+    )
+
     expect(content).toContain("EC2Client")
     expect(content).toContain("DescribeInstancesCommand")
   })
 
-  test("examples resource returns ecs_services content", () => {
-    const content = server.handleExampleResource("ecs_services.ts")
-    expect(content).toContain("ECSClient")
-    expect(content).toContain("ListServicesCommand")
-  })
+  test("prime returns MCP skill content", async () => {
+    const content = await server.handlePrime()
 
-  test("examples resource throws for unknown name", () => {
-    expect(() => server.handleExampleResource("unknown")).toThrow()
+    expect(content).toContain("# Sandy")
+    expect(content).toContain("sandy://skills/mcp/resources/scripting-guide.md")
   })
 })
 
@@ -149,19 +158,19 @@ describe("sandy_check", () => {
     expect(result.output).toContain("sandy_image")
   })
 
-  test("baseline dispatches run with __baseline__ scriptPath and imdsPort 0", async () => {
+  test("baseline dispatches run with baseline scriptPath and imdsPort 0", async () => {
     backend.imageExistsResult = true
     await server.handleSandyCheck(() => {}, "baseline")
     const run = findRun(backend)
-    expect(run.opts.scriptPath).toBe("__baseline__")
+    expect(run.opts.scriptPath).toBe("baseline")
     expect(run.opts.imdsPort).toBe(0)
   })
 
-  test("connect dispatches run with __connect__ scriptPath and given imdsPort", async () => {
+  test("connect dispatches run with connect scriptPath and given imdsPort", async () => {
     backend.imageExistsResult = true
     await server.handleSandyCheck(() => {}, "connect", 9001)
     const run = findRun(backend)
-    expect(run.opts.scriptPath).toBe("__connect__")
+    expect(run.opts.scriptPath).toBe("connect")
     expect(run.opts.imdsPort).toBe(9001)
   })
 })

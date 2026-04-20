@@ -42,7 +42,7 @@ export async function runBaseline(
   backend: Backend,
   onProgress: ProgressCallback = () => {},
 ): Promise<void> {
-  await runCheck(backend, onProgress, { scriptPath: "__baseline__", imdsPort: 0 }, "baseline")
+  await runCheck(backend, onProgress, { scriptPath: "baseline", imdsPort: 0 }, "baseline")
 }
 
 export async function runConnect(
@@ -53,7 +53,7 @@ export async function runConnect(
   await runCheck(
     backend,
     onProgress,
-    { scriptPath: "__connect__", imdsPort: argv.imdsPort, region: argv.region },
+    { scriptPath: "connect", imdsPort: argv.imdsPort, region: argv.region },
     "connect",
   )
 }

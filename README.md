@@ -43,7 +43,7 @@ flowchart LR
 
 ## How to use it
 
-- **As an MCP server** — `sandy mcp`, registered automatically by the Claude Code plugin. Exposes the `sandy_image`, `sandy_check`, `sandy_run`, and `sandy_resume_session` tools, plus the `sandy://scripting-guide` resource for script-authoring guidance.
+- **As an MCP server** — `sandy mcp`, registered automatically by the Claude Code plugin. Exposes the `sandy_image`, `sandy_check`, `sandy_run`, `sandy_resume_session`, and `prime` tools, plus embedded `sandy://skills/mcp/...` resources for script-authoring guidance.
 - **As a CLI** — `sandy run --script path/to/script.ts --imds-port <port>`. Same backends, same guarantees. Suited to scripted workflows and agents that prefer driving binaries through a shell rather than MCP.
 
 Both modes select from the same `Backend` implementation and share every runtime constraint.
@@ -144,7 +144,7 @@ sandy_run(script: "…", imdsPort: 9001, region: "us-west-2")
 
 Progress streams via `notifications/progress`. Session state persists for the lifetime of the MCP process and resumes with `sandy_resume_session`.
 
-Read `sandy://scripting-guide` from the MCP server for the full scripting contract.
+Read `sandy://skills/mcp/resources/scripting-guide.md` from the MCP server for the full scripting contract.
 
 ### Via CLI
 
@@ -194,7 +194,7 @@ for await (const batch of listServiceArns("my-cluster")) {
 }
 ```
 
-Full guide: `sandy://scripting-guide` via MCP, or [`src/mcp-resources/scripting-guide.md`](src/mcp-resources/scripting-guide.md) in-repo.
+Full guide: `sandy://skills/mcp/resources/scripting-guide.md` via MCP, or `sandy resource sandy://skills/cli/resources/scripting-guide.md` via CLI.
 
 ## How it works
 
@@ -210,8 +210,8 @@ Backends are modality-agnostic. Swapping Shuru for Docker changes where the proc
 - **Docker does not enforce domain-based egress filtering.** The Shuru backend restricts egress to `*.amazonaws.com` and `*.aws.amazon.com`; Docker does not. Prefer Shuru for scripts from untrusted sources.
 - **Credentials depend on `imds-broker`.** Sandy does not issue or cache credentials. The broker must be reachable on the IMDS port you pass in.
 - **One MCP session at a time.** The MCP server holds a single active session in memory. Resume with `sandy_resume_session`; parallel sessions are not supported.
-- **No persistent state between runs.** Each run starts from a clean sandbox image. Recreate the image after editing `src/bootstrap/` files.
-- **Skill packaging is in transition.** A single `sandy` skill ships today. The planned split into peer `sandy-cli` and `sandy-mcp` skills is not yet released.
+- **No persistent state between runs.** Each run starts from a clean sandbox image. Recreate the image after editing `embedded/bootstrap/` files.
+- **Skill source of truth.** `embedded/skills/mcp/SKILL.md` is canonical for MCP skill content. `plugin/skills/sandy/SKILL.md` must stay synchronised; a test enforces equality.
 
 ## Acknowledgements
 
