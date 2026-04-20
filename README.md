@@ -169,7 +169,7 @@ Script output written to `/workspace/output` inside the sandbox syncs back to `.
 
 ### Writing scripts
 
-Scripts are TypeScript with access to every `@aws-sdk/client-*` package, plus `arquero`, `asciichart`, `console-table-printer`, `@fast-csv/format`, and `jmespath`. Two patterns are mandatory.
+Scripts are TypeScript with access to every `@aws-sdk/client-*` package, plus `arquero`, `simple-ascii-chart`, `console-table-printer`, `@fast-csv/format`, and `jmespath`. Two patterns are mandatory.
 
 - **Use `async function*` generators for paginated AWS calls.** Progress appears immediately, partial results survive failures, and callers decide when to stop.
 - **Call the SDK directly.** No `child_process`. No shelling out to `aws`.

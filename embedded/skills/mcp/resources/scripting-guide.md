@@ -16,7 +16,7 @@ Sandy runs TypeScript scripts in sandboxed microVMs with AWS SDK access via IMDS
 
 - All `@aws-sdk/client-*` packages (ec2, ecs, ecr, s3, iam, lambda, cloudformation, ssm, secrets-manager, etc.)
 - `arquero` — data table manipulation and aggregation
-- `asciichart` — ASCII line charts for terminal output
+- `simple-ascii-chart` — ASCII line and bar charts for terminal output
 - `console-table-printer` — table output
 - `@fast-csv/format` — CSV generation
 - `jmespath` — JSON query language
@@ -57,7 +57,7 @@ Fetch current docs with context7:
 | Library | context7 ID |
 |---------|------------|
 | arquero | `/uwdata/arquero` |
-| asciichart | `/kroitor/asciichart` |
+| simple-ascii-chart | `/gtktsc/ascii-chart` |
 | AWS SDK JS v3 | `/aws/aws-sdk-js-v3` |
 | fast-csv | `/c2fo/fast-csv` |
 | JMESPath JS | `/jmespath/jmespath.js` |
