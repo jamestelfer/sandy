@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
-import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { createLogger } from "./logger"
 import { DummyBackend } from "./dummy-backend"
@@ -382,8 +382,14 @@ describe("logging", () => {
     const server = new SandyMcpServer(backend, process.cwd(), logger)
 
     function logLines(): LogRecord[] {
-      const logFile = join(logDir, "sandy", "mcp.log")
-      if (!existsSync(logFile)) {
+      const dir = join(logDir, "sandy")
+      if (!existsSync(dir)) {
+        return []
+      }
+      const logFile = readdirSync(dir)
+        .filter((name) => /^mcp\.pid-\d+\.\d{8}-\d{6}\.log$/.test(name))
+        .map((name) => join(dir, name))[0]
+      if (!logFile) {
         return []
       }
       return parseLogFile(readFileSync(logFile, "utf-8"))

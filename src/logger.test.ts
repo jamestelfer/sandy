@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { homedir } from "node:os"
 import { createLogger, noopLogger, stateDir } from "./logger"
@@ -19,11 +19,20 @@ afterEach(() => {
   delete process.env.SANDY_LOG_LEVEL
 })
 
-function readLog(): string[] {
-  const logFile = join(stateDir(), "mcp.log")
-  if (!existsSync(logFile)) {
+function findLogFiles(): string[] {
+  const dir = stateDir()
+  if (!existsSync(dir)) {
     return []
   }
+  return readdirSync(dir).filter((name) => /^mcp\.pid-\d+\.\d{8}-\d{6}\.log$/.test(name))
+}
+
+function readLog(): string[] {
+  const files = findLogFiles()
+  if (files.length === 0) {
+    return []
+  }
+  const logFile = join(stateDir(), files[0])
   return readFileSync(logFile, "utf8")
     .split("\n")
     .filter((l) => l.length > 0)
@@ -81,6 +90,22 @@ describe("createLogger — basic format", () => {
     const logger = createLogger()
     logger.info("x")
     expect(existsSync(dir)).toBe(true)
+  })
+
+  test("uses scoped filename mcp.pid-<pid>.<yyyymmdd-hhMMss>.log", () => {
+    const logger = createLogger()
+    logger.info("x")
+    const files = findLogFiles()
+    expect(files).toHaveLength(1)
+    expect(files[0]).toMatch(/^mcp\.pid-\d+\.\d{8}-\d{6}\.log$/)
+  })
+
+  test("includes current process pid in filename", () => {
+    const logger = createLogger()
+    logger.info("x")
+    const files = findLogFiles()
+    expect(files).toHaveLength(1)
+    expect(files[0]).toContain(`pid-${process.pid}.`)
   })
 })
 
@@ -169,9 +194,9 @@ describe("noopLogger", () => {
     expect(existsSync(stateDir())).toBe(false)
   })
 
-  test("does not create mcp.log", () => {
+  test("does not create any scoped log file", () => {
     noopLogger().info("x")
-    expect(existsSync(join(stateDir(), "mcp.log"))).toBe(false)
+    expect(findLogFiles()).toHaveLength(0)
   })
 
   test("child() returns a logger that is also a no-op", () => {
