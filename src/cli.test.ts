@@ -169,14 +169,16 @@ describe("CLI check", () => {
     }
   })
 
-  it("baseline dispatches to backend.run()", async () => {
+  it("baseline dispatches to backend.run() with extracted script path", async () => {
     const backend = new DummyBackend()
     backend.imageExistsResult = true
     await runBaseline(backend)
-    expect(backend.calls.find((c) => c.method === "run")).toMatchObject({
-      method: "run",
-      opts: { scriptPath: "baseline" },
-    })
+    const runCall = backend.calls.find((c) => c.method === "run")
+    expect(runCall).toBeDefined()
+    if (runCall?.method === "run") {
+      expect(runCall.opts.scriptPath).toMatch(/baseline\.ts$/)
+      expect(runCall.opts.scriptPath).not.toBe("baseline")
+    }
   })
 
   it("baseline does not set exit code on success", async () => {
@@ -198,14 +200,17 @@ describe("CLI check", () => {
     process.exitCode = prevExitCode ?? 0
   })
 
-  it("connect dispatches to backend.run() with imdsPort", async () => {
+  it("connect dispatches to backend.run() with extracted script path and imdsPort", async () => {
     const backend = new DummyBackend()
     backend.imageExistsResult = true
     await runConnect({ imdsPort: 9001, region: "us-west-2" }, backend)
-    expect(backend.calls.find((c) => c.method === "run")).toMatchObject({
-      method: "run",
-      opts: { scriptPath: "connect", imdsPort: 9001 },
-    })
+    const runCall = backend.calls.find((c) => c.method === "run")
+    expect(runCall).toBeDefined()
+    if (runCall?.method === "run") {
+      expect(runCall.opts.scriptPath).toMatch(/connect\.ts$/)
+      expect(runCall.opts.scriptPath).not.toBe("connect")
+      expect(runCall.opts.imdsPort).toBe(9001)
+    }
   })
 
   it("baseline forwards onProgress to backend.run()", async () => {
@@ -233,8 +238,13 @@ describe("CLI run", () => {
     await runRun({ script: "foo.ts", imdsPort: 9001, region: "us-west-2" }, backend)
     expect(backend.calls[0]).toMatchObject({
       method: "run",
-      opts: { scriptPath: "foo.ts", imdsPort: 9001 },
+      opts: { imdsPort: 9001 },
     })
+    const runCall = backend.calls[0]
+    if (runCall?.method === "run") {
+      expect(runCall.opts.scriptPath).toMatch(/foo\.ts$/)
+      expect(runCall.opts.scriptPath).toStartWith(tmpDir)
+    }
   })
 
   it("forwards onProgress to backend.run() without adding a prefix", async () => {

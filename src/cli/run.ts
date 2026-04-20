@@ -1,9 +1,11 @@
+import { resolve } from "node:path"
 import type { CommandModule } from "yargs"
 import type { Backend } from "../backend"
 import { OutputHandler } from "../output-handler"
 import { createSession } from "../session"
 import type { ProgressCallback } from "../types"
 import { DEFAULT_REGION } from "../types"
+import { establishWorkDir } from "../workdir"
 
 export interface RunArgs {
   script: string
@@ -19,13 +21,15 @@ export async function runRun(
   backend: Backend,
   onProgress: ProgressCallback = () => {},
 ): Promise<void> {
+  const scriptPath = resolve(process.cwd(), argv.script)
+  await establishWorkDir()
   const handler = new OutputHandler(onProgress)
   const session = await createSession(argv.session, argv.outputDir)
   handler.stdoutLine(`sandy: output directory: ${session.dir}`)
 
   const result = await backend.run(
     {
-      scriptPath: argv.script,
+      scriptPath,
       imdsPort: argv.imdsPort,
       region: argv.region,
       session: session.name,

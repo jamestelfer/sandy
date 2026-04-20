@@ -4,6 +4,7 @@ import type { Backend } from "../backend"
 import { SandyMcpServer } from "../mcp-server"
 import type { Logger } from "../logger"
 import { createLogger } from "../logger"
+import { establishWorkDir } from "../workdir"
 
 export async function runMcp(
   backend: Backend,
@@ -12,7 +13,9 @@ export async function runMcp(
 ): Promise<number> {
   try {
     logger.info("MCP server starting")
-    const sandy = new SandyMcpServer(backend, process.cwd(), logger)
+    const scriptsRoot = process.cwd()
+    await establishWorkDir()
+    const sandy = new SandyMcpServer(backend, scriptsRoot, logger)
     const server = sandy.createMcpServer()
 
     server.server.oninitialized = () => {

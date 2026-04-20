@@ -36,7 +36,8 @@ describe("sandy_run", () => {
     expect(result.output).toContain("[err] warn")
     expect(result.sessionName).toBeTruthy()
     const call = findRun(backend)
-    expect(call.opts.scriptPath).toBe("foo.ts")
+    expect(call.opts.scriptPath).toMatch(/foo\.ts$/)
+    expect(call.opts.scriptPath).toStartWith(process.cwd())
     expect(call.opts.imdsPort).toBe(9001)
   })
 
@@ -158,19 +159,21 @@ describe("sandy_check", () => {
     expect(result.output).toContain("sandy_image")
   })
 
-  test("baseline dispatches run with baseline scriptPath and imdsPort 0", async () => {
+  test("baseline dispatches run with extracted baseline script path and imdsPort 0", async () => {
     backend.imageExistsResult = true
     await server.handleSandyCheck(() => {}, "baseline")
     const run = findRun(backend)
-    expect(run.opts.scriptPath).toBe("baseline")
+    expect(run.opts.scriptPath).toMatch(/baseline\.ts$/)
+    expect(run.opts.scriptPath).not.toBe("baseline")
     expect(run.opts.imdsPort).toBe(0)
   })
 
-  test("connect dispatches run with connect scriptPath and given imdsPort", async () => {
+  test("connect dispatches run with extracted connect script path and given imdsPort", async () => {
     backend.imageExistsResult = true
     await server.handleSandyCheck(() => {}, "connect", 9001)
     const run = findRun(backend)
-    expect(run.opts.scriptPath).toBe("connect")
+    expect(run.opts.scriptPath).toMatch(/connect\.ts$/)
+    expect(run.opts.scriptPath).not.toBe("connect")
     expect(run.opts.imdsPort).toBe(9001)
   })
 })
