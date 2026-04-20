@@ -26,6 +26,12 @@
       "style": {
         "noNonNullAssertion": "warn",
         "useBlockStatements": "error"
+      },
+      "suspicious": {
+        "noDoubleEquals": {
+          "level": "error",
+          "options": { "ignoreNull": false }
+        }
       }
     }
   }

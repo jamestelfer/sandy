@@ -28,7 +28,7 @@ const TAR_EXTRACT_FS_METHODS = [
 type TarExtractFs = Pick<typeof nodeFsTypes, (typeof TAR_EXTRACT_FS_METHODS)[number]>
 
 function isTarExtractFs(candidate: unknown): candidate is TarExtractFs {
-  if (candidate == null || typeof candidate !== "object") {
+  if (candidate === null || candidate === undefined || typeof candidate !== "object") {
     return false
   }
   const obj: Record<string, unknown> = candidate as Record<string, unknown>
