@@ -175,7 +175,7 @@ describe("CLI check", () => {
     await runBaseline(backend)
     expect(backend.calls.find((c) => c.method === "run")).toMatchObject({
       method: "run",
-      opts: { scriptPath: "__baseline__" },
+      opts: { scriptPath: "baseline" },
     })
   })
 
@@ -204,7 +204,7 @@ describe("CLI check", () => {
     await runConnect({ imdsPort: 9001, region: "us-west-2" }, backend)
     expect(backend.calls.find((c) => c.method === "run")).toMatchObject({
       method: "run",
-      opts: { scriptPath: "__connect__", imdsPort: 9001 },
+      opts: { scriptPath: "connect", imdsPort: 9001 },
     })
   })
 

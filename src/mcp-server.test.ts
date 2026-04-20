@@ -158,19 +158,19 @@ describe("sandy_check", () => {
     expect(result.output).toContain("sandy_image")
   })
 
-  test("baseline dispatches run with __baseline__ scriptPath and imdsPort 0", async () => {
+  test("baseline dispatches run with baseline scriptPath and imdsPort 0", async () => {
     backend.imageExistsResult = true
     await server.handleSandyCheck(() => {}, "baseline")
     const run = findRun(backend)
-    expect(run.opts.scriptPath).toBe("__baseline__")
+    expect(run.opts.scriptPath).toBe("baseline")
     expect(run.opts.imdsPort).toBe(0)
   })
 
-  test("connect dispatches run with __connect__ scriptPath and given imdsPort", async () => {
+  test("connect dispatches run with connect scriptPath and given imdsPort", async () => {
     backend.imageExistsResult = true
     await server.handleSandyCheck(() => {}, "connect", 9001)
     const run = findRun(backend)
-    expect(run.opts.scriptPath).toBe("__connect__")
+    expect(run.opts.scriptPath).toBe("connect")
     expect(run.opts.imdsPort).toBe(9001)
   })
 })

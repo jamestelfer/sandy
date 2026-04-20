@@ -22,6 +22,7 @@ describe("CLI resource", () => {
     })
 
     const parsed = JSON.parse(output) as string[]
+    expect(parsed.length).toBeGreaterThan(0)
     expect(parsed).toContain("sandy://skills/cli/SKILL.md")
     expect(parsed).toContain("sandy://skills/mcp/SKILL.md")
   })

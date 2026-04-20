@@ -58,10 +58,18 @@ export const handlerProgressCallback = (
 }
 
 function mimeTypeForUri(uri: string): string {
-  if (uri.endsWith(".ts")) {
-    return "text/plain"
+  const dot = uri.lastIndexOf(".")
+  const ext = dot >= 0 ? uri.slice(dot) : ""
+  switch (ext) {
+    case ".md":
+      return "text/markdown"
+    case ".ts":
+      return "text/plain"
+    case ".json":
+      return "application/json"
+    default:
+      return "application/octet-stream"
   }
-  return "text/markdown"
 }
 
 export class SandyMcpServer {
@@ -126,7 +134,7 @@ export class SandyMcpServer {
           sessionName: "",
         }
       }
-      const scriptPath = action === "baseline" ? "__baseline__" : "__connect__"
+      const scriptPath = action === "baseline" ? "baseline" : "connect"
       const port = imdsPort ?? 0
       const session = await this.ensureSession()
       const opts: RunOptions = {

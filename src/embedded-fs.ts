@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs"
+import type * as nodeFsTypes from "node:fs"
 import * as nodeFs from "node:fs/promises"
 import { Readable } from "node:stream"
 import { createFsFromVolume, Volume } from "memfs"
@@ -8,41 +9,30 @@ import tarPath from "../embedded.tar" with { type: "file" }
 
 type MemFs = ReturnType<typeof createFsFromVolume>
 
-// Surface area tar-fs extract calls on opts.fs at runtime.
-// Derived from tar-fs source inspection: these are all callback-style node:fs methods
-// that tar-fs invokes during extraction.
-interface TarExtractFs {
-  mkdir: typeof import("node:fs").mkdir
-  createWriteStream: typeof import("node:fs").createWriteStream
-  symlink: typeof import("node:fs").symlink
-  link: typeof import("node:fs").link
-  unlink: typeof import("node:fs").unlink
-  chmod: typeof import("node:fs").chmod
-  chown: typeof import("node:fs").chown
-  stat: typeof import("node:fs").stat
-  lstat: typeof import("node:fs").lstat
-  utimes: typeof import("node:fs").utimes
-  realpath: typeof import("node:fs").realpath
-}
+// Methods tar-fs extract calls on opts.fs at runtime.
+// Derived from tar-fs source inspection.
+const TAR_EXTRACT_FS_METHODS = [
+  "mkdir",
+  "createWriteStream",
+  "symlink",
+  "link",
+  "unlink",
+  "chmod",
+  "chown",
+  "stat",
+  "lstat",
+  "utimes",
+  "realpath",
+] as const
+
+type TarExtractFs = Pick<typeof nodeFsTypes, (typeof TAR_EXTRACT_FS_METHODS)[number]>
 
 function isTarExtractFs(candidate: unknown): candidate is TarExtractFs {
-  if (typeof candidate !== "object" || candidate === null) {
+  if (candidate == null || typeof candidate !== "object") {
     return false
   }
-  const required = [
-    "mkdir",
-    "createWriteStream",
-    "symlink",
-    "link",
-    "unlink",
-    "chmod",
-    "chown",
-    "stat",
-    "lstat",
-    "utimes",
-    "realpath",
-  ] as const
-  return required.every((fn) => typeof (candidate as Record<string, unknown>)[fn] === "function")
+  const obj: Record<string, unknown> = candidate as Record<string, unknown>
+  return TAR_EXTRACT_FS_METHODS.every((fn) => typeof obj[fn] === "function")
 }
 
 function isString(value: string | Buffer): value is string {
@@ -59,14 +49,17 @@ function assertStringName(entry: { name: string | Buffer }): asserts entry is { 
   }
 }
 
-let embeddedFsPromise: Promise<MemFs> | null = null
-
-export function getEmbeddedFS(): Promise<MemFs> {
-  if (!embeddedFsPromise) {
-    embeddedFsPromise = initEmbeddedFS()
+function memoize<T>(factory: () => T): () => T {
+  let cached: T | undefined
+  return () => {
+    if (cached === undefined) {
+      cached = factory()
+    }
+    return cached
   }
-  return embeddedFsPromise
 }
+
+export const getEmbeddedFS: () => Promise<MemFs> = memoize(() => initEmbeddedFS())
 
 async function initEmbeddedFS(): Promise<MemFs> {
   const volume = new Volume()
