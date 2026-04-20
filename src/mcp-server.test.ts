@@ -9,6 +9,8 @@ import type { RunOptions } from "./types"
 
 type RunCall = { method: "run"; opts: RunOptions }
 
+const LOG_FILE_RE = /^mcp\.pid-\d+\.\d{8}-\d{6}\.log$/
+
 function findRun(backend: DummyBackend): RunCall {
   const call = backend.calls.find((c): c is RunCall => c.method === "run")
   if (!call) {
@@ -387,7 +389,7 @@ describe("logging", () => {
         return []
       }
       const logFile = readdirSync(dir)
-        .filter((name) => /^mcp\.pid-\d+\.\d{8}-\d{6}\.log$/.test(name))
+        .filter((name) => LOG_FILE_RE.test(name))
         .map((name) => join(dir, name))[0]
       if (!logFile) {
         return []

@@ -175,17 +175,25 @@ class FileSinkWriter implements Sink {
   }
 }
 
+function pad2(value: number): string {
+  return String(value).padStart(2, "0")
+}
+
 function formatLogTimestamp(now: Date): string {
   const y = now.getUTCFullYear()
-  const mm = String(now.getUTCMonth() + 1).padStart(2, "0")
-  const dd = String(now.getUTCDate()).padStart(2, "0")
-  const hh = String(now.getUTCHours()).padStart(2, "0")
-  const min = String(now.getUTCMinutes()).padStart(2, "0")
-  const ss = String(now.getUTCSeconds()).padStart(2, "0")
+  const mm = pad2(now.getUTCMonth() + 1)
+  const dd = pad2(now.getUTCDate())
+  const hh = pad2(now.getUTCHours())
+  const min = pad2(now.getUTCMinutes())
+  const ss = pad2(now.getUTCSeconds())
   return `${y}${mm}${dd}-${hh}${min}${ss}`
 }
 
-const LOG_FILE_NAME = `mcp.pid-${process.pid}.${formatLogTimestamp(new Date())}.log`
+function scopedLogFileName(pid: number, now: Date): string {
+  return `mcp.pid-${pid}.${formatLogTimestamp(now)}.log`
+}
+
+const LOG_FILE_NAME = scopedLogFileName(process.pid, new Date())
 
 export function createLogger(level?: string): Logger {
   const threshold = LEVEL_VALUE[normalizeLevel(level ?? process.env.SANDY_LOG_LEVEL)]

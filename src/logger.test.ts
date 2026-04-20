@@ -19,12 +19,14 @@ afterEach(() => {
   delete process.env.SANDY_LOG_LEVEL
 })
 
+const LOG_FILE_RE = /^mcp\.pid-\d+\.\d{8}-\d{6}\.log$/
+
 function findLogFiles(): string[] {
   const dir = stateDir()
   if (!existsSync(dir)) {
     return []
   }
-  return readdirSync(dir).filter((name) => /^mcp\.pid-\d+\.\d{8}-\d{6}\.log$/.test(name))
+  return readdirSync(dir).filter((name) => LOG_FILE_RE.test(name))
 }
 
 function readLog(): string[] {
@@ -97,7 +99,7 @@ describe("createLogger — basic format", () => {
     logger.info("x")
     const files = findLogFiles()
     expect(files).toHaveLength(1)
-    expect(files[0]).toMatch(/^mcp\.pid-\d+\.\d{8}-\d{6}\.log$/)
+    expect(files[0]).toMatch(LOG_FILE_RE)
   })
 
   test("includes current process pid in filename", () => {
