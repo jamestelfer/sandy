@@ -27,7 +27,7 @@ imds-broker: start_server(profile="myaccount-ReadOnly", region="us-west-2") → 
 
 Extract the port number (e.g. `9001`) and pass it to `sandy_run`.
 
-## Tools
+## MCP tools
 
 ### sandy_image
 
@@ -90,7 +90,7 @@ resource: sandy://skills/mcp/resources/examples/ecs_services.ts
 
 ## Typical workflow
 
-1. Read `sandy://skills/mcp/resources/scripting-guide.md` to understand constraints and patterns
+1. Read the scripting guide: `resource: sandy://skills/mcp/resources/scripting-guide.md`
 2. Start IMDS server via `imds-broker`
 3. `sandy_image(action: "create")` if image not yet built
 4. `sandy_check(action: "connect", imdsPort: <port>)` to verify connectivity

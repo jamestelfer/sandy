@@ -23,7 +23,7 @@ Sandy runs TypeScript scripts in sandboxed microVMs with AWS SDK access via IMDS
 
 ## AWS credentials
 
-Credentials resolved via IMDS. No static credentials needed — obtain an IMDS port from the imds-broker MCP before running.
+Credentials resolved via IMDS. No static credentials needed — start an IMDS server and pass the port to `sandy run --imds-port`.
 
 ## Constraints
 

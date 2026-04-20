@@ -9,7 +9,7 @@ describe("CLI prime", () => {
       output += line
     })
 
-    expect(output).toContain("Sandy CLI skill")
+    expect(output).toContain("# Sandy")
     expect(output).toContain("sandy resource sandy://skills/cli/resources/scripting-guide.md")
   })
 })
