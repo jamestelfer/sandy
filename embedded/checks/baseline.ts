@@ -1,6 +1,7 @@
 import { search } from "jmespath"
 import { Table } from "console-table-printer"
 import { format } from "@fast-csv/format"
+import { plot } from "simple-ascii-chart"
 import { writeFileSync } from "node:fs"
 import { Writable } from "node:stream"
 import { progress } from "../sandy.js"
@@ -69,5 +70,17 @@ const result = {
 const outputPath = `${outputDir}/baseline.json`
 writeFileSync(outputPath, JSON.stringify(result, null, 2))
 console.log(`Output written to: ${outputPath}`)
+
+// Verify simple-ascii-chart works
+const chartOutput = plot(
+  [
+    [1, 1],
+    [2, 4],
+    [3, 9],
+    [4, 16],
+  ],
+  { title: "Baseline chart check" },
+)
+console.log(chartOutput)
 
 progress("Baseline checks complete.")
