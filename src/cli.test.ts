@@ -4,7 +4,8 @@ import { join } from "node:path"
 import { runConfig } from "./cli/config"
 import { runImage } from "./cli/image"
 import { runBaseline, runConnect } from "./cli/check"
-import { runRun } from "./cli/run"
+import { makeRunCommand, runRun } from "./cli/run"
+import yargs from "yargs"
 import { runMcp } from "./cli/mcp"
 import { DummyBackend } from "./dummy-backend"
 import { noopLogger } from "./logger"
@@ -301,6 +302,31 @@ describe("CLI run", () => {
     expect(backend.calls[0]).toMatchObject({
       method: "run",
       opts: { scriptArgs: ["arg1", "arg2"] },
+    })
+  })
+
+  it("keeps numeric-looking args after -- as strings", async () => {
+    const backend = new DummyBackend()
+
+    await yargs([
+      "run",
+      "--script",
+      "foo.ts",
+      "--imds-port",
+      "9001",
+      "--region",
+      "us-west-2",
+      "--",
+      "527100417633",
+    ])
+      .command(makeRunCommand(backend, () => {}))
+      .demandCommand(1)
+      .strict()
+      .parseAsync()
+
+    expect(backend.calls[0]).toMatchObject({
+      method: "run",
+      opts: { scriptArgs: ["527100417633"] },
     })
   })
 

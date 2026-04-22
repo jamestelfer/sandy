@@ -55,7 +55,10 @@ export function makeRunCommand(backend: Backend, onProgress: ProgressCallback): 
         .option("region", { type: "string", default: DEFAULT_REGION })
         .option("session", { type: "string" })
         .option("output-dir", { type: "string" })
-        .parserConfiguration({ "populate--": true }),
+        .parserConfiguration({
+          "populate--": true,
+          "parse-positional-numbers": false,
+        }),
     handler: async (argv) => runRun(argv as unknown as RunArgs, backend, onProgress),
   }
 }
