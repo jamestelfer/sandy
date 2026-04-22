@@ -6,14 +6,10 @@ import type { Backend } from "./backend"
 import type { RunOptions, RunResult } from "./types"
 import { VM_BOOTSTRAP, VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "./types"
 import type { OutputHandler } from "./output-handler"
-import { resolveScriptDir } from "./check-scripts"
+
 import { OutputTracker } from "./scan-output"
 import { buildRunEnv } from "./run-env"
 import { stageBootstrapFiles } from "./bootstrap-staging"
-
-// Shuru requires all mounted host paths to be within CWD. Use .sandy/tmp
-// (already gitignored) instead of the OS temp directory.
-const SHURU_TMP_BASE = path.resolve(".sandy", "tmp")
 
 export type ShellExecutor = (
   cmd: string[],
@@ -108,7 +104,7 @@ export class ShuruBackend implements Backend {
   }
 
   async imageCreate(handler: OutputHandler): Promise<void> {
-    await using staging = await makeTmpDir("sandy-shuru-bootstrap-", SHURU_TMP_BASE)
+    await using staging = await makeTmpDir("sandy-shuru-bootstrap-", process.cwd())
     await stageBootstrapFiles(staging.path)
 
     await this.executor(
@@ -130,7 +126,7 @@ export class ShuruBackend implements Backend {
   }
 
   async run(opts: RunOptions, handler: OutputHandler): Promise<RunResult> {
-    await using scriptDirObj = await resolveScriptDir(opts.scriptPath, SHURU_TMP_BASE)
+    const scriptDirPath = path.dirname(path.resolve(opts.scriptPath))
     const scriptName = path.basename(opts.scriptPath, ".ts")
     const compiledPath = `/workspace/dist/scripts/${scriptName}.js`
     const imdsEndpoint = `http://10.0.0.1:${opts.imdsPort}`
@@ -142,7 +138,7 @@ export class ShuruBackend implements Backend {
       allowHostWrites: true,
       exposeHost: [String(opts.imdsPort)],
       mounts: {
-        [scriptDirObj.path]: VM_SCRIPTS_DIR,
+        [scriptDirPath]: VM_SCRIPTS_DIR,
         [opts.sessionDir]: `${VM_OUTPUT_DIR}:rw`,
       },
       network: {

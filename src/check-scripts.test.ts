@@ -1,53 +1,57 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { mkdirSync, rmSync } from "node:fs"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
-import { resolveScriptDir } from "./check-scripts"
+import { extractBuiltinChecks } from "./check-scripts"
 import { getEmbeddedFS } from "./embedded-fs"
 
-describe("resolveScriptDir", () => {
-  test("baseline creates a temp dir containing the baseline script", async () => {
-    await using dir = await resolveScriptDir("baseline")
+const tmpDir = path.join(import.meta.dir, "../.tmp-test-check-scripts")
+
+beforeEach(() => {
+  rmSync(tmpDir, { recursive: true, force: true })
+  mkdirSync(tmpDir, { recursive: true })
+  process.chdir(tmpDir)
+})
+
+afterEach(() => {
+  process.chdir(path.join(import.meta.dir, ".."))
+  rmSync(tmpDir, { recursive: true, force: true })
+})
+
+describe("extractBuiltinChecks", () => {
+  test("creates a temp dir under CWD and stages baseline.ts", async () => {
+    await using dir = await extractBuiltinChecks()
+    expect(dir.path.startsWith(`${tmpDir}${path.sep}`)).toBe(true)
     const content = await fs.readFile(path.join(dir.path, "baseline.ts"), "utf8")
     expect(content).toContain("Baseline checks complete")
   })
 
-  test("connect creates a temp dir containing the connect script", async () => {
-    await using dir = await resolveScriptDir("connect")
+  test("stages connect.ts", async () => {
+    await using dir = await extractBuiltinChecks()
     const content = await fs.readFile(path.join(dir.path, "connect.ts"), "utf8")
     expect(content).toContain("EC2Client")
   })
 
   test("extracts all check scripts into the temp dir", async () => {
-    await using dir = await resolveScriptDir("baseline")
+    await using dir = await extractBuiltinChecks()
     const files = await fs.readdir(dir.path)
     expect(files).toContain("baseline.ts")
     expect(files).toContain("connect.ts")
   })
 
-  test("real script path returns dirname without creating a temp dir", async () => {
-    await using dir = await resolveScriptDir("/some/path/myscript.ts")
-    expect(dir.path).toBe("/some/path")
-  })
-
-  test("temp dir for builtin checks is removed on disposal", async () => {
-    let tmpPath: string
+  test("temp dir is removed on disposal", async () => {
+    let extractedPath = ""
     {
-      await using dir = await resolveScriptDir("baseline")
-      tmpPath = dir.path
-      const stat = await fs.stat(tmpPath)
+      await using dir = await extractBuiltinChecks()
+      extractedPath = dir.path
+      const stat = await fs.stat(extractedPath)
       expect(stat.isDirectory()).toBe(true)
     }
-    await expect(fs.stat(tmpPath)).rejects.toThrow()
-  })
-
-  test("real path disposal is a no-op — parent dir is not removed", async () => {
-    const scriptPath = "/some/real/script.ts"
-    await using dir = await resolveScriptDir(scriptPath)
-    expect(dir.path).toBe("/some/real")
+    await expect(fs.stat(extractedPath)).rejects.toThrow()
   })
 
   test("baseline script content matches embedded FS source", async () => {
-    await using dir = await resolveScriptDir("baseline")
+    await using dir = await extractBuiltinChecks()
     const staged = await fs.readFile(path.join(dir.path, "baseline.ts"), "utf8")
     const memfs = await getEmbeddedFS()
     const embedded = memfs.readFileSync("/checks/baseline.ts", "utf-8") as string

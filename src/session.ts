@@ -14,10 +14,10 @@ export function validateSessionName(name: string): void {
   if (!SESSION_NAME_RE.test(name)) {
     throw new Error(`invalid session name: ${JSON.stringify(name)}`)
   }
-  // Containment check: ensure the resolved path stays within .sandy/ regardless of
+  // Containment check: ensure the resolved path stays within CWD regardless of
   // what the format check allows. This is the Node.js equivalent of a virtual root.
-  const base = resolve(".sandy")
-  const resolved = resolve(join(".sandy", name))
+  const base = process.cwd()
+  const resolved = resolve(name)
   if (!resolved.startsWith(base + sep)) {
     throw new Error(`invalid session name: ${JSON.stringify(name)}`)
   }
@@ -28,7 +28,7 @@ export async function createSession(name?: string, dir?: string): Promise<Sessio
   if (name !== undefined) {
     validateSessionName(sessionName)
   }
-  const resolvedDir = dir ? resolve(dir) : resolve(join(".sandy", sessionName))
+  const resolvedDir = dir ? resolve(dir) : resolve(sessionName)
 
   mkdirSync(resolvedDir, { recursive: true })
   ensureGitignore()
@@ -37,9 +37,8 @@ export async function createSession(name?: string, dir?: string): Promise<Sessio
 }
 
 function ensureGitignore(): void {
-  const path = join(".sandy", ".gitignore")
+  const path = join(".gitignore")
   if (!existsSync(path)) {
-    mkdirSync(".sandy", { recursive: true })
     writeFileSync(path, "*\n")
   }
 }

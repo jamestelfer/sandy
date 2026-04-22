@@ -7,7 +7,7 @@ import type { Backend } from "./backend"
 import type { RunOptions, RunResult } from "./types"
 import { VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "./types"
 import type { OutputHandler } from "./output-handler"
-import { resolveScriptDir } from "./check-scripts"
+
 import { OutputTracker } from "./scan-output"
 import { buildRunEnv } from "./run-env"
 import { stageBootstrapFiles } from "./bootstrap-staging"
@@ -156,7 +156,7 @@ export class DockerBackend implements Backend {
   }
 
   async run(opts: RunOptions, handler: OutputHandler): Promise<RunResult> {
-    await using scriptDirObj = await resolveScriptDir(opts.scriptPath)
+    const scriptDirPath = path.dirname(path.resolve(opts.scriptPath))
     const scriptName = path.basename(opts.scriptPath, ".ts")
     const compiledPath = `/workspace/dist/scripts/${scriptName}.js`
     const imdsEndpoint = `http://host.docker.internal:${opts.imdsPort}`
@@ -167,10 +167,7 @@ export class DockerBackend implements Backend {
       Cmd: [compiledPath, ...(opts.scriptArgs ?? [])],
       Env: Object.entries(env).map(([k, v]) => `${k}=${v}`),
       HostConfig: {
-        Binds: [
-          `${scriptDirObj.path}:${VM_SCRIPTS_DIR}:ro`,
-          `${opts.sessionDir}:${VM_OUTPUT_DIR}:rw`,
-        ],
+        Binds: [`${scriptDirPath}:${VM_SCRIPTS_DIR}:ro`, `${opts.sessionDir}:${VM_OUTPUT_DIR}:rw`],
         // host.docker.internal resolves on macOS/Windows by default; on Linux the
         // host-gateway alias is required to make it resolve to the Docker bridge IP.
         ExtraHosts: ["host.docker.internal:host-gateway"],

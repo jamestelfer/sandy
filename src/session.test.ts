@@ -52,22 +52,21 @@ describe("createSession", () => {
     expect(a.name).not.toBe(b.name)
   })
 
-  it("creates .sandy/<name>/ directory", async () => {
+  it("creates <name>/ directory under CWD", async () => {
     const { name } = await createSession()
-    expect(existsSync(join(tmpDir, ".sandy", name))).toBe(true)
+    expect(existsSync(join(tmpDir, name))).toBe(true)
   })
 
-  it("creates .sandy/.gitignore with * if absent", async () => {
+  it("creates .gitignore with * if absent", async () => {
     await createSession()
-    const content = readFileSync(join(tmpDir, ".sandy", ".gitignore"), "utf8")
+    const content = readFileSync(join(tmpDir, ".gitignore"), "utf8")
     expect(content).toBe("*\n")
   })
 
-  it("does not overwrite an existing .sandy/.gitignore", async () => {
-    mkdirSync(join(tmpDir, ".sandy"), { recursive: true })
-    writeFileSync(join(tmpDir, ".sandy", ".gitignore"), "existing\n")
+  it("does not overwrite an existing .gitignore", async () => {
+    writeFileSync(join(tmpDir, ".gitignore"), "existing\n")
     await createSession()
-    const content = readFileSync(join(tmpDir, ".sandy", ".gitignore"), "utf8")
+    const content = readFileSync(join(tmpDir, ".gitignore"), "utf8")
     expect(content).toBe("existing\n")
   })
 
@@ -78,11 +77,11 @@ describe("createSession", () => {
   it("uses the provided name when given", async () => {
     const { name, dir } = await createSession("my-session")
     expect(name).toBe("my-session")
-    expect(dir).toBe(resolve(tmpDir, ".sandy", "my-session"))
-    expect(existsSync(join(tmpDir, ".sandy", "my-session"))).toBe(true)
+    expect(dir).toBe(resolve(tmpDir, "my-session"))
+    expect(existsSync(join(tmpDir, "my-session"))).toBe(true)
   })
 
-  it("uses the provided dir when given, ignoring the default .sandy/<name>/ path", async () => {
+  it("uses the provided dir when given, ignoring the default <name>/ path", async () => {
     const customDir = join(tmpDir, "custom-output")
     const { dir } = await createSession(undefined, customDir)
     expect(dir).toBe(customDir)

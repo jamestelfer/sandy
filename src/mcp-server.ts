@@ -4,6 +4,7 @@ import { z } from "zod"
 import type { Backend } from "./backend"
 import { OutputHandler } from "./output-handler"
 import { createSession, validateSessionName } from "./session"
+import { extractBuiltinChecks } from "./check-scripts"
 import type { ProgressCallback, RunOptions } from "./types"
 import { DEFAULT_REGION } from "./types"
 import type { Logger } from "./logger"
@@ -85,13 +86,14 @@ export class SandyMcpServer {
     this.scriptsRoot = scriptsRoot
   }
 
-  private validateScriptPath(scriptPath: string): void {
-    const resolved = resolve(scriptPath)
+  private validateScriptPath(scriptPath: string): string {
+    const resolved = resolve(this.scriptsRoot, scriptPath)
     if (!resolved.startsWith(this.scriptsRoot + sep)) {
       throw new Error(
         `script path must be within the working directory: ${JSON.stringify(scriptPath)}`,
       )
     }
+    return resolved
   }
 
   private createOutputHandler(onProgress?: ProgressCallback): OutputHandler {
@@ -134,8 +136,10 @@ export class SandyMcpServer {
           sessionName: "",
         }
       }
-      const scriptPath = action === "baseline" ? "baseline" : "connect"
+      const checkScript = action === "baseline" ? "baseline" : "connect"
       const port = imdsPort ?? 0
+      await using checkDir = await extractBuiltinChecks()
+      const scriptPath = `${checkDir.path}/${checkScript}.ts`
       const session = await this.ensureSession()
       const opts: RunOptions = {
         scriptPath,
@@ -200,11 +204,11 @@ export class SandyMcpServer {
     try {
       log.info({ script: params.script, region: params.region }, "invoked")
 
-      this.validateScriptPath(params.script)
+      const scriptPath = this.validateScriptPath(params.script)
       const session = await this.ensureSession()
 
       const opts: RunOptions = {
-        scriptPath: params.script,
+        scriptPath,
         imdsPort: params.imdsPort,
         region: params.region ?? DEFAULT_REGION,
         session: session.name,

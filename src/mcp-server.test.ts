@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
-import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { createLogger } from "./logger"
 import { DummyBackend } from "./dummy-backend"
@@ -8,6 +8,8 @@ import { listEmbeddedResourceUris, readEmbeddedResource } from "./embedded-fs"
 import type { RunOptions } from "./types"
 
 type RunCall = { method: "run"; opts: RunOptions }
+
+const LOG_FILE_RE = /^mcp\.pid-\d+\.\d{8}-\d{6}\.log$/
 
 function findRun(backend: DummyBackend): RunCall {
   const call = backend.calls.find((c): c is RunCall => c.method === "run")
@@ -36,7 +38,8 @@ describe("sandy_run", () => {
     expect(result.output).toContain("[err] warn")
     expect(result.sessionName).toBeTruthy()
     const call = findRun(backend)
-    expect(call.opts.scriptPath).toBe("foo.ts")
+    expect(call.opts.scriptPath).toMatch(/foo\.ts$/)
+    expect(call.opts.scriptPath).toStartWith(process.cwd())
     expect(call.opts.imdsPort).toBe(9001)
   })
 
@@ -158,19 +161,21 @@ describe("sandy_check", () => {
     expect(result.output).toContain("sandy_image")
   })
 
-  test("baseline dispatches run with baseline scriptPath and imdsPort 0", async () => {
+  test("baseline dispatches run with extracted baseline script path and imdsPort 0", async () => {
     backend.imageExistsResult = true
     await server.handleSandyCheck(() => {}, "baseline")
     const run = findRun(backend)
-    expect(run.opts.scriptPath).toBe("baseline")
+    expect(run.opts.scriptPath).toMatch(/baseline\.ts$/)
+    expect(run.opts.scriptPath).not.toBe("baseline")
     expect(run.opts.imdsPort).toBe(0)
   })
 
-  test("connect dispatches run with connect scriptPath and given imdsPort", async () => {
+  test("connect dispatches run with extracted connect script path and given imdsPort", async () => {
     backend.imageExistsResult = true
     await server.handleSandyCheck(() => {}, "connect", 9001)
     const run = findRun(backend)
-    expect(run.opts.scriptPath).toBe("connect")
+    expect(run.opts.scriptPath).toMatch(/connect\.ts$/)
+    expect(run.opts.scriptPath).not.toBe("connect")
     expect(run.opts.imdsPort).toBe(9001)
   })
 })
@@ -379,8 +384,14 @@ describe("logging", () => {
     const server = new SandyMcpServer(backend, process.cwd(), logger)
 
     function logLines(): LogRecord[] {
-      const logFile = join(logDir, "sandy", "mcp.log")
-      if (!existsSync(logFile)) {
+      const dir = join(logDir, "sandy")
+      if (!existsSync(dir)) {
+        return []
+      }
+      const logFile = readdirSync(dir)
+        .filter((name) => LOG_FILE_RE.test(name))
+        .map((name) => join(dir, name))[0]
+      if (!logFile) {
         return []
       }
       return parseLogFile(readFileSync(logFile, "utf-8"))

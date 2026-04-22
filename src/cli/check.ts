@@ -1,10 +1,12 @@
-import { basename } from "node:path"
+import { basename, join } from "node:path"
 import type { CommandModule } from "yargs"
 import type { Backend } from "../backend"
+import { extractBuiltinChecks } from "../check-scripts"
 import { OutputHandler } from "../output-handler"
 import { createSession } from "../session"
-import type { ProgressCallback, RunOptions } from "../types"
+import type { ProgressCallback } from "../types"
 import { DEFAULT_REGION } from "../types"
+import { establishWorkDir } from "../workdir"
 
 export interface ConnectArgs {
   imdsPort: number
@@ -14,9 +16,12 @@ export interface ConnectArgs {
 async function runCheck(
   backend: Backend,
   onProgress: ProgressCallback,
-  opts: Omit<RunOptions, "session" | "sessionDir">,
+  checkScript: "baseline" | "connect",
+  imdsPort: number,
+  region: string,
   label: string,
 ): Promise<void> {
+  await establishWorkDir()
   const handler = new OutputHandler(onProgress)
   const imageExists = await backend.imageExists(handler)
   if (!imageExists) {
@@ -25,9 +30,11 @@ async function runCheck(
     process.exitCode = 1
     return
   }
+  await using checkDir = await extractBuiltinChecks()
+  const scriptPath = join(checkDir.path, `${checkScript}.ts`)
   const session = await createSession()
   const result = await backend.run(
-    { ...opts, session: session.name, sessionDir: session.dir },
+    { scriptPath, imdsPort, region, session: session.name, sessionDir: session.dir },
     handler,
   )
   if (result.exitCode !== 0) {
@@ -42,7 +49,7 @@ export async function runBaseline(
   backend: Backend,
   onProgress: ProgressCallback = () => {},
 ): Promise<void> {
-  await runCheck(backend, onProgress, { scriptPath: "baseline", imdsPort: 0 }, "baseline")
+  await runCheck(backend, onProgress, "baseline", 0, DEFAULT_REGION, "baseline")
 }
 
 export async function runConnect(
@@ -50,12 +57,7 @@ export async function runConnect(
   backend: Backend,
   onProgress: ProgressCallback = () => {},
 ): Promise<void> {
-  await runCheck(
-    backend,
-    onProgress,
-    { scriptPath: "connect", imdsPort: argv.imdsPort, region: argv.region },
-    "connect",
-  )
+  await runCheck(backend, onProgress, "connect", argv.imdsPort, argv.region, "connect")
 }
 
 export function makeCheckCommand(backend: Backend, onProgress: ProgressCallback): CommandModule {
