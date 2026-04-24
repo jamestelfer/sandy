@@ -1,30 +1,14 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs"
 import { join } from "node:path"
-import { humanId } from "human-id"
 import { createLogger } from "./logger"
 import { DummyBackend } from "./dummy-backend"
 import { SandyMcpServer, handlerProgressCallback } from "./mcp-server"
 import { listEmbeddedResourceUris, readEmbeddedResource } from "./embedded-fs"
+import { useIsolatedCwd } from "./test-cwd"
 import type { RunOptions } from "./types"
 
-const repoRoot = join(import.meta.dir, "..")
-const testTmpRoot = join(repoRoot, ".sandy", ".test-tmp")
-let testTmpDir: string | null = null
-
-beforeEach(() => {
-  testTmpDir = join(testTmpRoot, humanId({ separator: "-", capitalize: false }))
-  mkdirSync(testTmpDir, { recursive: true })
-  process.chdir(testTmpDir)
-})
-
-afterEach(() => {
-  process.chdir(repoRoot)
-  if (testTmpDir) {
-    rmSync(testTmpDir, { recursive: true, force: true })
-    testTmpDir = null
-  }
-})
+useIsolatedCwd()
 
 type RunCall = { method: "run"; opts: RunOptions }
 

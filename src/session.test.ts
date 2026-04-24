@@ -1,19 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test"
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { describe, expect, it } from "bun:test"
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { createSession, validateSessionName } from "./session"
+import { useIsolatedCwd } from "./test-cwd"
 
-const tmpDir = join(import.meta.dir, "../.tmp-test-session")
-
-beforeEach(() => {
-  mkdirSync(tmpDir, { recursive: true })
-  process.chdir(tmpDir)
-})
-
-afterEach(() => {
-  process.chdir(join(import.meta.dir, ".."))
-  rmSync(tmpDir, { recursive: true, force: true })
-})
+const isolatedCwd = useIsolatedCwd()
 
 describe("validateSessionName", () => {
   it("accepts valid humanId-style names", () => {
@@ -54,19 +45,19 @@ describe("createSession", () => {
 
   it("creates <name>/ directory under CWD", async () => {
     const { name } = await createSession()
-    expect(existsSync(join(tmpDir, name))).toBe(true)
+    expect(existsSync(join(isolatedCwd.currentDir(), name))).toBe(true)
   })
 
   it("creates .gitignore with * if absent", async () => {
     await createSession()
-    const content = readFileSync(join(tmpDir, ".gitignore"), "utf8")
+    const content = readFileSync(join(isolatedCwd.currentDir(), ".gitignore"), "utf8")
     expect(content).toBe("*\n")
   })
 
   it("does not overwrite an existing .gitignore", async () => {
-    writeFileSync(join(tmpDir, ".gitignore"), "existing\n")
+    writeFileSync(join(isolatedCwd.currentDir(), ".gitignore"), "existing\n")
     await createSession()
-    const content = readFileSync(join(tmpDir, ".gitignore"), "utf8")
+    const content = readFileSync(join(isolatedCwd.currentDir(), ".gitignore"), "utf8")
     expect(content).toBe("existing\n")
   })
 
@@ -77,19 +68,19 @@ describe("createSession", () => {
   it("uses the provided name when given", async () => {
     const { name, dir } = await createSession("my-session")
     expect(name).toBe("my-session")
-    expect(dir).toBe(resolve(tmpDir, "my-session"))
-    expect(existsSync(join(tmpDir, "my-session"))).toBe(true)
+    expect(dir).toBe(resolve(isolatedCwd.currentDir(), "my-session"))
+    expect(existsSync(join(isolatedCwd.currentDir(), "my-session"))).toBe(true)
   })
 
   it("uses the provided dir when given, ignoring the default <name>/ path", async () => {
-    const customDir = join(tmpDir, "custom-output")
+    const customDir = join(isolatedCwd.currentDir(), "custom-output")
     const { dir } = await createSession(undefined, customDir)
     expect(dir).toBe(customDir)
     expect(existsSync(customDir)).toBe(true)
   })
 
   it("still generates a session name when only dir is provided", async () => {
-    const customDir = join(tmpDir, "custom-output")
+    const customDir = join(isolatedCwd.currentDir(), "custom-output")
     const { name } = await createSession(undefined, customDir)
     expect(name).toMatch(/^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)+$/)
   })

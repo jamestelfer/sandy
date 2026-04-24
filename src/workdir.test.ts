@@ -1,20 +1,18 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test"
+import { beforeEach, describe, expect, it } from "bun:test"
 import { chmodSync, existsSync, mkdirSync, rmSync } from "node:fs"
 import { join, resolve } from "node:path"
 import * as os from "node:os"
+import { useIsolatedCwd } from "./test-cwd"
 import { establishWorkDir } from "./workdir"
 
-const root = join(import.meta.dir, "../.tmp-test-workdir")
+const isolatedCwd = useIsolatedCwd()
+let root = ""
 
 beforeEach(() => {
+  root = join(isolatedCwd.currentDir(), "workdir")
   rmSync(root, { recursive: true, force: true })
   mkdirSync(root, { recursive: true })
   process.chdir(root)
-})
-
-afterEach(() => {
-  process.chdir(join(import.meta.dir, ".."))
-  rmSync(root, { recursive: true, force: true })
 })
 
 describe("establishWorkDir", () => {
