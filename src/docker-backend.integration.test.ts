@@ -106,18 +106,17 @@ describe("DockerBackend integration", () => {
     async () => {
       const docker = new Docker()
       const backend = new DockerBackend(docker)
-      // Prune stopped containers then remove both image tags
+      // Prune stopped containers then remove the primary image tag.
+      // Keep sandy:layer-retention to preserve cache warmth.
       try {
         await docker.pruneContainers()
       } catch {
         /* ignore */
       }
-      for (const name of ["sandy:latest", "sandy:layer-retention"]) {
-        try {
-          await docker.getImage(name).remove()
-        } catch {
-          /* already absent */
-        }
+      try {
+        await docker.getImage("sandy:latest").remove()
+      } catch {
+        /* already absent */
       }
       expect(await backend.imageExists(noop)).toBe(false)
     },
