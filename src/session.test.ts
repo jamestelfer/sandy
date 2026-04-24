@@ -2,9 +2,9 @@ import { describe, expect, it } from "bun:test"
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { createSession, validateSessionName } from "./session"
-import { useIsolatedCwd } from "./test-cwd"
+import { useTestCwdIsolation } from "./test-tooling/isolated-cwd"
 
-const isolatedCwd = useIsolatedCwd()
+const isolatedCwd = useTestCwdIsolation()
 
 describe("validateSessionName", () => {
   it("accepts valid humanId-style names", () => {

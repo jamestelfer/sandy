@@ -3,9 +3,9 @@ import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import { extractBuiltinChecks } from "./check-scripts"
 import { getEmbeddedFS } from "./embedded-fs"
-import { useIsolatedCwd } from "./test-cwd"
+import { useTestCwdIsolation } from "./test-tooling/isolated-cwd"
 
-const isolatedCwd = useIsolatedCwd()
+const isolatedCwd = useTestCwdIsolation()
 
 describe("extractBuiltinChecks", () => {
   test("creates a temp dir under CWD and stages baseline.ts", async () => {

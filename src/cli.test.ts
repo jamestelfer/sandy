@@ -8,9 +8,9 @@ import yargs from "yargs"
 import { runMcp } from "./cli/mcp"
 import { DummyBackend } from "./dummy-backend"
 import { noopLogger } from "./logger"
-import { useIsolatedCwd } from "./test-cwd"
+import { useTestCwdIsolation } from "./test-tooling/isolated-cwd"
 
-const isolatedCwd = useIsolatedCwd()
+const isolatedCwd = useTestCwdIsolation()
 
 beforeEach(() => {
   process.env.XDG_CONFIG_HOME = isolatedCwd.currentDir()

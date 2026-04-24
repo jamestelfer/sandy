@@ -5,10 +5,10 @@ import { createLogger } from "./logger"
 import { DummyBackend } from "./dummy-backend"
 import { SandyMcpServer, handlerProgressCallback } from "./mcp-server"
 import { listEmbeddedResourceUris, readEmbeddedResource } from "./embedded-fs"
-import { useIsolatedCwd } from "./test-cwd"
+import { useTestCwdIsolation } from "./test-tooling/isolated-cwd"
 import type { RunOptions } from "./types"
 
-useIsolatedCwd()
+useTestCwdIsolation()
 
 type RunCall = { method: "run"; opts: RunOptions }
 

@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it } from "bun:test"
 import { chmodSync, existsSync, mkdirSync, rmSync } from "node:fs"
 import { join, resolve } from "node:path"
 import * as os from "node:os"
-import { useIsolatedCwd } from "./test-cwd"
+import { useTestCwdIsolation } from "./test-tooling/isolated-cwd"
 import { establishWorkDir } from "./workdir"
 
-const isolatedCwd = useIsolatedCwd()
+const isolatedCwd = useTestCwdIsolation()
 let root = ""
 
 beforeEach(() => {

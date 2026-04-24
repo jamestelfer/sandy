@@ -3,14 +3,14 @@ import { mkdirSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { humanId } from "human-id"
 
-interface IsolatedCwd {
+interface IsolatedCwdContext {
   repoRoot: string
   testTmpRoot: string
   currentDir: () => string
 }
 
-export function useIsolatedCwd(): IsolatedCwd {
-  const repoRoot = join(import.meta.dir, "..")
+export function useTestCwdIsolation(): IsolatedCwdContext {
+  const repoRoot = join(import.meta.dir, "../..")
   const testTmpRoot = join(repoRoot, ".sandy", ".test-tmp")
   let dir: string | null = null
 
