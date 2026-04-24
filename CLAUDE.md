@@ -7,6 +7,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 Apply these rules to all prose, commit messages, PR descriptions, and user-facing text.
 
 - Technical-professional register. Use terms directly without over-explanation.
+- Use Conventional Commit leads for all commit messages and PR descriptions.
 - Guides: second person, imperative mood. Start instructions with the verb.
 - Reference: third person, declarative mood. Describe what things are and do.
 - No first person ("I", "we") anywhere except `Acknowledgements`.
@@ -49,6 +50,13 @@ bun run build               # compile binary to dist/sandy
 ```
 
 Use the fix/verify workflow for commit readiness. `verify` must pass without introducing file changes.
+
+## Commit rules
+
+- Structure commits for review. Keep each commit a clear logical implementation step.
+- Keep commits atomic. Move from tested working state to tested working state only.
+- Include required test changes in the same commit as the code changes they validate.
+- Use Conventional Commit messages for all commits.
 
 ## Code Style (Biome)
 
