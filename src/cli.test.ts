@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
-import { mkdirSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { runConfig } from "./cli/config"
 import { runImage } from "./cli/image"
@@ -9,18 +8,15 @@ import yargs from "yargs"
 import { runMcp } from "./cli/mcp"
 import { DummyBackend } from "./dummy-backend"
 import { noopLogger } from "./logger"
+import { useTestCwdIsolation } from "./test-tooling/isolated-cwd"
 
-const tmpDir = join(import.meta.dir, "../.tmp-test-cli")
+const isolatedCwd = useTestCwdIsolation()
 
 beforeEach(() => {
-  mkdirSync(tmpDir, { recursive: true })
-  process.env.XDG_CONFIG_HOME = tmpDir
-  process.chdir(tmpDir)
+  process.env.XDG_CONFIG_HOME = isolatedCwd.currentDir()
 })
 
 afterEach(() => {
-  process.chdir(join(import.meta.dir, ".."))
-  rmSync(tmpDir, { recursive: true, force: true })
   delete process.env.XDG_CONFIG_HOME
 })
 
@@ -244,7 +240,7 @@ describe("CLI run", () => {
     const runCall = backend.calls[0]
     if (runCall?.method === "run") {
       expect(runCall.opts.scriptPath).toMatch(/foo\.ts$/)
-      expect(runCall.opts.scriptPath).toStartWith(tmpDir)
+      expect(runCall.opts.scriptPath).toStartWith(isolatedCwd.currentDir())
     }
   })
 
@@ -282,7 +278,7 @@ describe("CLI run", () => {
 
   it("uses --output-dir as session directory when provided", async () => {
     const backend = new DummyBackend()
-    const customDir = join(tmpDir, "my-out")
+    const customDir = join(isolatedCwd.currentDir(), "my-out")
     await runRun(
       { script: "foo.ts", imdsPort: 9001, region: "us-west-2", outputDir: customDir },
       backend,

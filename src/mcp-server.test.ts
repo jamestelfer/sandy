@@ -5,7 +5,10 @@ import { createLogger } from "./logger"
 import { DummyBackend } from "./dummy-backend"
 import { SandyMcpServer, handlerProgressCallback } from "./mcp-server"
 import { listEmbeddedResourceUris, readEmbeddedResource } from "./embedded-fs"
+import { useTestCwdIsolation } from "./test-tooling/isolated-cwd"
 import type { RunOptions } from "./types"
+
+useTestCwdIsolation()
 
 type RunCall = { method: "run"; opts: RunOptions }
 
@@ -374,7 +377,7 @@ describe("logging", () => {
   }
 
   function setup(level: string = "info") {
-    const logDir = join(import.meta.dir, "../.tmp-test-mcp-log")
+    const logDir = join(process.cwd(), "mcp-log")
     rmSync(logDir, { recursive: true, force: true })
     mkdirSync(logDir, { recursive: true })
     process.env.XDG_STATE_HOME = logDir
@@ -401,8 +404,6 @@ describe("logging", () => {
   }
 
   afterEach(() => {
-    const logDir = join(import.meta.dir, "../.tmp-test-mcp-log")
-    rmSync(logDir, { recursive: true, force: true })
     delete process.env.XDG_STATE_HOME
   })
 

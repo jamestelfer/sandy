@@ -1,27 +1,16 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { mkdirSync, rmSync } from "node:fs"
+import { describe, expect, test } from "bun:test"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import { extractBuiltinChecks } from "./check-scripts"
 import { getEmbeddedFS } from "./embedded-fs"
+import { useTestCwdIsolation } from "./test-tooling/isolated-cwd"
 
-const tmpDir = path.join(import.meta.dir, "../.tmp-test-check-scripts")
-
-beforeEach(() => {
-  rmSync(tmpDir, { recursive: true, force: true })
-  mkdirSync(tmpDir, { recursive: true })
-  process.chdir(tmpDir)
-})
-
-afterEach(() => {
-  process.chdir(path.join(import.meta.dir, ".."))
-  rmSync(tmpDir, { recursive: true, force: true })
-})
+const isolatedCwd = useTestCwdIsolation()
 
 describe("extractBuiltinChecks", () => {
   test("creates a temp dir under CWD and stages baseline.ts", async () => {
     await using dir = await extractBuiltinChecks()
-    expect(dir.path.startsWith(`${tmpDir}${path.sep}`)).toBe(true)
+    expect(dir.path.startsWith(`${isolatedCwd.currentDir()}${path.sep}`)).toBe(true)
     const content = await fs.readFile(path.join(dir.path, "baseline.ts"), "utf8")
     expect(content).toContain("Baseline checks complete")
   })
