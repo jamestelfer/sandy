@@ -7,6 +7,18 @@ import { SandyMcpServer, handlerProgressCallback } from "./mcp-server"
 import { listEmbeddedResourceUris, readEmbeddedResource } from "./embedded-fs"
 import type { RunOptions } from "./types"
 
+const tmpDir = join(import.meta.dir, "../.tmp-test-mcp-server")
+
+beforeEach(() => {
+  mkdirSync(tmpDir, { recursive: true })
+  process.chdir(tmpDir)
+})
+
+afterEach(() => {
+  process.chdir(join(import.meta.dir, ".."))
+  rmSync(tmpDir, { recursive: true, force: true })
+})
+
 type RunCall = { method: "run"; opts: RunOptions }
 
 const LOG_FILE_RE = /^mcp\.pid-\d+\.\d{8}-\d{6}\.log$/
