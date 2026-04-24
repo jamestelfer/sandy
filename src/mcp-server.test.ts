@@ -1,22 +1,29 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs"
 import { join } from "node:path"
+import { humanId } from "human-id"
 import { createLogger } from "./logger"
 import { DummyBackend } from "./dummy-backend"
 import { SandyMcpServer, handlerProgressCallback } from "./mcp-server"
 import { listEmbeddedResourceUris, readEmbeddedResource } from "./embedded-fs"
 import type { RunOptions } from "./types"
 
-const tmpDir = join(import.meta.dir, "../.tmp-test-mcp-server")
+const repoRoot = join(import.meta.dir, "..")
+const testTmpRoot = join(repoRoot, ".sandy", ".test-tmp")
+let testTmpDir: string | null = null
 
 beforeEach(() => {
-  mkdirSync(tmpDir, { recursive: true })
-  process.chdir(tmpDir)
+  testTmpDir = join(testTmpRoot, humanId({ separator: "-", capitalize: false }))
+  mkdirSync(testTmpDir, { recursive: true })
+  process.chdir(testTmpDir)
 })
 
 afterEach(() => {
-  process.chdir(join(import.meta.dir, ".."))
-  rmSync(tmpDir, { recursive: true, force: true })
+  process.chdir(repoRoot)
+  if (testTmpDir) {
+    rmSync(testTmpDir, { recursive: true, force: true })
+    testTmpDir = null
+  }
 })
 
 type RunCall = { method: "run"; opts: RunOptions }
@@ -386,7 +393,7 @@ describe("logging", () => {
   }
 
   function setup(level: string = "info") {
-    const logDir = join(import.meta.dir, "../.tmp-test-mcp-log")
+    const logDir = join(process.cwd(), "mcp-log")
     rmSync(logDir, { recursive: true, force: true })
     mkdirSync(logDir, { recursive: true })
     process.env.XDG_STATE_HOME = logDir
@@ -413,8 +420,6 @@ describe("logging", () => {
   }
 
   afterEach(() => {
-    const logDir = join(import.meta.dir, "../.tmp-test-mcp-log")
-    rmSync(logDir, { recursive: true, force: true })
     delete process.env.XDG_STATE_HOME
   })
 
