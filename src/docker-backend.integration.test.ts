@@ -7,6 +7,7 @@ import { makeTmpDir } from "./tmpdir"
 const noop = new OutputHandler(() => {})
 
 const SKIP = !process.env.INTEGRATION
+const SKIP_SLOW = SKIP || !process.env.SLOW_TEST
 const TIMEOUT = 300_000
 
 describe("DockerBackend integration", () => {
@@ -33,10 +34,13 @@ describe("DockerBackend integration", () => {
       const path = await import("node:path")
       const fs = await import("node:fs/promises")
       await using sessionDir = await makeTmpDir("sandy-integration-")
-      await using scriptDir = await makeTmpDir("sandy-scripts-")
+      const scriptsDir = path.join(sessionDir.path, "scripts")
+      const outputDir = path.join(sessionDir.path, "output")
+      await fs.mkdir(scriptsDir, { recursive: true })
+      await fs.mkdir(outputDir, { recursive: true })
 
-      // Write a trivial TypeScript script
-      const scriptPath = path.join(scriptDir.path, "hello.ts")
+      // Write a trivial TypeScript script in the session scripts directory
+      const scriptPath = path.join(scriptsDir, "hello.ts")
       await fs.writeFile(scriptPath, 'console.log("[-->  hello from docker")\n')
 
       const result = await backend.run(
@@ -77,7 +81,7 @@ describe("DockerBackend integration", () => {
   )
 
   // Force-delete removes both tags — run after soft-delete test to rebuild first
-  test.skipIf(SKIP)(
+  test.skipIf(SKIP_SLOW)(
     "imageDelete with force removes sandy:latest and sandy:layer-retention",
     async () => {
       const docker = new Docker()
