@@ -3,8 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { createLogger, noopLogger, stateDir } from "./logging"
-import type { TmpDir } from "./resources"
-import { makeTmpDir } from "./resources"
+import { makeTmpDir, type TmpDir } from "./resources"
 
 let testTmpDir: TmpDir
 

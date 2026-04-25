@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { RunOptions } from "./core"
-import { DEFAULT_REGION, VM_OUTPUT_DIR } from "./core"
+import { DEFAULT_REGION, type RunOptions, VM_OUTPUT_DIR } from "./core"
 import { buildRunEnv } from "./execution"
 
 const baseOpts: RunOptions = {

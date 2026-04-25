@@ -2,8 +2,7 @@ import { readFileSync } from "node:fs"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import { pack as packTar } from "tar-fs"
-import type { RunOptions, RunResult } from "../core"
-import { VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "../core"
+import { type RunOptions, type RunResult, VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "../core"
 // Dockerfile — embedded in binary by Bun at build time
 import dockerfilePath from "../docker/Dockerfile" with { type: "file" }
 import { buildRunEnv, OutputTracker } from "../execution"

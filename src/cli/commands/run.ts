@@ -1,6 +1,5 @@
 import type { CommandModule } from "yargs"
-import type { ProgressCallback } from "../../core"
-import { DEFAULT_REGION } from "../../core"
+import { DEFAULT_REGION, type ProgressCallback } from "../../core"
 import { OutputHandler } from "../../output"
 import type { Backend } from "../../sandbox"
 import { establishWorkDir, Session } from "../../session"

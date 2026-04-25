@@ -5,8 +5,7 @@ import { Readable } from "node:stream"
 import { extract as extractTar } from "tar-stream"
 import { OutputHandler } from "./output"
 import { makeTmpDir } from "./resources"
-import type { DockerClientLike } from "./sandbox"
-import { DockerBackend, defaultBuildContextFactory } from "./sandbox"
+import { DockerBackend, type DockerClientLike, defaultBuildContextFactory } from "./sandbox"
 import { fakeBuildContext, makeDockerFake } from "./test-support"
 
 describe("defaultBuildContextFactory", () => {

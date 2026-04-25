@@ -4,8 +4,7 @@ import { join } from "node:path"
 import type { RunOptions } from "./core"
 import { OutputHandler } from "./output"
 import { makeTmpDir } from "./resources"
-import type { SandboxFactory } from "./sandbox"
-import { ShuruBackend } from "./sandbox"
+import { type SandboxFactory, ShuruBackend } from "./sandbox"
 import { makeExecutor, makeSandboxFactory } from "./test-support"
 
 // Synthetic fixture paths — these never touch disk; the mock sandbox factory

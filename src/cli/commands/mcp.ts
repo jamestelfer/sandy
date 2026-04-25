@@ -1,7 +1,6 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import type { CommandModule } from "yargs"
-import type { Logger } from "../../logging"
-import { createLogger } from "../../logging"
+import { createLogger, type Logger } from "../../logging"
 import { SandyMcpServer } from "../../mcp"
 import type { Backend } from "../../sandbox"
 import { establishWorkDir } from "../../session"

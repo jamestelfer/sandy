@@ -1,7 +1,6 @@
 import { basename, join } from "node:path"
 import type { CommandModule } from "yargs"
-import type { ProgressCallback } from "../../core"
-import { DEFAULT_REGION } from "../../core"
+import { DEFAULT_REGION, type ProgressCallback } from "../../core"
 import { OutputHandler } from "../../output"
 import { extractEmbeddedChecks } from "../../resources"
 import type { Backend } from "../../sandbox"
