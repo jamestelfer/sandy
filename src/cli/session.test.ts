@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
-import { useTestCwdIsolation } from "../test-support/isolated-cwd"
+import { useTestCwdIsolation } from "../test-support"
 import { runSessionCreate } from "./commands/session"
 
 const isolatedCwd = useTestCwdIsolation()

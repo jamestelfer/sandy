@@ -1,10 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import Docker from "dockerode"
-import { OutputHandler } from "./output/handler"
-import { DockerBackend } from "./sandbox/docker-backend"
-import { Session } from "./session/session"
-import { establishWorkDir } from "./session/workdir"
-import { useTestCwdIsolation } from "./test-support/isolated-cwd"
+import { OutputHandler } from "./output"
+import { DockerBackend } from "./sandbox"
+import { establishWorkDir, Session } from "./session"
+import { useTestCwdIsolation } from "./test-support"
 
 useTestCwdIsolation()
 

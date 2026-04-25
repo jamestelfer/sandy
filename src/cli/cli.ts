@@ -1,7 +1,7 @@
 import yargs, { type Argv } from "yargs"
 import { hideBin } from "yargs/helpers"
-import type { ProgressCallback } from "../core/types"
-import type { Backend } from "../sandbox/backend"
+import type { ProgressCallback } from "../core"
+import type { Backend } from "../sandbox"
 import { registerCommands } from "./commands"
 
 export function makeCli(

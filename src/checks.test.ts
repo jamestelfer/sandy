@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
-import { extractEmbeddedChecks } from "./resources/checks"
-import { Session } from "./session/session"
-import { useTestCwdIsolation } from "./test-support/isolated-cwd"
+import { extractEmbeddedChecks } from "./resources"
+import { Session } from "./session"
+import { useTestCwdIsolation } from "./test-support"
 
 useTestCwdIsolation()
 

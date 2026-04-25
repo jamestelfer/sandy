@@ -7,11 +7,9 @@ import { runConfig } from "./cli/commands/config"
 import { runImage } from "./cli/commands/image"
 import { runMcp } from "./cli/commands/mcp"
 import { makeRunCommand, runRun } from "./cli/commands/run"
-import { noopLogger } from "./logging/logger"
-import { Session } from "./session/session"
-import { establishWorkDir } from "./session/workdir"
-import { DummyBackend } from "./test-support/dummy-backend"
-import { useTestCwdIsolation } from "./test-support/isolated-cwd"
+import { noopLogger } from "./logging"
+import { establishWorkDir, Session } from "./session"
+import { DummyBackend, useTestCwdIsolation } from "./test-support"
 
 const isolatedCwd = useTestCwdIsolation()
 

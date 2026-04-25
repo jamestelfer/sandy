@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { parseProgressLine } from "./output/progress"
+import { parseProgressLine } from "./output"
 
 describe("parseProgressLine", () => {
   it("detects a progress line", () => {

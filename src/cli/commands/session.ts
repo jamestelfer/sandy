@@ -1,6 +1,5 @@
 import type { CommandModule } from "yargs"
-import { Session } from "../../session/session"
-import { establishWorkDir } from "../../session/workdir"
+import { establishWorkDir, Session } from "../../session"
 
 export interface SessionCreateResult {
   sessionName: string

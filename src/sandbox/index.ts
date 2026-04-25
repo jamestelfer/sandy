@@ -1,4 +1,17 @@
 export type { Backend } from "./backend"
-export { DockerBackend } from "./docker-backend"
+export {
+  type BuildContextFactory,
+  type ContainerLike,
+  DockerBackend,
+  type DockerClientLike,
+  defaultBuildContextFactory,
+  type ImageLike,
+} from "./docker-backend"
 export { createBackend } from "./factory"
-export { ShuruBackend } from "./shuru-backend"
+export {
+  type SandboxFactory,
+  type SandboxLike,
+  type ShellExecutor,
+  ShuruBackend,
+  type SpawnHandleLike,
+} from "./shuru-backend"

@@ -1,6 +1,6 @@
 import type { Argv } from "yargs"
-import type { ProgressCallback } from "../../core/types"
-import type { Backend } from "../../sandbox/backend"
+import type { ProgressCallback } from "../../core"
+import type { Backend } from "../../sandbox"
 import { makeCheckCommand } from "./check"
 import configCommand from "./config"
 import { makeImageCommand } from "./image"

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test"
-import type { RunOptions } from "./core/types"
-import { OutputHandler } from "./output/handler"
-import { DummyBackend } from "./test-support/dummy-backend"
+import type { RunOptions } from "./core"
+import { OutputHandler } from "./output"
+import { DummyBackend } from "./test-support"
 
 const testOpts: RunOptions = {
   scriptPath: "foo.ts",

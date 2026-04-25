@@ -1,6 +1,6 @@
-import { makeCli } from "./cli/cli"
-import type { ProgressCallback } from "./core/types"
-import { createBackend } from "./sandbox/factory"
+import { makeCli } from "./cli"
+import type { ProgressCallback } from "./core"
+import { createBackend } from "./sandbox"
 
 const onProgress: ProgressCallback = (msg: string) => {
   const underline = "─".repeat(msg.length)

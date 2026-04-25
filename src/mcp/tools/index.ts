@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol"
 import type { ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types"
 import { z } from "zod"
-import type { Logger } from "../../logging/logger"
+import type { Logger } from "../../logging"
 import type {
   SandyCheckResult,
   SandyRunParams,

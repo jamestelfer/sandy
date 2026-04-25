@@ -1,4 +1,4 @@
-import type { ProgressCallback } from "../core/types"
+import type { ProgressCallback } from "../core"
 import { LineWriter } from "./line-writer"
 import { parseProgressLine } from "./progress"
 

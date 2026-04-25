@@ -6,9 +6,9 @@ import {
   embeddedPathFromUri,
   getEmbeddedFS,
   listEmbeddedResourceUris,
+  makeTmpDir,
   readEmbeddedResource,
-} from "./resources/embedded-fs"
-import { makeTmpDir } from "./resources/tmpdir"
+} from "./resources"
 
 describe("embedded filesystem", () => {
   test("memoises initialisation promise", () => {

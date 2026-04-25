@@ -1,13 +1,11 @@
 import * as path from "node:path"
 import type { StartOptions } from "@superhq/shuru"
 import { Sandbox } from "@superhq/shuru"
-import type { RunOptions, RunResult } from "../core/types"
-import { VM_BOOTSTRAP, VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "../core/types"
-import { buildRunEnv } from "../execution/run-env"
-import { OutputTracker } from "../execution/scan-output"
-import type { OutputHandler } from "../output/handler"
-import { stageBootstrapFiles } from "../resources/bootstrap-staging"
-import { makeTmpDir } from "../resources/tmpdir"
+import type { RunOptions, RunResult } from "../core"
+import { VM_BOOTSTRAP, VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "../core"
+import { buildRunEnv, OutputTracker } from "../execution"
+import type { OutputHandler } from "../output"
+import { makeTmpDir, stageBootstrapFiles } from "../resources"
 import type { Backend } from "./backend"
 
 export type ShellExecutor = (

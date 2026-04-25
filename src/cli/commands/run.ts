@@ -1,10 +1,9 @@
 import type { CommandModule } from "yargs"
-import type { ProgressCallback } from "../../core/types"
-import { DEFAULT_REGION } from "../../core/types"
-import { OutputHandler } from "../../output/handler"
-import type { Backend } from "../../sandbox/backend"
-import { Session } from "../../session/session"
-import { establishWorkDir } from "../../session/workdir"
+import type { ProgressCallback } from "../../core"
+import { DEFAULT_REGION } from "../../core"
+import { OutputHandler } from "../../output"
+import type { Backend } from "../../sandbox"
+import { establishWorkDir, Session } from "../../session"
 
 export interface RunArgs {
   script: string

@@ -3,8 +3,8 @@ import { existsSync, symlinkSync, writeFileSync } from "node:fs"
 import { mkdtemp, readFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { Session } from "./session/session"
-import { useTestCwdIsolation } from "./test-support/isolated-cwd"
+import { Session } from "./session"
+import { useTestCwdIsolation } from "./test-support"
 
 const isolatedCwd = useTestCwdIsolation()
 

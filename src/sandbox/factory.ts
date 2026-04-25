@@ -1,5 +1,5 @@
 import Docker from "dockerode"
-import { type Config, readConfig } from "../core/config"
+import { type Config, readConfig } from "../core"
 import type { Backend } from "./backend"
 import { DockerBackend, type DockerClientLike } from "./docker-backend"
 import { ShuruBackend } from "./shuru-backend"
