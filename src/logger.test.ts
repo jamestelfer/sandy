@@ -1,20 +1,20 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs"
-import { join } from "node:path"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
+import { join } from "node:path"
 import { createLogger, noopLogger, stateDir } from "./logger"
+import type { TmpDir } from "./tmpdir"
+import { makeTmpDir } from "./tmpdir"
 
-const testTmpDir = join(import.meta.dir, "..", ".tmp-test-logger")
+let testTmpDir: TmpDir
 
-beforeEach(() => {
-  mkdirSync(testTmpDir, { recursive: true })
-  process.env.XDG_STATE_HOME = testTmpDir
+beforeEach(async () => {
+  testTmpDir = await makeTmpDir("logger-test-")
+  process.env.XDG_STATE_HOME = testTmpDir.path
 })
 
-afterEach(() => {
-  if (existsSync(testTmpDir)) {
-    rmSync(testTmpDir, { recursive: true, force: true })
-  }
+afterEach(async () => {
+  await testTmpDir[Symbol.asyncDispose]()
   delete process.env.XDG_STATE_HOME
   delete process.env.SANDY_LOG_LEVEL
 })
@@ -42,7 +42,7 @@ function readLog(): string[] {
 
 describe("stateDir", () => {
   test("uses XDG_STATE_HOME when set", () => {
-    expect(stateDir()).toBe(join(testTmpDir, "sandy"))
+    expect(stateDir()).toBe(join(testTmpDir.path, "sandy"))
   })
 
   test("falls back to ~/.local/state/sandy when XDG_STATE_HOME is unset", () => {

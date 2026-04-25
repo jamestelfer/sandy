@@ -5,80 +5,93 @@ description: Run TypeScript scripts in sandboxed microVMs or Docker containers w
 
 # Sandy
 
-Sandy executes TypeScript scripts in disposable sandboxed environments (Shuru microVMs or Docker containers) with AWS credentials provided via IMDS. The CLI exposes subcommands for managing the sandbox and running scripts.
+Sandy executes TypeScript scripts in disposable sandboxed environments (Shuru microVMs or Docker containers) with AWS credentials from IMDS.
+
+The CLI uses explicit sessions. Create one first, then run scripts from that session’s `scripts/` directory.
 
 ## Setup
 
-Before running scripts, read the scripting guide:
+Read the scripting guide before writing scripts:
 
 ```
 sandy resource sandy://skills/cli/resources/scripting-guide.md
 ```
 
-This contains the runtime environment, available AWS SDK packages, scripting constraints, and mandatory patterns.
+This guide defines runtime constraints, available AWS SDK packages, and the required async generator pattern.
 
 ## IMDS port
 
-AWS credentials are provided via an IMDS server on the host. Start one separately and note the port number (e.g. `9001`) to pass to `sandy run` and `sandy check connect`.
+Start an IMDS server separately and pass its port to `sandy run` and `sandy check connect`.
 
 ## CLI commands
 
 ### sandy image
 
-Create or delete the Sandy sandbox image. Run once before using `sandy run`.
+Create or delete the Sandy sandbox image.
 
 ```
 sandy image create
 sandy image delete
-sandy image delete --force   # clean rebuild, removes cached layers
+sandy image delete --force
+```
+
+### sandy session create
+
+Create a session and print the session name plus scripts path.
+
+```
+sandy session create
 ```
 
 ### sandy check
 
-Verify the sandbox environment is working.
+Verify sandbox health. Each check creates and deletes an ephemeral session; no session argument is accepted.
 
 ```
-sandy check baseline                         # no AWS needed
-sandy check connect --imds-port 9001         # requires IMDS port
+sandy check baseline
+sandy check connect --imds-port 9001
 sandy check connect --imds-port 9001 --region ap-southeast-2
 ```
 
 ### sandy run
 
-Run a TypeScript script in the sandbox.
+Run a TypeScript script from `<session>/scripts/`.
 
 ```
-sandy run --script /path/to/script.ts --imds-port 9001
-sandy run --script /path/to/script.ts --imds-port 9001 --region ap-southeast-2
-sandy run --script /path/to/script.ts --imds-port 9001 --session happy-fox-trail
-sandy run --script /path/to/script.ts --imds-port 9001 -- arg1 arg2
+sandy run --session happy-fox-trail --script inventory.ts --imds-port 9001
+sandy run --session happy-fox-trail --script inventory.ts --imds-port 9001 --region ap-southeast-2
+sandy run --session happy-fox-trail --script inventory.ts --imds-port 9001 -- arg1 arg2
 ```
 
 Options:
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--script` | yes | Path to the TypeScript file |
+| `--session` | yes | Session name |
+| `--script` | yes | Script path relative to `<session>/scripts/` |
 | `--imds-port` | yes | Port of the running IMDS server |
 | `--region` | no | AWS region (default `us-west-2`) |
-| `--session` | no | Reuse a previous session's output directory |
-| `--output-dir` | no | Override the output directory path |
 | `--` | no | Arguments passed as `process.argv` inside the script |
 
-Output files written to `process.env.SANDY_OUTPUT` inside the sandbox appear in `.sandy/<session>/` on the host.
+Session layout on the host:
+
+- `.sandy/<session>/scripts/` mounted read-only at `/workspace/scripts`
+- `.sandy/<session>/output/` mounted read-write at `/workspace/output`
+
+Scripts should write files under `process.env.SANDY_OUTPUT`.
 
 ### sandy resource
 
 List or read embedded resources.
 
 ```
-sandy resource                                                    # list all resource URIs
-sandy resource sandy://skills/cli/resources/scripting-guide.md    # read a resource
+sandy resource
+sandy resource sandy://skills/cli/resources/scripting-guide.md
 ```
 
 ### sandy prime
 
-Print the full skill text (this file) to stdout.
+Print the full skill text to stdout.
 
 ```
 sandy prime
@@ -86,13 +99,9 @@ sandy prime
 
 ## Resources
 
-Read these before writing scripts:
-
-| Resource | Content |
-|----------|---------|
-| `sandy://skills/cli/resources/scripting-guide.md` | Runtime environment, packages, constraints, async generator pattern |
-| `sandy://skills/cli/resources/examples/ec2_describe.ts` | Example: describe EC2 instances with pagination |
-| `sandy://skills/cli/resources/examples/ecs_services.ts` | Example: list ECS services with running/desired counts |
+- `sandy://skills/cli/resources/scripting-guide.md`
+- `sandy://skills/cli/resources/examples/ec2_describe.ts`
+- `sandy://skills/cli/resources/examples/ecs_services.ts`
 
 ```
 sandy resource sandy://skills/cli/resources/scripting-guide.md
@@ -102,10 +111,11 @@ sandy resource sandy://skills/cli/resources/examples/ecs_services.ts
 
 ## Typical workflow
 
-1. Read the scripting guide: `sandy resource sandy://skills/cli/resources/scripting-guide.md`
-2. Start an IMDS server and note the port
-3. `sandy image create` if image not yet built
-4. `sandy check connect --imds-port <port>` to verify connectivity
-5. Write script following the async generator pattern from the guide
-6. `sandy run --script path/to/script.ts --imds-port <port>`
-7. Read output from the session directory or stdout
+1. Read the scripting guide.
+2. Start an IMDS server and note the port.
+3. Run `sandy image create` if needed.
+4. Run `sandy session create` and note the scripts path.
+5. Write a script into that scripts directory.
+6. Run `sandy check connect --imds-port <port>`.
+7. Run `sandy run --session <name> --script file.ts --imds-port <port>`.
+8. Read outputs from `.sandy/<session>/output/` or stdout.

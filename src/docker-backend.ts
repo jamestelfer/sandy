@@ -1,19 +1,17 @@
-import * as path from "node:path"
-import * as fs from "node:fs/promises"
 import { readFileSync } from "node:fs"
-import { spawn } from "node:child_process"
-import { makeTmpDir } from "./tmpdir"
+import * as fs from "node:fs/promises"
+import * as path from "node:path"
+import { pack as packTar } from "tar-fs"
 import type { Backend } from "./backend"
-import type { RunOptions, RunResult } from "./types"
-import { VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "./types"
-import type { OutputHandler } from "./output-handler"
-
-import { OutputTracker } from "./scan-output"
-import { buildRunEnv } from "./run-env"
 import { stageBootstrapFiles } from "./bootstrap-staging"
-
 // Dockerfile — embedded in binary by Bun at build time
 import dockerfilePath from "./docker/Dockerfile" with { type: "file" }
+import type { OutputHandler } from "./output-handler"
+import { buildRunEnv } from "./run-env"
+import { OutputTracker } from "./scan-output"
+import { makeTmpDir } from "./tmpdir"
+import type { RunOptions, RunResult } from "./types"
+import { VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "./types"
 
 const DOCKERFILE = readFileSync(dockerfilePath, "utf-8")
 
@@ -54,11 +52,8 @@ export async function defaultBuildContextFactory(): Promise<
 
   // Attach staging dir cleanup to the stream so the caller can dispose after
   // Docker finishes reading — no need to buffer the tar in memory.
-  const proc = spawn("tar", ["-c", "."], { cwd: staging.path })
-  if (!proc.stdout) {
-    throw new Error("tar process has no stdout")
-  }
-  return Object.assign(proc.stdout, { [Symbol.asyncDispose]: () => staging[Symbol.asyncDispose]() })
+  const tarStream = packTar(staging.path)
+  return Object.assign(tarStream, { [Symbol.asyncDispose]: () => staging[Symbol.asyncDispose]() })
 }
 
 // Parse Docker's multiplexed log stream format and route frames to OutputHandler.
@@ -156,7 +151,9 @@ export class DockerBackend implements Backend {
   }
 
   async run(opts: RunOptions, handler: OutputHandler): Promise<RunResult> {
-    const scriptDirPath = path.dirname(path.resolve(opts.scriptPath))
+    const sessionDir = path.resolve(opts.sessionDir)
+    const scriptDirPath = path.join(sessionDir, "scripts")
+    const outputDirPath = path.join(sessionDir, "output")
     const scriptName = path.basename(opts.scriptPath, ".ts")
     const compiledPath = `/workspace/dist/scripts/${scriptName}.js`
     const imdsEndpoint = `http://host.docker.internal:${opts.imdsPort}`
@@ -167,7 +164,7 @@ export class DockerBackend implements Backend {
       Cmd: [compiledPath, ...(opts.scriptArgs ?? [])],
       Env: Object.entries(env).map(([k, v]) => `${k}=${v}`),
       HostConfig: {
-        Binds: [`${scriptDirPath}:${VM_SCRIPTS_DIR}:ro`, `${opts.sessionDir}:${VM_OUTPUT_DIR}:rw`],
+        Binds: [`${scriptDirPath}:${VM_SCRIPTS_DIR}:ro`, `${outputDirPath}:${VM_OUTPUT_DIR}:rw`],
         // host.docker.internal resolves on macOS/Windows by default; on Linux the
         // host-gateway alias is required to make it resolve to the Docker bridge IP.
         ExtraHosts: ["host.docker.internal:host-gateway"],
@@ -177,7 +174,7 @@ export class DockerBackend implements Backend {
       },
     })
 
-    const tracker = await OutputTracker.create(opts.sessionDir)
+    const tracker = await OutputTracker.create(outputDirPath)
 
     try {
       await container.start()

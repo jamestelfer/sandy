@@ -1,87 +1,139 @@
 import { describe, expect, it } from "bun:test"
-import { existsSync, readFileSync, writeFileSync } from "node:fs"
-import { join, resolve } from "node:path"
-import { createSession, validateSessionName } from "./session"
+import { existsSync, symlinkSync, writeFileSync } from "node:fs"
+import { mkdtemp, readFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { Session } from "./session"
 import { useTestCwdIsolation } from "./test-tooling/isolated-cwd"
 
 const isolatedCwd = useTestCwdIsolation()
 
-describe("validateSessionName", () => {
-  it("accepts valid humanId-style names", () => {
-    expect(() => validateSessionName("quick-brown-fox")).not.toThrow()
-    expect(() => validateSessionName("ab-cd")).not.toThrow()
+describe("Session", () => {
+  describe("create", () => {
+    it("generates a humanId-shaped name and creates dir/scripts/output", async () => {
+      const session = await Session.create()
+      expect(session.name).toMatch(/^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)+$/)
+      expect(session.dir).toBe(join(isolatedCwd.currentDir(), session.name))
+      expect(session.scriptsDir).toBe(join(session.dir, "scripts"))
+      expect(session.outputDir).toBe(join(session.dir, "output"))
+      expect(existsSync(session.scriptsDir)).toBe(true)
+      expect(existsSync(session.outputDir)).toBe(true)
+    })
+
+    it("returns a different name on each call", async () => {
+      const a = await Session.create()
+      const b = await Session.create()
+      expect(a.name).not.toBe(b.name)
+    })
+
+    it("captures baseDir at construction — later chdir does not move the session", async () => {
+      const session = await Session.create()
+      const originalDir = session.dir
+      const tmp = await mkdtemp(join(tmpdir(), "other-"))
+      process.chdir(tmp)
+      expect(session.dir).toBe(originalDir)
+    })
   })
 
-  it("rejects path traversal attempts", () => {
-    expect(() => validateSessionName("../../.ssh")).toThrow("invalid session name")
-    expect(() => validateSessionName("../evil")).toThrow("invalid session name")
+  describe("ephemeral", () => {
+    it("returns a disposable session whose dir is removed on scope exit", async () => {
+      let dirDuring = ""
+      {
+        await using session = await Session.ephemeral()
+        dirDuring = session.dir
+        expect(existsSync(dirDuring)).toBe(true)
+      }
+      expect(existsSync(dirDuring)).toBe(false)
+    })
+
+    it("explicit delete also removes the dir", async () => {
+      const session = await Session.ephemeral()
+      const dir = session.dir
+      await session.delete()
+      expect(existsSync(dir)).toBe(false)
+    })
   })
 
-  it("rejects names with slashes", () => {
-    expect(() => validateSessionName("foo/bar")).toThrow("invalid session name")
-    expect(() => validateSessionName("/etc/shadow")).toThrow("invalid session name")
+  describe("resume", () => {
+    it("returns a Session for an existing session dir", async () => {
+      const created = await Session.create()
+      const resumed = await Session.resume(created.name)
+      expect(resumed.name).toBe(created.name)
+      expect(resumed.dir).toBe(created.dir)
+    })
+
+    it("throws when the session dir does not exist", async () => {
+      await expect(Session.resume("never-was-here")).rejects.toThrow(/session not found/)
+    })
+
+    it("throws on invalid name format", async () => {
+      await expect(Session.resume("../../.ssh")).rejects.toThrow(/invalid session name/)
+    })
+
+    it("rejects single-word names", async () => {
+      await expect(Session.resume("singleword")).rejects.toThrow(/invalid session name/)
+    })
+
+    it("rejects empty name", async () => {
+      await expect(Session.resume("")).rejects.toThrow(/invalid session name/)
+    })
+
+    it("describes expected format for invalid names", async () => {
+      await expect(Session.resume("invalid")).rejects.toThrow(
+        /expected lowercase hyphen-separated words/,
+      )
+    })
   })
 
-  it("rejects single-word names (must match humanId two-word minimum)", () => {
-    expect(() => validateSessionName("singleword")).toThrow("invalid session name")
+  describe("resolveScript", () => {
+    it("returns absolute path for a valid script", async () => {
+      const session = await Session.create()
+      await session.writeScript("hello.ts", "console.log('ok')")
+      expect(await session.resolveScript("hello.ts")).toBe(join(session.scriptsDir, "hello.ts"))
+    })
+
+    it("rejects paths escaping the scripts dir", async () => {
+      const session = await Session.create()
+      await expect(session.resolveScript("../escape.ts")).rejects.toThrow(
+        /must be within the session scripts directory/,
+      )
+    })
+
+    it("throws if the script is missing", async () => {
+      const session = await Session.create()
+      await expect(session.resolveScript("missing.ts")).rejects.toThrow(/script not found/)
+    })
+
+    it("rejects symlinks", async () => {
+      const session = await Session.create()
+      const outside = join(session.dir, "outside.ts")
+      writeFileSync(outside, "console.log('x')")
+      symlinkSync(outside, join(session.scriptsDir, "linked.ts"))
+      await expect(session.resolveScript("linked.ts")).rejects.toThrow(/must not be a symlink/)
+    })
   })
 
-  it("rejects empty string", () => {
-    expect(() => validateSessionName("")).toThrow("invalid session name")
-  })
-})
+  describe("writeScript", () => {
+    it("writes content and returns absolute path", async () => {
+      const session = await Session.create()
+      const path = await session.writeScript("a/b.ts", "console.log('nested')")
+      expect(path).toBe(join(session.scriptsDir, "a", "b.ts"))
+      expect(await readFile(path, "utf8")).toBe("console.log('nested')")
+    })
 
-describe("createSession", () => {
-  it("returns a lowercase hyphen-separated name when no name given", async () => {
-    const { name } = await createSession()
-    expect(name).toMatch(/^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)+$/)
-  })
+    it("rejects paths escaping the scripts dir", async () => {
+      const session = await Session.create()
+      await expect(session.writeScript("../../escape.ts", "x")).rejects.toThrow(
+        /must be within the session scripts directory/,
+      )
+    })
 
-  it("returns a different name on each call", async () => {
-    const a = await createSession()
-    const b = await createSession()
-    expect(a.name).not.toBe(b.name)
-  })
-
-  it("creates <name>/ directory under CWD", async () => {
-    const { name } = await createSession()
-    expect(existsSync(join(isolatedCwd.currentDir(), name))).toBe(true)
-  })
-
-  it("creates .gitignore with * if absent", async () => {
-    await createSession()
-    const content = readFileSync(join(isolatedCwd.currentDir(), ".gitignore"), "utf8")
-    expect(content).toBe("*\n")
-  })
-
-  it("does not overwrite an existing .gitignore", async () => {
-    writeFileSync(join(isolatedCwd.currentDir(), ".gitignore"), "existing\n")
-    await createSession()
-    const content = readFileSync(join(isolatedCwd.currentDir(), ".gitignore"), "utf8")
-    expect(content).toBe("existing\n")
-  })
-
-  it("rejects path traversal in provided name", async () => {
-    await expect(createSession("../../.ssh")).rejects.toThrow("invalid session name")
-  })
-
-  it("uses the provided name when given", async () => {
-    const { name, dir } = await createSession("my-session")
-    expect(name).toBe("my-session")
-    expect(dir).toBe(resolve(isolatedCwd.currentDir(), "my-session"))
-    expect(existsSync(join(isolatedCwd.currentDir(), "my-session"))).toBe(true)
-  })
-
-  it("uses the provided dir when given, ignoring the default <name>/ path", async () => {
-    const customDir = join(isolatedCwd.currentDir(), "custom-output")
-    const { dir } = await createSession(undefined, customDir)
-    expect(dir).toBe(customDir)
-    expect(existsSync(customDir)).toBe(true)
-  })
-
-  it("still generates a session name when only dir is provided", async () => {
-    const customDir = join(isolatedCwd.currentDir(), "custom-output")
-    const { name } = await createSession(undefined, customDir)
-    expect(name).toMatch(/^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)+$/)
+    it("refuses to overwrite a symlink", async () => {
+      const session = await Session.create()
+      const outside = join(session.dir, "outside.ts")
+      writeFileSync(outside, "x")
+      symlinkSync(outside, join(session.scriptsDir, "linked.ts"))
+      await expect(session.writeScript("linked.ts", "new")).rejects.toThrow(/must not be a symlink/)
+    })
   })
 })

@@ -7,6 +7,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 Apply these rules to all prose, commit messages, PR descriptions, and user-facing text.
 
 - Technical-professional register. Use terms directly without over-explanation.
+- Use Conventional Commit leads for all commit messages and PR descriptions.
 - Guides: second person, imperative mood. Start instructions with the verb.
 - Reference: third person, declarative mood. Describe what things are and do.
 - No first person ("I", "we") anywhere except `Acknowledgements`.
@@ -40,12 +41,22 @@ Unit tests (`*.test.ts`) sit alongside source. Integration tests (`*.integration
 ## Dev Commands
 
 ```bash
-bun run agent       # lint:fix + format:fix + build + test — full CI cycle
-bun test            # unit tests only
-bun run build       # compile binary to dist/sandy
-bun run lint:fix    # auto-fix lint
-bun run format:fix  # auto-fix formatting
+bun run fix                 # apply lint and format fixes
+bun run verify              # non-mutating quality gate: biome check + build + unit tests + Docker integration test
+bun run agent               # fix then verify
+bun test                    # unit tests only
+bun run integration:docker  # Docker integration test
+bun run build               # compile binary to dist/sandy
 ```
+
+Use the fix/verify workflow for commit readiness. `verify` must pass without introducing file changes.
+
+## Commit rules
+
+- Structure commits for review. Keep each commit a clear logical implementation step.
+- Keep commits atomic. Move from tested working state to tested working state only.
+- Include required test changes in the same commit as the code changes they validate.
+- Use Conventional Commit messages for all commits.
 
 ## Code Style (Biome)
 

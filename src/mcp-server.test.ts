@@ -1,10 +1,11 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test"
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
-import { createLogger } from "./logger"
 import { DummyBackend } from "./dummy-backend"
-import { SandyMcpServer, handlerProgressCallback } from "./mcp-server"
 import { listEmbeddedResourceUris, readEmbeddedResource } from "./embedded-fs"
+import { createLogger } from "./logger"
+import { handlerProgressCallback, SandyMcpServer } from "./mcp-server"
+import { Session } from "./session"
 import { useTestCwdIsolation } from "./test-tooling/isolated-cwd"
 import type { RunOptions } from "./types"
 
@@ -22,40 +23,120 @@ function findRun(backend: DummyBackend): RunCall {
   return call
 }
 
+async function ensureSession(): Promise<Session> {
+  return Session.create()
+}
+
+async function createSessionScript(scriptName: string): Promise<Session> {
+  const session = await Session.create()
+  await session.writeScript(scriptName, "console.log('ok')")
+  return session
+}
+
 describe("sandy_run", () => {
   let backend: DummyBackend
   let server: SandyMcpServer
 
   beforeEach(() => {
     backend = new DummyBackend()
-    server = new SandyMcpServer(backend, process.cwd())
+    server = new SandyMcpServer(backend)
   })
 
   test("dispatches to backend and returns structured result", async () => {
     backend.runResult = { exitCode: 0, output: "hello\n[err] warn\n", outputFiles: [] }
+    const session = await createSessionScript("foo.ts")
 
-    const result = await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 })
+    const result = await server.handleSandyRun({
+      session: session.name,
+      script: "foo.ts",
+      imdsPort: 9001,
+    })
 
     expect(result.exitCode).toBe(0)
     expect(result.output).toContain("hello")
     expect(result.output).toContain("[err] warn")
-    expect(result.sessionName).toBeTruthy()
+    expect(result.sessionName).toBe(session.name)
     const call = findRun(backend)
-    expect(call.opts.scriptPath).toMatch(/foo\.ts$/)
-    expect(call.opts.scriptPath).toStartWith(process.cwd())
+    expect(call.opts.scriptPath).toBe(join(session.scriptsDir, "foo.ts"))
     expect(call.opts.imdsPort).toBe(9001)
   })
 
-  test("rejects script path outside the working directory", async () => {
-    await expect(server.handleSandyRun({ script: "/etc/shadow", imdsPort: 9001 })).rejects.toThrow(
-      "script path must be within the working directory",
+  test("rejects missing session with remediation", async () => {
+    await expect(
+      server.handleSandyRun({ session: "", script: "foo.ts", imdsPort: 9001 }),
+    ).rejects.toThrow("use sandy_create_session")
+  })
+
+  test("rejects unknown session with remediation", async () => {
+    await expect(
+      server.handleSandyRun({ session: "missing-session", script: "foo.ts", imdsPort: 9001 }),
+    ).rejects.toThrow("sandy_resume_session")
+  })
+
+  test("rejects missing script with full expected path", async () => {
+    const session = await ensureSession()
+
+    await expect(
+      server.handleSandyRun({ session: session.name, script: "missing.ts", imdsPort: 9001 }),
+    ).rejects.toThrow(/expected at .*missing\.ts/)
+  })
+
+  test("writes inline content before execution", async () => {
+    const session = await ensureSession()
+
+    await server.handleSandyRun({
+      session: session.name,
+      script: "inline.ts",
+      content: "console.log('inline')",
+      imdsPort: 9001,
+    })
+
+    expect(readFileSync(join(session.scriptsDir, "inline.ts"), "utf-8")).toBe(
+      "console.log('inline')",
     )
   })
 
-  test("rejects path traversal above working directory", async () => {
-    await expect(
-      server.handleSandyRun({ script: "../../outside.ts", imdsPort: 9001 }),
-    ).rejects.toThrow("script path must be within the working directory")
+  test("overwrites inline content on repeated runs", async () => {
+    const session = await ensureSession()
+
+    await server.handleSandyRun({
+      session: session.name,
+      script: "inline.ts",
+      content: "console.log('first')",
+      imdsPort: 9001,
+    })
+    await server.handleSandyRun({
+      session: session.name,
+      script: "inline.ts",
+      content: "console.log('second')",
+      imdsPort: 9001,
+    })
+
+    expect(readFileSync(join(session.scriptsDir, "inline.ts"), "utf-8")).toBe(
+      "console.log('second')",
+    )
+  })
+
+  test("allows parallel runs on the same session", async () => {
+    const session = await ensureSession()
+
+    await Promise.all([
+      server.handleSandyRun({
+        session: session.name,
+        script: "parallel-a.ts",
+        content: "console.log('a')",
+        imdsPort: 9001,
+      }),
+      server.handleSandyRun({
+        session: session.name,
+        script: "parallel-b.ts",
+        content: "console.log('b')",
+        imdsPort: 9001,
+      }),
+    ])
+
+    const runs = backend.calls.filter((c): c is RunCall => c.method === "run")
+    expect(runs.length).toBe(2)
   })
 })
 
@@ -68,37 +149,25 @@ describe("session management", () => {
     server = new SandyMcpServer(backend)
   })
 
-  test("session auto-created once and reused on subsequent sandy_run calls", async () => {
-    await server.handleSandyRun({ script: "a.ts", imdsPort: 9001 })
-    await server.handleSandyRun({ script: "b.ts", imdsPort: 9001 })
+  test("sandy_create_session returns session name and scripts path", async () => {
+    const created = await server.handleCreateSession()
 
-    const runs = backend.calls.filter((c): c is RunCall => c.method === "run")
-    expect(runs.length).toBe(2)
-    expect(runs[0].opts.session).toBe(runs[1].opts.session)
-    expect(runs[0].opts.sessionDir).toBe(runs[1].opts.sessionDir)
+    expect(created.sessionName).toMatch(/^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)+$/)
+    expect(created.scriptsPath).toMatch(/\/scripts$/)
   })
 
-  test("sandy_resume_session sets active session name for next run", async () => {
-    server.handleResumeSession("my-custom-session")
-    const result = await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 })
+  test("sandy_resume_session returns session details for an existing session", async () => {
+    const created = await ensureSession()
+    const resumed = await server.handleResumeSession(created.name)
 
-    expect(result.sessionName).toBe("my-custom-session")
-    const run = findRun(backend)
-    expect(run.opts.session).toBe("my-custom-session")
+    expect(resumed.sessionName).toBe(created.name)
+    expect(resumed.scriptsPath).toBe(created.scriptsDir)
   })
 
-  test("activeSession reset after resume does not reuse the resumed name", async () => {
-    server.handleResumeSession("session-a")
-    await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 })
-
-    // Force-clear activeSession without a new handleResumeSession call, simulating an
-    // internal reset (error recovery, reconnect, etc.) that bypasses handleResumeSession.
-    // Without the fix, resumedName is still "session-a" and would be reused.
-    ;(server as unknown as { activeSession: null }).activeSession = null
-
-    const result = await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 })
-
-    expect(result.sessionName).not.toBe("session-a")
+  test("sandy_resume_session rejects unknown sessions with remediation", async () => {
+    await expect(server.handleResumeSession("missing-session")).rejects.toThrow(
+      "sandy_create_session",
+    )
   })
 })
 
@@ -164,7 +233,7 @@ describe("sandy_check", () => {
     expect(result.output).toContain("sandy_image")
   })
 
-  test("baseline dispatches run with extracted baseline script path and imdsPort 0", async () => {
+  test("baseline dispatches run with staged baseline script path and imdsPort 0", async () => {
     backend.imageExistsResult = true
     await server.handleSandyCheck(() => {}, "baseline")
     const run = findRun(backend)
@@ -173,13 +242,34 @@ describe("sandy_check", () => {
     expect(run.opts.imdsPort).toBe(0)
   })
 
-  test("connect dispatches run with extracted connect script path and given imdsPort", async () => {
+  test("connect dispatches run with staged connect script path and given imdsPort", async () => {
     backend.imageExistsResult = true
     await server.handleSandyCheck(() => {}, "connect", 9001)
     const run = findRun(backend)
     expect(run.opts.scriptPath).toMatch(/connect\.ts$/)
     expect(run.opts.scriptPath).not.toBe("connect")
     expect(run.opts.imdsPort).toBe(9001)
+  })
+
+  test("ephemeral session directory is removed after run", async () => {
+    backend.imageExistsResult = true
+    await server.handleSandyCheck(() => {}, "baseline")
+    const run = findRun(backend)
+    expect(existsSync(run.opts.sessionDir)).toBe(false)
+  })
+
+  test("ephemeral session directory is removed when backend.run throws", async () => {
+    backend.imageExistsResult = true
+    let captured: { sessionDir: string } | undefined
+    backend.run = async (opts) => {
+      captured = { sessionDir: opts.sessionDir }
+      throw new Error("boom")
+    }
+    await expect(server.handleSandyCheck(() => {}, "baseline")).rejects.toThrow("boom")
+    expect(captured).toBeDefined()
+    if (captured) {
+      expect(existsSync(captured.sessionDir)).toBe(false)
+    }
   })
 })
 
@@ -220,8 +310,12 @@ describe("progress", () => {
   test("handleSandyRun forwards backend progress via onProgress", async () => {
     backend.progressLines = ["loading resources", "querying ec2"]
     const received: string[] = []
+    const session = await createSessionScript("foo.ts")
 
-    await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 }, (msg) => received.push(msg))
+    await server.handleSandyRun(
+      { session: session.name, script: "foo.ts", imdsPort: 9001 },
+      (msg) => received.push(msg),
+    )
 
     expect(received).toEqual(["loading resources", "querying ec2"])
   })
@@ -384,7 +478,7 @@ describe("logging", () => {
 
     const logger = createLogger(level)
     const backend = new DummyBackend()
-    const server = new SandyMcpServer(backend, process.cwd(), logger)
+    const server = new SandyMcpServer(backend, logger)
 
     function logLines(): LogRecord[] {
       const dir = join(logDir, "sandy")
@@ -409,7 +503,8 @@ describe("logging", () => {
 
   test("handleSandyRun logs invocation and completion", async () => {
     const { server, logLines } = setup()
-    await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 })
+    const session = await createSessionScript("foo.ts")
+    await server.handleSandyRun({ session: session.name, script: "foo.ts", imdsPort: 9001 })
 
     const logs = logLines()
     expect(logs.some((l) => l.fields.tool === "sandy_run" && l.msg === "invoked")).toBe(true)
@@ -444,22 +539,12 @@ describe("logging", () => {
     expect(logs.some((l) => l.msg === "no image found" && l.level === "error")).toBe(true)
   })
 
-  test("ensureSession logs session creation on first tool call", async () => {
-    const { server, logLines } = setup()
-    await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 })
-
-    const logs = logLines()
-    const sessionLog = logs.find((l) => l.msg === "session created")
-    expect(sessionLog?.fields.session).toBeTruthy()
-  })
-
   test("handler error is logged before re-throwing", async () => {
     const { server, logLines } = setup()
-    try {
-      await server.handleSandyRun({ script: "/etc/shadow", imdsPort: 9001 })
-    } catch {
-      // expected to throw
-    }
+
+    await expect(
+      server.handleSandyRun({ session: "", script: "foo.ts", imdsPort: 9001 }),
+    ).rejects.toThrow(/session is required/)
 
     const logs = logLines()
     expect(logs.some((l) => l.fields.tool === "sandy_run" && l.level === "error")).toBe(true)
@@ -468,8 +553,9 @@ describe("logging", () => {
   test("output lines logged at debug level when logger level is debug", async () => {
     const { backend, server, logLines } = setup("debug")
     backend.stdoutLines = ["hello from sandbox"]
+    const session = await createSessionScript("foo.ts")
 
-    await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 })
+    await server.handleSandyRun({ session: session.name, script: "foo.ts", imdsPort: 9001 })
 
     const lines = logLines()
     expect(lines.some((l) => l.fields.source === "output" && l.msg === "hello from sandbox")).toBe(
@@ -480,20 +566,22 @@ describe("logging", () => {
   test("output lines not logged when logger level is info", async () => {
     const { backend, server, logLines } = setup("info")
     backend.stdoutLines = ["hello from sandbox"]
+    const session = await createSessionScript("foo.ts")
 
-    await server.handleSandyRun({ script: "foo.ts", imdsPort: 9001 })
+    await server.handleSandyRun({ session: session.name, script: "foo.ts", imdsPort: 9001 })
 
     const lines = logLines()
     expect(lines.some((l) => l.fields.source === "output")).toBe(false)
   })
 
-  test("handleResumeSession logs session resume requested", () => {
+  test("handleResumeSession logs session resume requested", async () => {
     const { server, logLines } = setup()
-    server.handleResumeSession("my-session")
+    const session = await ensureSession()
+    await server.handleResumeSession(session.name)
 
     const logs = logLines()
     expect(
-      logs.some((l) => l.msg === "session resume requested" && l.fields.session === "my-session"),
+      logs.some((l) => l.msg === "session resume requested" && l.fields.session === session.name),
     ).toBe(true)
   })
 })

@@ -1,8 +1,7 @@
-import { resolve } from "node:path"
 import type { CommandModule } from "yargs"
 import type { Backend } from "../backend"
 import { OutputHandler } from "../output-handler"
-import { createSession } from "../session"
+import { Session } from "../session"
 import type { ProgressCallback } from "../types"
 import { DEFAULT_REGION } from "../types"
 import { establishWorkDir } from "../workdir"
@@ -11,8 +10,7 @@ export interface RunArgs {
   script: string
   imdsPort: number
   region: string
-  session?: string
-  outputDir?: string
+  session: string
   "--"?: string[]
 }
 
@@ -21,10 +19,12 @@ export async function runRun(
   backend: Backend,
   onProgress: ProgressCallback = () => {},
 ): Promise<void> {
-  const scriptPath = resolve(process.cwd(), argv.script)
   await establishWorkDir()
+
   const handler = new OutputHandler(onProgress)
-  const session = await createSession(argv.session, argv.outputDir)
+  const session = await Session.resume(argv.session)
+  const scriptPath = await session.resolveScript(argv.script)
+
   handler.stdoutLine(`sandy: output directory: ${session.dir}`)
 
   const result = await backend.run(
@@ -53,8 +53,7 @@ export function makeRunCommand(backend: Backend, onProgress: ProgressCallback): 
         .option("script", { type: "string", demandOption: true })
         .option("imds-port", { type: "number", demandOption: true })
         .option("region", { type: "string", default: DEFAULT_REGION })
-        .option("session", { type: "string" })
-        .option("output-dir", { type: "string" })
+        .option("session", { type: "string", demandOption: true })
         .parserConfiguration({
           "populate--": true,
           "parse-positional-numbers": false,

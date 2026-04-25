@@ -1,15 +1,14 @@
 import * as path from "node:path"
-import { makeTmpDir } from "./tmpdir"
 import type { StartOptions } from "@superhq/shuru"
 import { Sandbox } from "@superhq/shuru"
 import type { Backend } from "./backend"
+import { stageBootstrapFiles } from "./bootstrap-staging"
+import type { OutputHandler } from "./output-handler"
+import { buildRunEnv } from "./run-env"
+import { OutputTracker } from "./scan-output"
+import { makeTmpDir } from "./tmpdir"
 import type { RunOptions, RunResult } from "./types"
 import { VM_BOOTSTRAP, VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "./types"
-import type { OutputHandler } from "./output-handler"
-
-import { OutputTracker } from "./scan-output"
-import { buildRunEnv } from "./run-env"
-import { stageBootstrapFiles } from "./bootstrap-staging"
 
 export type ShellExecutor = (
   cmd: string[],
@@ -126,7 +125,9 @@ export class ShuruBackend implements Backend {
   }
 
   async run(opts: RunOptions, handler: OutputHandler): Promise<RunResult> {
-    const scriptDirPath = path.dirname(path.resolve(opts.scriptPath))
+    const sessionDir = path.resolve(opts.sessionDir)
+    const scriptDirPath = path.join(sessionDir, "scripts")
+    const outputDirPath = path.join(sessionDir, "output")
     const scriptName = path.basename(opts.scriptPath, ".ts")
     const compiledPath = `/workspace/dist/scripts/${scriptName}.js`
     const imdsEndpoint = `http://10.0.0.1:${opts.imdsPort}`
@@ -139,7 +140,7 @@ export class ShuruBackend implements Backend {
       exposeHost: [String(opts.imdsPort)],
       mounts: {
         [scriptDirPath]: VM_SCRIPTS_DIR,
-        [opts.sessionDir]: `${VM_OUTPUT_DIR}:rw`,
+        [outputDirPath]: `${VM_OUTPUT_DIR}:rw`,
       },
       network: {
         allow: ["*.amazonaws.com", "*.aws.amazon.com"],
@@ -150,7 +151,7 @@ export class ShuruBackend implements Backend {
 
     const spawnCmd = ["sh", "-l", "/workspace/entrypoint", compiledPath, ...(opts.scriptArgs ?? [])]
 
-    const tracker = await OutputTracker.create(opts.sessionDir)
+    const tracker = await OutputTracker.create(outputDirPath)
 
     try {
       const proc = await sb.spawn(spawnCmd, { env: spawnEnv })

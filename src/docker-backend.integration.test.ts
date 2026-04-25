@@ -2,11 +2,16 @@ import { describe, expect, test } from "bun:test"
 import Docker from "dockerode"
 import { DockerBackend } from "./docker-backend"
 import { OutputHandler } from "./output-handler"
-import { makeTmpDir } from "./tmpdir"
+import { Session } from "./session"
+import { useTestCwdIsolation } from "./test-tooling/isolated-cwd"
+import { establishWorkDir } from "./workdir"
+
+useTestCwdIsolation()
 
 const noop = new OutputHandler(() => {})
 
 const SKIP = !process.env.INTEGRATION
+const SKIP_SLOW = SKIP || !process.env.SLOW_TEST
 const TIMEOUT = 300_000
 
 describe("DockerBackend integration", () => {
@@ -30,21 +35,19 @@ describe("DockerBackend integration", () => {
         await backend.imageCreate(noop)
       }
 
-      const path = await import("node:path")
-      const fs = await import("node:fs/promises")
-      await using sessionDir = await makeTmpDir("sandy-integration-")
-      await using scriptDir = await makeTmpDir("sandy-scripts-")
-
-      // Write a trivial TypeScript script
-      const scriptPath = path.join(scriptDir.path, "hello.ts")
-      await fs.writeFile(scriptPath, 'console.log("[-->  hello from docker")\n')
+      await establishWorkDir()
+      await using session = await Session.ephemeral()
+      const scriptPath = await session.writeScript(
+        "hello.ts",
+        'console.log("[-->  hello from docker")\n',
+      )
 
       const result = await backend.run(
         {
           scriptPath,
           imdsPort: 9001,
-          session: "integration-test",
-          sessionDir: sessionDir.path,
+          session: session.name,
+          sessionDir: session.dir,
         },
         noop,
       )
@@ -77,7 +80,7 @@ describe("DockerBackend integration", () => {
   )
 
   // Force-delete removes both tags — run after soft-delete test to rebuild first
-  test.skipIf(SKIP)(
+  test.skipIf(SKIP_SLOW)(
     "imageDelete with force removes sandy:latest and sandy:layer-retention",
     async () => {
       const docker = new Docker()
@@ -102,18 +105,17 @@ describe("DockerBackend integration", () => {
     async () => {
       const docker = new Docker()
       const backend = new DockerBackend(docker)
-      // Prune stopped containers then remove both image tags
+      // Prune stopped containers then remove the primary image tag.
+      // Keep sandy:layer-retention to preserve cache warmth.
       try {
         await docker.pruneContainers()
       } catch {
         /* ignore */
       }
-      for (const name of ["sandy:latest", "sandy:layer-retention"]) {
-        try {
-          await docker.getImage(name).remove()
-        } catch {
-          /* already absent */
-        }
+      try {
+        await docker.getImage("sandy:latest").remove()
+      } catch {
+        /* already absent */
       }
       expect(await backend.imageExists(noop)).toBe(false)
     },

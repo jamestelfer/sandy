@@ -1,17 +1,18 @@
-import { hideBin } from "yargs/helpers"
+import Docker from "dockerode"
 import yargs from "yargs"
-import { readConfig } from "./config"
+import { hideBin } from "yargs/helpers"
+import type { Backend } from "./backend"
+import { makeCheckCommand } from "./cli/check"
 import configCommand from "./cli/config"
 import { makeImageCommand } from "./cli/image"
-import { makeCheckCommand } from "./cli/check"
-import { makeRunCommand } from "./cli/run"
 import { makeMcpCommand } from "./cli/mcp"
-import resourceCommand from "./cli/resource"
 import primeCommand from "./cli/prime"
-import { ShuruBackend } from "./shuru-backend"
+import resourceCommand from "./cli/resource"
+import { makeRunCommand } from "./cli/run"
+import sessionCommand from "./cli/session"
+import { readConfig } from "./config"
 import { DockerBackend } from "./docker-backend"
-import Docker from "dockerode"
-import type { Backend } from "./backend"
+import { ShuruBackend } from "./shuru-backend"
 import type { ProgressCallback } from "./types"
 
 async function createBackend(): Promise<Backend> {
@@ -38,6 +39,7 @@ async function main(): Promise<void> {
     .command(makeImageCommand(backend, onProgress))
     .command(makeCheckCommand(backend, onProgress))
     .command(makeRunCommand(backend, onProgress))
+    .command(sessionCommand)
     .command(makeMcpCommand(backend))
     .command(resourceCommand)
     .command(primeCommand)
