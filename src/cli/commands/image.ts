@@ -1,7 +1,7 @@
 import type { CommandModule } from "yargs"
-import type { Backend } from "../backend"
-import { OutputHandler } from "../output-handler"
-import type { ProgressCallback } from "../types"
+import type { ProgressCallback } from "../../core"
+import { OutputHandler } from "../../output"
+import type { Backend } from "../../sandbox"
 
 export interface ImageArgs {
   action: "create" | "delete"

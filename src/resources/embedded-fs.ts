@@ -5,7 +5,7 @@ import { Readable } from "node:stream"
 import { createFsFromVolume, Volume } from "memfs"
 import type { ExtractOptions } from "tar-fs"
 import tar from "tar-fs"
-import tarPath from "../embedded.tar" with { type: "file" }
+import tarPath from "../../embedded.tar" with { type: "file" }
 
 type MemFs = ReturnType<typeof createFsFromVolume>
 

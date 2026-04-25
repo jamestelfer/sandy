@@ -1,13 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
-import { DummyBackend } from "./dummy-backend"
-import { listEmbeddedResourceUris, readEmbeddedResource } from "./embedded-fs"
-import { createLogger } from "./logger"
-import { handlerProgressCallback, SandyMcpServer } from "./mcp-server"
+import type { RunOptions } from "./core"
+import { createLogger } from "./logging"
+import { handlerProgressCallback, SandyMcpServer } from "./mcp"
+import { listEmbeddedResourceUris, readEmbeddedResource } from "./resources"
 import { Session } from "./session"
-import { useTestCwdIsolation } from "./test-tooling/isolated-cwd"
-import type { RunOptions } from "./types"
+import { DummyBackend, useTestCwdIsolation } from "./test-support"
 
 useTestCwdIsolation()
 

@@ -3,11 +3,10 @@ import * as fs from "node:fs/promises"
 import { join } from "node:path"
 import { Readable } from "node:stream"
 import { extract as extractTar } from "tar-stream"
-import type { DockerClientLike } from "./docker-backend"
-import { DockerBackend, defaultBuildContextFactory } from "./docker-backend"
-import { OutputHandler } from "./output-handler"
-import { fakeBuildContext, makeDockerFake } from "./test-helpers"
-import { makeTmpDir } from "./tmpdir"
+import { OutputHandler } from "./output"
+import { makeTmpDir } from "./resources"
+import { DockerBackend, type DockerClientLike, defaultBuildContextFactory } from "./sandbox"
+import { fakeBuildContext, makeDockerFake } from "./test-support"
 
 describe("defaultBuildContextFactory", () => {
   test("produces a tar stream containing all bootstrap files and Dockerfile", async () => {

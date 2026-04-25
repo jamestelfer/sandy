@@ -1,6 +1,6 @@
+import type { ProgressCallback } from "../core"
 import { LineWriter } from "./line-writer"
 import { parseProgressLine } from "./progress"
-import type { ProgressCallback } from "./types"
 
 export class OutputHandler {
   private outputBuf = ""

@@ -2,12 +2,10 @@ import { describe, expect, test } from "bun:test"
 import { mkdirSync, symlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import yargs from "yargs"
-import { DummyBackend } from "../dummy-backend"
-import { Session } from "../session"
-import { useTestCwdIsolation } from "../test-tooling/isolated-cwd"
-import { DEFAULT_REGION } from "../types"
-import { establishWorkDir } from "../workdir"
-import { makeRunCommand, runRun } from "./run"
+import { DEFAULT_REGION } from "../core"
+import { establishWorkDir, Session } from "../session"
+import { DummyBackend, useTestCwdIsolation } from "../test-support"
+import { makeRunCommand, runRun } from "./commands/run"
 
 const isolatedCwd = useTestCwdIsolation()
 

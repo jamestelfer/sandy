@@ -1,5 +1,5 @@
 import type { ArgumentsCamelCase, CommandModule } from "yargs"
-import { listEmbeddedResourceUris, readEmbeddedResource } from "../embedded-fs"
+import { listEmbeddedResourceUris, readEmbeddedResource } from "../../resources"
 
 export interface ResourceArgs {
   url?: string

@@ -1,9 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
-import { stageBootstrapFiles } from "./bootstrap-staging"
-import { getEmbeddedFS } from "./embedded-fs"
-import { makeTmpDir } from "./tmpdir"
+import { getEmbeddedFS, makeTmpDir, stageBootstrapFiles } from "./resources"
 
 const noopLogger = () => {}
 

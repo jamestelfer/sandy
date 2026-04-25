@@ -4,7 +4,7 @@ import { mkdtemp, readFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Session } from "./session"
-import { useTestCwdIsolation } from "./test-tooling/isolated-cwd"
+import { useTestCwdIsolation } from "./test-support"
 
 const isolatedCwd = useTestCwdIsolation()
 

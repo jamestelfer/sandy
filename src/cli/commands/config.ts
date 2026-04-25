@@ -1,5 +1,5 @@
 import type { CommandModule } from "yargs"
-import { readConfig, writeConfig } from "../config"
+import { readConfig, writeConfig } from "../../core"
 
 export interface ConfigArgs {
   docker: boolean

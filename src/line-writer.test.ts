@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { LineWriter } from "./line-writer"
+import { LineWriter } from "./output"
 
 function collect(lines: string[]): LineWriter {
   return new LineWriter((line) => lines.push(line))

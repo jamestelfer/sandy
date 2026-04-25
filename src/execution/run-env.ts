@@ -1,4 +1,3 @@
-import type { RunOptions } from "./types"
 import {
   DEFAULT_REGION,
   ENV_ENDPOINT,
@@ -8,8 +7,9 @@ import {
   ENV_SANDY_OUTPUT,
   ENV_V1_DISABLED,
   ENV_V1_DISABLED_VALUE,
+  type RunOptions,
   VM_OUTPUT_DIR,
-} from "./types"
+} from "../core"
 
 export function buildRunEnv(opts: RunOptions, imdsEndpoint: string): Record<string, string> {
   return {

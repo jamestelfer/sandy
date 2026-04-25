@@ -2,16 +2,13 @@ import { readFileSync } from "node:fs"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import { pack as packTar } from "tar-fs"
-import type { Backend } from "./backend"
-import { stageBootstrapFiles } from "./bootstrap-staging"
+import { type RunOptions, type RunResult, VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "../core"
 // Dockerfile — embedded in binary by Bun at build time
-import dockerfilePath from "./docker/Dockerfile" with { type: "file" }
-import type { OutputHandler } from "./output-handler"
-import { buildRunEnv } from "./run-env"
-import { OutputTracker } from "./scan-output"
-import { makeTmpDir } from "./tmpdir"
-import type { RunOptions, RunResult } from "./types"
-import { VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "./types"
+import dockerfilePath from "../docker/Dockerfile" with { type: "file" }
+import { buildRunEnv, OutputTracker } from "../execution"
+import type { OutputHandler } from "../output"
+import { makeTmpDir, stageBootstrapFiles } from "../resources"
+import type { Backend } from "./backend"
 
 const DOCKERFILE = readFileSync(dockerfilePath, "utf-8")
 

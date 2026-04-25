@@ -1,12 +1,10 @@
 import { basename, join } from "node:path"
 import type { CommandModule } from "yargs"
-import type { Backend } from "../backend"
-import { extractEmbeddedChecks } from "../checks"
-import { OutputHandler } from "../output-handler"
-import { Session } from "../session"
-import type { ProgressCallback } from "../types"
-import { DEFAULT_REGION } from "../types"
-import { establishWorkDir } from "../workdir"
+import { DEFAULT_REGION, type ProgressCallback } from "../../core"
+import { OutputHandler } from "../../output"
+import { extractEmbeddedChecks } from "../../resources"
+import type { Backend } from "../../sandbox"
+import { establishWorkDir, Session } from "../../session"
 
 export interface ConnectArgs {
   imdsPort: number
