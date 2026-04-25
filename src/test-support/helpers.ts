@@ -8,8 +8,8 @@ import type {
   ContainerLike,
   DockerClientLike,
   ImageLike,
-} from "./docker-backend"
-import type { SandboxFactory, ShellExecutor } from "./shuru-backend"
+} from "../sandbox/docker-backend"
+import type { SandboxFactory, ShellExecutor } from "../sandbox/shuru-backend"
 
 // ── Docker fakes ─────────────────────────────────────────────────────────────
 

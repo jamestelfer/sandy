@@ -1,8 +1,8 @@
 import { afterEach, beforeEach } from "bun:test"
 import { mkdirSync } from "node:fs"
 import { join } from "node:path"
-import type { TmpDir } from "../tmpdir"
-import { makeTmpDir } from "../tmpdir"
+import type { TmpDir } from "../resources/tmpdir"
+import { makeTmpDir } from "../resources/tmpdir"
 
 interface IsolatedCwdContext {
   repoRoot: string

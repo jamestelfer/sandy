@@ -1,6 +1,6 @@
-import type { Backend } from "./backend"
-import type { OutputHandler } from "./output-handler"
-import type { RunOptions, RunResult } from "./types"
+import type { RunOptions, RunResult } from "../core/types"
+import type { OutputHandler } from "../output/handler"
+import type { Backend } from "../sandbox/backend"
 
 type BackendCall =
   | { method: "imageCreate" }

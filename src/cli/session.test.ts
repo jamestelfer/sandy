@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
-import { useTestCwdIsolation } from "../test-tooling/isolated-cwd"
-import { runSessionCreate } from "./session"
+import { useTestCwdIsolation } from "../test-support/isolated-cwd"
+import { runSessionCreate } from "./commands/session"
 
 const isolatedCwd = useTestCwdIsolation()
 

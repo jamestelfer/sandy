@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it } from "bun:test"
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from "node:fs"
 import * as os from "node:os"
 import { join, resolve } from "node:path"
-import { useTestCwdIsolation } from "./test-tooling/isolated-cwd"
-import { establishWorkDir } from "./workdir"
+import { establishWorkDir } from "./session/workdir"
+import { useTestCwdIsolation } from "./test-support/isolated-cwd"
 
 const isolatedCwd = useTestCwdIsolation()
 let root = ""

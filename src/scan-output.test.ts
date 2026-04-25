@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
-import { OutputTracker } from "./scan-output"
-import { makeTmpDir } from "./tmpdir"
+import { OutputTracker } from "./execution/scan-output"
+import { makeTmpDir } from "./resources/tmpdir"
 
 async function withTmpDir(fn: (dir: string) => Promise<void>): Promise<void> {
   await using dir = await makeTmpDir("scan-output-test-")

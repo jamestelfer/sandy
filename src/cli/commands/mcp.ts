@@ -1,10 +1,10 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import type { CommandModule } from "yargs"
-import type { Backend } from "../backend"
-import type { Logger } from "../logger"
-import { createLogger } from "../logger"
-import { SandyMcpServer } from "../mcp-server"
-import { establishWorkDir } from "../workdir"
+import type { Logger } from "../../logging/logger"
+import { createLogger } from "../../logging/logger"
+import { SandyMcpServer } from "../../mcp/server"
+import type { Backend } from "../../sandbox/backend"
+import { establishWorkDir } from "../../session/workdir"
 
 export async function runMcp(
   backend: Backend,

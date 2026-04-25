@@ -1,5 +1,5 @@
 import type { CommandModule } from "yargs"
-import { readEmbeddedResource } from "../embedded-fs"
+import { readEmbeddedResource } from "../../resources/embedded-fs"
 
 export async function runPrime(print: (line: string) => void = console.log): Promise<void> {
   const content = await readEmbeddedResource("sandy://skills/cli/SKILL.md")

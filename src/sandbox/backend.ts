@@ -1,5 +1,5 @@
-import type { OutputHandler } from "./output-handler"
-import type { RunOptions, RunResult } from "./types"
+import type { RunOptions, RunResult } from "../core/types"
+import type { OutputHandler } from "../output/handler"
 
 export interface Backend {
   imageCreate(handler: OutputHandler): Promise<void>
