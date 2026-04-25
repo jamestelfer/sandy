@@ -1,38 +1,41 @@
 import { describe, expect, test } from "bun:test"
-import { mkdirSync, rmSync, writeFileSync } from "node:fs"
+import * as fs from "node:fs/promises"
 import { join } from "node:path"
-import { spawn } from "node:child_process"
 import { Readable } from "node:stream"
-import { DockerBackend, defaultBuildContextFactory } from "./docker-backend"
+import { extract as extractTar } from "tar-stream"
 import type { DockerClientLike } from "./docker-backend"
+import { DockerBackend, defaultBuildContextFactory } from "./docker-backend"
 import { OutputHandler } from "./output-handler"
 import { fakeBuildContext, makeDockerFake } from "./test-helpers"
+import { makeTmpDir } from "./tmpdir"
 
 describe("defaultBuildContextFactory", () => {
   test("produces a tar stream containing all bootstrap files and Dockerfile", async () => {
-    const contextStream = await defaultBuildContextFactory()
+    await using contextStream = await defaultBuildContextFactory()
 
-    const tarList = spawn("tar", ["-t"])
-    if (!tarList.stdin) {
-      throw new Error("tar stdin is null")
-    }
-    contextStream.pipe(tarList.stdin)
+    const entries = new Set<string>()
+    const extractor = extractTar()
 
-    const chunks: Buffer[] = []
     await new Promise<void>((resolve, reject) => {
-      tarList.stdout.on("data", (c: Buffer) => chunks.push(c))
-      tarList.stdout.on("end", resolve)
-      tarList.stdout.on("error", reject)
+      extractor.on("entry", (header, stream, next) => {
+        entries.add(header.name)
+        stream.on("end", next)
+        stream.on("error", reject)
+        stream.resume()
+      })
+      extractor.on("finish", resolve)
+      extractor.on("error", reject)
+      contextStream.on("error", reject)
+      contextStream.pipe(extractor)
     })
-    const listing = Buffer.concat(chunks).toString()
 
-    expect(listing).toContain("bootstrap/init.sh")
-    expect(listing).toContain("bootstrap/node_certs.sh")
-    expect(listing).toContain("bootstrap/package.json")
-    expect(listing).toContain("bootstrap/tsconfig.json")
-    expect(listing).toContain("bootstrap/entrypoint")
-    expect(listing).toContain("bootstrap/sandy.ts")
-    expect(listing).toContain("Dockerfile")
+    expect(entries.has("bootstrap/init.sh")).toBe(true)
+    expect(entries.has("bootstrap/node_certs.sh")).toBe(true)
+    expect(entries.has("bootstrap/package.json")).toBe(true)
+    expect(entries.has("bootstrap/tsconfig.json")).toBe(true)
+    expect(entries.has("bootstrap/entrypoint")).toBe(true)
+    expect(entries.has("bootstrap/sandy.ts")).toBe(true)
+    expect(entries.has("Dockerfile")).toBe(true)
   })
 })
 
@@ -117,7 +120,7 @@ describe("DockerBackend.imageDelete", () => {
 })
 
 const baseRunOpts = {
-  scriptPath: "/home/user/scripts/hello.ts",
+  scriptPath: "/home/user/.sandy/test-session/scripts/hello.ts",
   imdsPort: 9001,
   session: "test-session",
   sessionDir: "/home/user/.sandy/test-session",
@@ -177,14 +180,13 @@ describe("DockerBackend.run", () => {
     expect(env).toContain("AWS_REGION=us-west-2")
   })
 
-  test("mounts script dir read-only and session dir read-write", async () => {
+  test("mounts session scripts dir read-only and session output dir read-write", async () => {
     const { docker, createContainerCalls } = makeDockerFake()
     const backend = new DockerBackend(docker, fakeBuildContext)
-    // scriptPath /home/user/scripts/hello.ts → scriptDir /home/user/scripts
     await backend.run(baseRunOpts, new OutputHandler(() => {}))
     const binds = (createContainerCalls[0]?.opts as ContainerOpts)?.HostConfig?.Binds ?? []
-    expect(binds).toContain("/home/user/scripts:/workspace/scripts:ro")
-    expect(binds).toContain("/home/user/.sandy/test-session:/workspace/output:rw")
+    expect(binds).toContain("/home/user/.sandy/test-session/scripts:/workspace/scripts:ro")
+    expect(binds).toContain("/home/user/.sandy/test-session/output:/workspace/output:rw")
   })
 
   test("forwards [-->-prefixed stdout lines as progress", async () => {
@@ -226,38 +228,36 @@ describe("DockerBackend.run", () => {
   })
 
   test("outputFiles includes files created during the run, not pre-existing ones", async () => {
-    const tmpDir = join(import.meta.dir, "../.tmp-test-docker-run")
-    mkdirSync(tmpDir, { recursive: true })
-    try {
-      // pre-existing file written before the backend run starts
-      writeFileSync(join(tmpDir, "pre-existing.json"), "{}")
+    await using tmpDir = await makeTmpDir("sandy-docker-run-test-")
+    const outputDir = join(tmpDir.path, "output")
+    await fs.mkdir(outputDir, { recursive: true })
 
-      // custom docker fake that writes a new file during container.start()
-      const { docker } = makeDockerFake()
-      const writingDocker: DockerClientLike = {
-        ...docker,
-        createContainer: async (opts) => {
-          const container = await docker.createContainer(opts)
-          return {
-            ...container,
-            start: async () => {
-              writeFileSync(join(tmpDir, "result.json"), "{}")
-              return container.start()
-            },
-          }
-        },
-      }
+    // pre-existing file written before the backend run starts
+    await fs.writeFile(join(outputDir, "pre-existing.json"), "{}")
 
-      const backend = new DockerBackend(writingDocker, fakeBuildContext)
-      const result = await backend.run(
-        { ...baseRunOpts, sessionDir: tmpDir },
-        new OutputHandler(() => {}),
-      )
-      expect(result.outputFiles).toContain("result.json")
-      expect(result.outputFiles).not.toContain("pre-existing.json")
-    } finally {
-      rmSync(tmpDir, { recursive: true, force: true })
+    // custom docker fake that writes a new file during container.start()
+    const { docker } = makeDockerFake()
+    const writingDocker: DockerClientLike = {
+      ...docker,
+      createContainer: async (opts) => {
+        const container = await docker.createContainer(opts)
+        return {
+          ...container,
+          start: async () => {
+            await fs.writeFile(join(outputDir, "result.json"), "{}")
+            return container.start()
+          },
+        }
+      },
     }
+
+    const backend = new DockerBackend(writingDocker, fakeBuildContext)
+    const result = await backend.run(
+      { ...baseRunOpts, sessionDir: tmpDir.path },
+      new OutputHandler(() => {}),
+    )
+    expect(result.outputFiles).toContain("result.json")
+    expect(result.outputFiles).not.toContain("pre-existing.json")
   })
 
   test("returns empty outputFiles when sessionDir does not exist", async () => {

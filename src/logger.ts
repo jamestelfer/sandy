@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs"
-import { join } from "node:path"
 import { homedir } from "node:os"
+import { join } from "node:path"
 
 export type Level = "debug" | "info" | "warn" | "error"
 type Threshold = Level | "silent"

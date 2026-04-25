@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test"
 import Docker from "dockerode"
 import { DockerBackend } from "./docker-backend"
 import { OutputHandler } from "./output-handler"
-import { makeTmpDir } from "./tmpdir"
+import { Session } from "./session"
+import { useTestCwdIsolation } from "./test-tooling/isolated-cwd"
+import { establishWorkDir } from "./workdir"
+
+useTestCwdIsolation()
 
 const noop = new OutputHandler(() => {})
 
@@ -31,24 +35,19 @@ describe("DockerBackend integration", () => {
         await backend.imageCreate(noop)
       }
 
-      const path = await import("node:path")
-      const fs = await import("node:fs/promises")
-      await using sessionDir = await makeTmpDir("sandy-integration-")
-      const scriptsDir = path.join(sessionDir.path, "scripts")
-      const outputDir = path.join(sessionDir.path, "output")
-      await fs.mkdir(scriptsDir, { recursive: true })
-      await fs.mkdir(outputDir, { recursive: true })
-
-      // Write a trivial TypeScript script in the session scripts directory
-      const scriptPath = path.join(scriptsDir, "hello.ts")
-      await fs.writeFile(scriptPath, 'console.log("[-->  hello from docker")\n')
+      await establishWorkDir()
+      await using session = await Session.ephemeral()
+      const scriptPath = await session.writeScript(
+        "hello.ts",
+        'console.log("[-->  hello from docker")\n',
+      )
 
       const result = await backend.run(
         {
           scriptPath,
           imdsPort: 9001,
-          session: "integration-test",
-          sessionDir: sessionDir.path,
+          session: session.name,
+          sessionDir: session.dir,
         },
         noop,
       )

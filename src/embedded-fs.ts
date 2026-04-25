@@ -1,10 +1,10 @@
-import { readFileSync } from "node:fs"
 import type * as nodeFsTypes from "node:fs"
+import { readFileSync } from "node:fs"
 import * as nodeFs from "node:fs/promises"
 import { Readable } from "node:stream"
 import { createFsFromVolume, Volume } from "memfs"
-import tar from "tar-fs"
 import type { ExtractOptions } from "tar-fs"
+import tar from "tar-fs"
 import tarPath from "../embedded.tar" with { type: "file" }
 
 type MemFs = ReturnType<typeof createFsFromVolume>

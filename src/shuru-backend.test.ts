@@ -1,17 +1,23 @@
 import { describe, expect, test } from "bun:test"
-import { mkdirSync, rmSync, writeFileSync } from "node:fs"
+import * as fs from "node:fs/promises"
 import { join } from "node:path"
-import { ShuruBackend } from "./shuru-backend"
-import type { SandboxFactory } from "./shuru-backend"
 import { OutputHandler } from "./output-handler"
+import type { SandboxFactory } from "./shuru-backend"
+import { ShuruBackend } from "./shuru-backend"
+import { makeExecutor, makeSandboxFactory } from "./test-helpers"
+import { makeTmpDir } from "./tmpdir"
 import type { RunOptions } from "./types"
-import { makeSandboxFactory, makeExecutor } from "./test-helpers"
+
+// Synthetic fixture paths — these never touch disk; the mock sandbox factory
+// inspects them as strings to assert mount/spawn wiring.
+const FIXTURE_SESSION_DIR = "/fixture/test-session"
+const FIXTURE_SCRIPT_PATH = `${FIXTURE_SESSION_DIR}/scripts/hello.ts`
 
 const baseRunOpts: RunOptions = {
-  scriptPath: "/home/user/scripts/hello.ts",
+  scriptPath: FIXTURE_SCRIPT_PATH,
   imdsPort: 9001,
   session: "test-session",
-  sessionDir: "/home/user/.sandy/test-session",
+  sessionDir: FIXTURE_SESSION_DIR,
   scriptArgs: [],
 }
 
@@ -23,15 +29,14 @@ describe("ShuruBackend.run", () => {
     expect(startOptsCalls[0]?.from).toBe("sandy")
   })
 
-  test("mounts script dir read-only and session dir read-write", async () => {
+  test("mounts session scripts dir read-only and session output dir read-write", async () => {
     const { factory, startOptsCalls } = makeSandboxFactory()
     const backend = new ShuruBackend(undefined, factory)
     await backend.run(baseRunOpts, new OutputHandler(() => {}))
 
     const mounts = startOptsCalls[0]?.mounts ?? {}
-    // scriptPath /home/user/scripts/hello.ts → scriptDir /home/user/scripts
-    expect(mounts["/home/user/scripts"]).toBe("/workspace/scripts")
-    expect(mounts["/home/user/.sandy/test-session"]).toBe("/workspace/output:rw")
+    expect(mounts[`${FIXTURE_SESSION_DIR}/scripts`]).toBe("/workspace/scripts")
+    expect(mounts[`${FIXTURE_SESSION_DIR}/output`]).toBe("/workspace/output:rw")
   })
 
   test("exposes IMDS port and restricts network to AWS domains", async () => {
@@ -150,35 +155,33 @@ describe("ShuruBackend.run", () => {
   })
 
   test("outputFiles includes files created during the run, not pre-existing ones", async () => {
-    const tmpDir = join(import.meta.dir, "../.tmp-test-shuru-run")
-    mkdirSync(tmpDir, { recursive: true })
-    try {
-      // pre-existing file written before the backend run starts
-      writeFileSync(join(tmpDir, "pre-existing.json"), "{}")
+    await using tmpDir = await makeTmpDir("shuru-run-test-")
+    const outputDir = join(tmpDir.path, "output")
+    await fs.mkdir(outputDir, { recursive: true })
 
-      // factory writes a new file into sessionDir during "spawn" to simulate script output
-      const factory: SandboxFactory = async () => ({
-        spawn: async () => {
-          writeFileSync(join(tmpDir, "result.json"), "{}")
-          const handle = {
-            on: (_: "stdout" | "stderr", __: (d: Buffer) => void) => handle,
-            exited: Promise.resolve(0),
-          }
-          return handle
-        },
-        stop: async () => {},
-      })
+    // pre-existing file written before the backend run starts
+    await fs.writeFile(join(outputDir, "pre-existing.json"), "{}")
 
-      const backend = new ShuruBackend(undefined, factory)
-      const result = await backend.run(
-        { ...baseRunOpts, sessionDir: tmpDir },
-        new OutputHandler(() => {}),
-      )
-      expect(result.outputFiles).toContain("result.json")
-      expect(result.outputFiles).not.toContain("pre-existing.json")
-    } finally {
-      rmSync(tmpDir, { recursive: true, force: true })
-    }
+    // factory writes a new file into session output during "spawn" to simulate script output
+    const factory: SandboxFactory = async () => ({
+      spawn: async () => {
+        await fs.writeFile(join(outputDir, "result.json"), "{}")
+        const handle = {
+          on: (_: "stdout" | "stderr", __: (d: Buffer) => void) => handle,
+          exited: Promise.resolve(0),
+        }
+        return handle
+      },
+      stop: async () => {},
+    })
+
+    const backend = new ShuruBackend(undefined, factory)
+    const result = await backend.run(
+      { ...baseRunOpts, sessionDir: tmpDir.path },
+      new OutputHandler(() => {}),
+    )
+    expect(result.outputFiles).toContain("result.json")
+    expect(result.outputFiles).not.toContain("pre-existing.json")
   })
 
   test("returns empty outputFiles when sessionDir does not exist", async () => {

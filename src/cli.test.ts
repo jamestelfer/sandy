@@ -1,14 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
+import { existsSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+import yargs from "yargs"
+import { runBaseline, runConnect } from "./cli/check"
 import { runConfig } from "./cli/config"
 import { runImage } from "./cli/image"
-import { runBaseline, runConnect } from "./cli/check"
-import { makeRunCommand, runRun } from "./cli/run"
-import yargs from "yargs"
 import { runMcp } from "./cli/mcp"
+import { makeRunCommand, runRun } from "./cli/run"
 import { DummyBackend } from "./dummy-backend"
 import { noopLogger } from "./logger"
+import { Session } from "./session"
 import { useTestCwdIsolation } from "./test-tooling/isolated-cwd"
+import { establishWorkDir } from "./workdir"
 
 const isolatedCwd = useTestCwdIsolation()
 
@@ -227,20 +230,62 @@ describe("CLI check", () => {
     await runConnect({ imdsPort: 9001, region: "us-west-2" }, backend, (msg) => received.push(msg))
     expect(received).toEqual(["checking connect"])
   })
+
+  it("ephemeral session directory is removed after baseline run", async () => {
+    const backend = new DummyBackend()
+    backend.imageExistsResult = true
+    await runBaseline(backend)
+    const runCall = backend.calls.find((c) => c.method === "run")
+    expect(runCall).toBeDefined()
+    if (runCall?.method === "run") {
+      expect(existsSync(runCall.opts.sessionDir)).toBe(false)
+    }
+  })
+
+  it("ephemeral session directory is removed even when backend.run throws", async () => {
+    const backend = new DummyBackend()
+    backend.imageExistsResult = true
+    let captured: { sessionDir: string } | undefined
+    backend.run = async (opts) => {
+      captured = { sessionDir: opts.sessionDir }
+      throw new Error("boom")
+    }
+    await expect(runBaseline(backend)).rejects.toThrow("boom")
+    expect(captured).toBeDefined()
+    if (captured) {
+      expect(existsSync(captured.sessionDir)).toBe(false)
+    }
+  })
 })
 
 describe("CLI run", () => {
+  async function stageScript(scriptName = "foo.ts"): Promise<{
+    session: Session
+    scriptPath: string
+  }> {
+    await establishWorkDir()
+    const session = await Session.create()
+    const scriptPath = await session.writeScript(scriptName, "console.log('ok')")
+    process.chdir(isolatedCwd.currentDir())
+    return { session, scriptPath }
+  }
+
   it("dispatches to backend.run() with correct RunOptions", async () => {
     const backend = new DummyBackend()
-    await runRun({ script: "foo.ts", imdsPort: 9001, region: "us-west-2" }, backend)
+    const { session, scriptPath } = await stageScript()
+
+    await runRun(
+      { script: "foo.ts", imdsPort: 9001, region: "us-west-2", session: session.name },
+      backend,
+    )
+
     expect(backend.calls[0]).toMatchObject({
       method: "run",
-      opts: { imdsPort: 9001 },
+      opts: { imdsPort: 9001, session: session.name },
     })
     const runCall = backend.calls[0]
     if (runCall?.method === "run") {
-      expect(runCall.opts.scriptPath).toMatch(/foo\.ts$/)
-      expect(runCall.opts.scriptPath).toStartWith(isolatedCwd.currentDir())
+      expect(runCall.opts.scriptPath).toBe(scriptPath)
     }
   })
 
@@ -248,53 +293,32 @@ describe("CLI run", () => {
     const backend = new DummyBackend()
     backend.progressLines = ["compiling..."]
     const received: string[] = []
-    await runRun({ script: "foo.ts", imdsPort: 9001, region: "us-west-2" }, backend, (msg) =>
-      received.push(msg),
+    const { session } = await stageScript()
+
+    await runRun(
+      { script: "foo.ts", imdsPort: 9001, region: "us-west-2", session: session.name },
+      backend,
+      (msg) => received.push(msg),
     )
+
     expect(received).toEqual(["compiling..."])
-  })
-
-  it("uses provided --session name", async () => {
-    const backend = new DummyBackend()
-    await runRun(
-      { script: "foo.ts", imdsPort: 9001, region: "us-west-2", session: "my-session" },
-      backend,
-    )
-    expect(backend.calls[0]).toMatchObject({
-      method: "run",
-      opts: { session: "my-session" },
-    })
-  })
-
-  it("auto-generates session when none provided", async () => {
-    const backend = new DummyBackend()
-    await runRun({ script: "foo.ts", imdsPort: 9001, region: "us-west-2" }, backend)
-    const call = backend.calls[0]
-    expect(call).toBeDefined()
-    if (call && call.method === "run") {
-      expect(call.opts.session).toMatch(/^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)+$/)
-    }
-  })
-
-  it("uses --output-dir as session directory when provided", async () => {
-    const backend = new DummyBackend()
-    const customDir = join(isolatedCwd.currentDir(), "my-out")
-    await runRun(
-      { script: "foo.ts", imdsPort: 9001, region: "us-west-2", outputDir: customDir },
-      backend,
-    )
-    expect(backend.calls[0]).toMatchObject({
-      method: "run",
-      opts: { sessionDir: customDir },
-    })
   })
 
   it("passes script args after --", async () => {
     const backend = new DummyBackend()
+    const { session } = await stageScript()
+
     await runRun(
-      { script: "foo.ts", imdsPort: 9001, region: "us-west-2", "--": ["arg1", "arg2"] },
+      {
+        script: "foo.ts",
+        imdsPort: 9001,
+        region: "us-west-2",
+        session: session.name,
+        "--": ["arg1", "arg2"],
+      },
       backend,
     )
+
     expect(backend.calls[0]).toMatchObject({
       method: "run",
       opts: { scriptArgs: ["arg1", "arg2"] },
@@ -303,9 +327,12 @@ describe("CLI run", () => {
 
   it("keeps numeric-looking args after -- as strings", async () => {
     const backend = new DummyBackend()
+    const { session } = await stageScript()
 
     await yargs([
       "run",
+      "--session",
+      session.name,
       "--script",
       "foo.ts",
       "--imds-port",
@@ -326,11 +353,73 @@ describe("CLI run", () => {
     })
   })
 
+  it("requires --session", () => {
+    const backend = new DummyBackend()
+
+    expect(() =>
+      yargs(["run", "--script", "foo.ts", "--imds-port", "9001"])
+        .exitProcess(false)
+        .command(makeRunCommand(backend, () => {}))
+        .demandCommand(1)
+        .strict()
+        .parse(),
+    ).toThrow(/session/)
+  })
+
+  it("requires --script", () => {
+    const backend = new DummyBackend()
+
+    expect(() =>
+      yargs(["run", "--session", "my-session", "--imds-port", "9001"])
+        .exitProcess(false)
+        .command(makeRunCommand(backend, () => {}))
+        .demandCommand(1)
+        .strict()
+        .parse(),
+    ).toThrow(/script/)
+  })
+
+  it("reports full expected path when script is missing", async () => {
+    const backend = new DummyBackend()
+    const { session } = await stageScript()
+
+    await expect(
+      runRun(
+        { script: "missing.ts", imdsPort: 9001, region: "us-west-2", session: session.name },
+        backend,
+      ),
+    ).rejects.toThrow(/missing\.ts/)
+  })
+
+  it("rejects symlink scripts", async () => {
+    const backend = new DummyBackend()
+    await establishWorkDir()
+    const session = await Session.create()
+    mkdirSync(join(session.dir, "outside"), { recursive: true })
+    const realPath = join(session.dir, "outside", "real.ts")
+    writeFileSync(realPath, "console.log('outside')")
+    symlinkSync(realPath, join(session.scriptsDir, "linked.ts"))
+    process.chdir(isolatedCwd.currentDir())
+
+    await expect(
+      runRun(
+        { script: "linked.ts", imdsPort: 9001, region: "us-west-2", session: session.name },
+        backend,
+      ),
+    ).rejects.toThrow(/linked\.ts/)
+  })
+
   it("sets process.exitCode when script exits non-zero", async () => {
     const backend = new DummyBackend()
     backend.runResult = { exitCode: 2, output: "", outputFiles: [] }
     const prevExitCode = process.exitCode
-    await runRun({ script: "foo.ts", imdsPort: 9001, region: "us-west-2" }, backend)
+    const { session } = await stageScript()
+
+    await runRun(
+      { script: "foo.ts", imdsPort: 9001, region: "us-west-2", session: session.name },
+      backend,
+    )
+
     expect(process.exitCode).toBe(2)
     process.exitCode = prevExitCode ?? 0
   })
@@ -343,11 +432,17 @@ describe("CLI run", () => {
       stderrLines.push(chunk.toString())
       return true
     }
+
+    const { session } = await stageScript()
     try {
-      await runRun({ script: "foo.ts", imdsPort: 9001, region: "us-west-2" }, backend)
+      await runRun(
+        { script: "foo.ts", imdsPort: 9001, region: "us-west-2", session: session.name },
+        backend,
+      )
     } finally {
       process.stderr.write = originalWrite
     }
+
     const combined = stderrLines.join("")
     expect(combined).toContain("output directory")
     expect(combined).not.toContain("[err]")

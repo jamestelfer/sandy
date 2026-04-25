@@ -3,7 +3,7 @@ import { mkdirSync, symlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import yargs from "yargs"
 import { DummyBackend } from "../dummy-backend"
-import { createSession } from "../session"
+import { Session } from "../session"
 import { useTestCwdIsolation } from "../test-tooling/isolated-cwd"
 import { DEFAULT_REGION } from "../types"
 import { establishWorkDir } from "../workdir"
@@ -11,18 +11,25 @@ import { makeRunCommand, runRun } from "./run"
 
 const isolatedCwd = useTestCwdIsolation()
 
+async function stageScriptForRun(scriptName = "foo.ts"): Promise<{
+  session: Session
+  scriptPath: string
+}> {
+  await establishWorkDir()
+  const session = await Session.create()
+  const scriptPath = await session.writeScript(scriptName, "console.log('ok')")
+  return { session, scriptPath }
+}
+
 describe("runRun", () => {
   test("resolves script from <session>/scripts", async () => {
     const backend = new DummyBackend()
-    await establishWorkDir()
-    const session = await createSession("my-session")
-    const scriptPath = join(session.dir, "scripts", "hello.ts")
-    writeFileSync(scriptPath, "console.log('ok')")
+    const { session, scriptPath } = await stageScriptForRun("hello.ts")
 
     process.chdir(isolatedCwd.currentDir())
     await runRun(
       {
-        session: "my-session",
+        session: session.name,
         script: "hello.ts",
         imdsPort: 9001,
         region: DEFAULT_REGION,
@@ -40,11 +47,13 @@ describe("runRun", () => {
 
   test("returns full expected path when script is missing", async () => {
     const backend = new DummyBackend()
+    const { session } = await stageScriptForRun()
+    process.chdir(isolatedCwd.currentDir())
 
     await expect(
       runRun(
         {
-          session: "my-session",
+          session: session.name,
           script: "missing.ts",
           imdsPort: 9001,
           region: DEFAULT_REGION,
@@ -57,18 +66,17 @@ describe("runRun", () => {
   test("rejects symlink scripts", async () => {
     const backend = new DummyBackend()
     await establishWorkDir()
-    const session = await createSession("my-session")
-    const scriptsDir = join(session.dir, "scripts")
+    const session = await Session.create()
     mkdirSync(join(session.dir, "outside"), { recursive: true })
     const outsidePath = join(session.dir, "outside", "real.ts")
     writeFileSync(outsidePath, "console.log('outside')")
-    symlinkSync(outsidePath, join(scriptsDir, "linked.ts"))
+    symlinkSync(outsidePath, join(session.scriptsDir, "linked.ts"))
 
     process.chdir(isolatedCwd.currentDir())
     await expect(
       runRun(
         {
-          session: "my-session",
+          session: session.name,
           script: "linked.ts",
           imdsPort: 9001,
           region: DEFAULT_REGION,
@@ -116,6 +124,6 @@ describe("makeRunCommand", () => {
         .command(makeRunCommand(backend, () => {}))
         .strict()
         .parseAsync(),
-    ).rejects.toThrow(/script not found/)
+    ).rejects.toThrow(/session not found/)
   })
 })

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "bun:test"
-import { chmodSync, existsSync, mkdirSync, rmSync } from "node:fs"
-import { join, resolve } from "node:path"
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from "node:fs"
 import * as os from "node:os"
+import { join, resolve } from "node:path"
 import { useTestCwdIsolation } from "./test-tooling/isolated-cwd"
 import { establishWorkDir } from "./workdir"
 
@@ -23,6 +23,13 @@ describe("establishWorkDir", () => {
     expect(existsSync(resolve(root, ".sandy"))).toBe(true)
   })
 
+  it("writes .gitignore with '*' when establishing the workdir", async () => {
+    await establishWorkDir()
+    const gitignore = join(process.cwd(), ".gitignore")
+    expect(existsSync(gitignore)).toBe(true)
+    expect(readFileSync(gitignore, "utf8")).toBe("*\n")
+  })
+
   it("falls back to $TMPDIR/sandy/<hash> when .sandy under original CWD is not writable", async () => {
     const roParent = join(root, "readonly")
     mkdirSync(roParent, { recursive: true })
@@ -31,7 +38,7 @@ describe("establishWorkDir", () => {
 
     try {
       await establishWorkDir()
-      const escapedTmp = os.tmpdir().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      const escapedTmp = realpathSync(os.tmpdir()).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
       expect(process.cwd()).toMatch(new RegExp(`^${escapedTmp}/sandy/[A-Za-z0-9_-]{16}$`))
     } finally {
       chmodSync(roParent, 0o755)

@@ -1,20 +1,22 @@
-import { resolve, sep } from "node:path"
+import { join } from "node:path"
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js"
+import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol"
+import type { ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types"
 import { z } from "zod"
 import type { Backend } from "./backend"
-import { OutputHandler } from "./output-handler"
-import { createSession, validateSessionName } from "./session"
-import { extractBuiltinChecks } from "./check-scripts"
-import type { ProgressCallback, RunOptions } from "./types"
-import { DEFAULT_REGION } from "./types"
+import { extractEmbeddedChecks } from "./checks"
+import { listEmbeddedResourceUris, readEmbeddedResource } from "./embedded-fs"
 import type { Logger } from "./logger"
 import { noopLogger } from "./logger"
-import { listEmbeddedResourceUris, readEmbeddedResource } from "./embedded-fs"
-import type { ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types"
-import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol"
+import { OutputHandler } from "./output-handler"
+import { Session } from "./session"
+import type { ProgressCallback, RunOptions } from "./types"
+import { DEFAULT_REGION } from "./types"
 
 export interface SandyRunParams {
+  session: string
   script: string
+  content?: string
   imdsPort: number
   region?: string
   args?: string[]
@@ -26,9 +28,14 @@ export interface SandyRunResult {
   sessionName: string
 }
 
-interface ActiveSession {
-  name: string
-  dir: string
+export interface SandyCheckResult {
+  exitCode: number
+  output: string
+}
+
+export interface SandySessionResult {
+  sessionName: string
+  scriptsPath: string
 }
 
 // Matches standard, gov, and China region names e.g. us-east-1, us-gov-east-1, cn-north-1
@@ -74,27 +81,10 @@ function mimeTypeForUri(uri: string): string {
 }
 
 export class SandyMcpServer {
-  private activeSession: ActiveSession | null = null
-  private resumedName: string | null = null
-  private readonly scriptsRoot: string
-
   constructor(
     private backend: Backend,
-    scriptsRoot: string = process.cwd(),
     private readonly logger: Logger = noopLogger(),
-  ) {
-    this.scriptsRoot = scriptsRoot
-  }
-
-  private validateScriptPath(scriptPath: string): string {
-    const resolved = resolve(this.scriptsRoot, scriptPath)
-    if (!resolved.startsWith(this.scriptsRoot + sep)) {
-      throw new Error(
-        `script path must be within the working directory: ${JSON.stringify(scriptPath)}`,
-      )
-    }
-    return resolved
-  }
+  ) {}
 
   private createOutputHandler(onProgress?: ProgressCallback): OutputHandler {
     const progress = onProgress ?? (() => {})
@@ -119,7 +109,7 @@ export class SandyMcpServer {
     action: "baseline" | "connect",
     imdsPort?: number,
     region?: string,
-  ): Promise<SandyRunResult> {
+  ): Promise<SandyCheckResult> {
     const log = this.logger.child({ tool: "sandy_check" })
 
     try {
@@ -133,29 +123,27 @@ export class SandyMcpServer {
           exitCode: 1,
           output:
             "No image found. Use the sandy_image tool with action 'create' to build one first.",
-          sessionName: "",
         }
       }
-      const checkScript = action === "baseline" ? "baseline" : "connect"
-      const port = imdsPort ?? 0
-      await using checkDir = await extractBuiltinChecks()
-      const scriptPath = `${checkDir.path}/${checkScript}.ts`
-      const session = await this.ensureSession()
+
+      await using session = await Session.ephemeral()
+      await extractEmbeddedChecks(session.scriptsDir)
+      const scriptPath = join(session.scriptsDir, `${action}.ts`)
+
       const opts: RunOptions = {
         scriptPath,
-        imdsPort: port,
+        imdsPort: imdsPort ?? 0,
         region: region ?? DEFAULT_REGION,
         session: session.name,
         sessionDir: session.dir,
       }
       const result = await this.backend.run(opts, handler)
 
-      log.info({ exitCode: result.exitCode, session: session.name }, "complete")
+      log.info({ exitCode: result.exitCode }, "complete")
 
       return {
         exitCode: result.exitCode,
         output: result.output,
-        sessionName: session.name,
       }
     } catch (err) {
       log.error({ err }, "failed")
@@ -187,12 +175,16 @@ export class SandyMcpServer {
     }
   }
 
-  handleResumeSession(sessionName: string): void {
-    validateSessionName(sessionName)
-    this.logger.info({ session: sessionName }, "session resume requested")
-    this.resumedName = sessionName
-    // Dir will be created lazily on next sandy_run or sandy_check
-    this.activeSession = null
+  async handleCreateSession(): Promise<SandySessionResult> {
+    const session = await Session.create()
+    this.logger.info({ session: session.name }, "session created by request")
+    return { sessionName: session.name, scriptsPath: session.scriptsDir }
+  }
+
+  async handleResumeSession(sessionName: string): Promise<SandySessionResult> {
+    const session = await Session.resume(sessionName)
+    this.logger.info({ session: session.name }, "session resume requested")
+    return { sessionName: session.name, scriptsPath: session.scriptsDir }
   }
 
   async handleSandyRun(
@@ -202,10 +194,17 @@ export class SandyMcpServer {
     const log = this.logger.child({ tool: "sandy_run" })
 
     try {
-      log.info({ script: params.script, region: params.region }, "invoked")
+      log.info({ session: params.session, script: params.script, region: params.region }, "invoked")
 
-      const scriptPath = this.validateScriptPath(params.script)
-      const session = await this.ensureSession()
+      if (!params.session.trim()) {
+        throw new Error("session is required; use sandy_create_session to create one")
+      }
+
+      const session = await Session.resume(params.session)
+      const scriptPath =
+        params.content === undefined
+          ? await session.resolveScript(params.script)
+          : await session.writeScript(params.script, params.content)
 
       const opts: RunOptions = {
         scriptPath,
@@ -230,17 +229,6 @@ export class SandyMcpServer {
       log.error({ err }, "failed")
       throw err
     }
-  }
-
-  private async ensureSession(): Promise<ActiveSession> {
-    if (!this.activeSession) {
-      const resumed = this.resumedName !== null
-      const session = await createSession(this.resumedName ?? undefined)
-      this.resumedName = null
-      this.activeSession = session
-      this.logger.info({ session: session.name, resumed }, "session created")
-    }
-    return this.activeSession
   }
 
   // ── MCP SDK wiring ───────────────────────────────────────────────────────
@@ -274,7 +262,7 @@ export class SandyMcpServer {
     server.registerTool(
       "sandy_check",
       {
-        description: "Run a health check (baseline or connect)",
+        description: "Run a health check (baseline or connect). Uses an ephemeral session.",
         inputSchema: z.object({
           action: z.enum(["baseline", "connect"]).describe('"baseline" or "connect"'),
           imdsPort: z.number().optional().describe("IMDS port (required for connect)"),
@@ -300,17 +288,40 @@ export class SandyMcpServer {
       {
         description: "Run a TypeScript script in the Sandy sandbox",
         inputSchema: z.object({
-          script: z.string().describe("Path to the TypeScript script"),
+          session: z.string().min(1).describe("Session name"),
+          script: z.string().describe("Path to the TypeScript script under session scripts/"),
+          content: z
+            .string()
+            .optional()
+            .describe("Optional inline script content to write before run"),
           imdsPort: z.number().describe("IMDS server port on the host"),
           region: regionSchema.describe("AWS region (default: us-west-2)"),
           args: z.array(z.string()).optional().describe("Arguments passed to the script"),
         }),
       },
-      async ({ script, imdsPort, region, args }, ctx) => {
+      async ({ session, script, content, imdsPort, region, args }, ctx) => {
         const onProgress = handlerProgressCallback(ctx)
 
-        const result = await this.handleSandyRun({ script, imdsPort, region, args }, onProgress)
+        const result = await this.handleSandyRun(
+          { session, script, content, imdsPort, region, args },
+          onProgress,
+        )
 
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        }
+      },
+    )
+
+    server.registerTool(
+      "sandy_create_session",
+      {
+        description: "Create a session and return its scripts path",
+        inputSchema: z.object({}),
+      },
+      async () => {
+        this.logger.info({ tool: "sandy_create_session" }, "invoked")
+        const result = await this.handleCreateSession()
         return {
           content: [{ type: "text" as const, text: JSON.stringify(result) }],
         }
@@ -320,21 +331,16 @@ export class SandyMcpServer {
     server.registerTool(
       "sandy_resume_session",
       {
-        description: "Set the active session name to resume a previous session",
+        description: "Resume an existing session and return its scripts path",
         inputSchema: z.object({
           sessionName: z.string().describe("Session name to resume"),
         }),
       },
       async ({ sessionName }) => {
         this.logger.info({ tool: "sandy_resume_session", session: sessionName }, "invoked")
-        this.handleResumeSession(sessionName)
+        const result = await this.handleResumeSession(sessionName)
         return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Active session set to: ${sessionName}`,
-            },
-          ],
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
         }
       },
     )

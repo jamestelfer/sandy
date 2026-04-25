@@ -2,19 +2,11 @@ import { describe, expect, test } from "bun:test"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import { OutputTracker } from "./scan-output"
+import { makeTmpDir } from "./tmpdir"
 
 async function withTmpDir(fn: (dir: string) => Promise<void>): Promise<void> {
-  const dir = path.join(
-    import.meta.dir,
-    "../.tmp-test-scan-output",
-    Math.random().toString(36).slice(2),
-  )
-  await fs.mkdir(dir, { recursive: true })
-  try {
-    await fn(dir)
-  } finally {
-    await fs.rm(dir, { recursive: true, force: true })
-  }
+  await using dir = await makeTmpDir("scan-output-test-")
+  await fn(dir.path)
 }
 
 describe("OutputTracker", () => {
@@ -74,18 +66,11 @@ describe("OutputTracker", () => {
   })
 
   test("changed() returns files if dir appears after construction", async () => {
-    const dir = path.join(
-      import.meta.dir,
-      "../.tmp-test-scan-output-late",
-      Math.random().toString(36).slice(2),
-    )
+    await using parent = await makeTmpDir("scan-output-late-")
+    const dir = path.join(parent.path, "late-dir")
     const tracker = await OutputTracker.create(dir)
     await fs.mkdir(dir, { recursive: true })
-    try {
-      await fs.writeFile(path.join(dir, "late.txt"), "x")
-      expect(await tracker.changed()).toContain("late.txt")
-    } finally {
-      await fs.rm(dir, { recursive: true, force: true })
-    }
+    await fs.writeFile(path.join(dir, "late.txt"), "x")
+    expect(await tracker.changed()).toContain("late.txt")
   })
 })

@@ -1,9 +1,9 @@
 import { basename, join } from "node:path"
 import type { CommandModule } from "yargs"
 import type { Backend } from "../backend"
-import { extractBuiltinChecks } from "../check-scripts"
+import { extractEmbeddedChecks } from "../checks"
 import { OutputHandler } from "../output-handler"
-import { createSession } from "../session"
+import { Session } from "../session"
 import type { ProgressCallback } from "../types"
 import { DEFAULT_REGION } from "../types"
 import { establishWorkDir } from "../workdir"
@@ -16,7 +16,7 @@ export interface ConnectArgs {
 async function runCheck(
   backend: Backend,
   onProgress: ProgressCallback,
-  checkScript: "baseline" | "connect",
+  checkName: "baseline" | "connect",
   imdsPort: number,
   region: string,
   label: string,
@@ -30,9 +30,11 @@ async function runCheck(
     process.exitCode = 1
     return
   }
-  await using checkDir = await extractBuiltinChecks()
-  const scriptPath = join(checkDir.path, `${checkScript}.ts`)
-  const session = await createSession()
+
+  await using session = await Session.ephemeral()
+  await extractEmbeddedChecks(session.scriptsDir)
+  const scriptPath = join(session.scriptsDir, `${checkName}.ts`)
+
   const result = await backend.run(
     { scriptPath, imdsPort, region, session: session.name, sessionDir: session.dir },
     handler,

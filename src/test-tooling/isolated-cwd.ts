@@ -1,7 +1,8 @@
 import { afterEach, beforeEach } from "bun:test"
-import { mkdirSync, rmSync } from "node:fs"
+import { mkdirSync } from "node:fs"
 import { join } from "node:path"
-import { humanId } from "human-id"
+import type { TmpDir } from "../tmpdir"
+import { makeTmpDir } from "../tmpdir"
 
 interface IsolatedCwdContext {
   repoRoot: string
@@ -12,18 +13,18 @@ interface IsolatedCwdContext {
 export function useTestCwdIsolation(): IsolatedCwdContext {
   const repoRoot = join(import.meta.dir, "../..")
   const testTmpRoot = join(repoRoot, ".sandy", ".test-tmp")
-  let dir: string | null = null
+  let dir: TmpDir | null = null
 
-  beforeEach(() => {
-    dir = join(testTmpRoot, humanId({ separator: "-", capitalize: false }))
-    mkdirSync(dir, { recursive: true })
-    process.chdir(dir)
+  beforeEach(async () => {
+    mkdirSync(testTmpRoot, { recursive: true })
+    dir = await makeTmpDir("test-", testTmpRoot)
+    process.chdir(dir.path)
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     process.chdir(repoRoot)
     if (dir) {
-      rmSync(dir, { recursive: true, force: true })
+      await dir[Symbol.asyncDispose]()
       dir = null
     }
   })
@@ -35,7 +36,7 @@ export function useTestCwdIsolation(): IsolatedCwdContext {
       if (!dir) {
         throw new Error("isolated cwd is not active")
       }
-      return dir
+      return dir.path
     },
   }
 }

@@ -9,7 +9,7 @@ import type {
   DockerClientLike,
   ImageLike,
 } from "./docker-backend"
-import type { ShellExecutor, SandboxFactory } from "./shuru-backend"
+import type { SandboxFactory, ShellExecutor } from "./shuru-backend"
 
 // ── Docker fakes ─────────────────────────────────────────────────────────────
 

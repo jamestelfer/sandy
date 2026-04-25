@@ -1,17 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
-import { mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { readConfig, writeConfig } from "./config"
+import { makeTmpDir, type TmpDir } from "./tmpdir"
 
-const tmpDir = join(import.meta.dir, "../.tmp-test-config")
+let tmpDir: TmpDir
 
-beforeEach(() => {
-  mkdirSync(tmpDir, { recursive: true })
-  process.env.XDG_CONFIG_HOME = tmpDir
+beforeEach(async () => {
+  tmpDir = await makeTmpDir("config-test-")
+  process.env.XDG_CONFIG_HOME = tmpDir.path
 })
 
-afterEach(() => {
-  rmSync(tmpDir, { recursive: true, force: true })
+afterEach(async () => {
+  await tmpDir[Symbol.asyncDispose]()
   delete process.env.XDG_CONFIG_HOME
 })
 
@@ -22,7 +23,7 @@ describe("readConfig", () => {
   })
 
   it("returns stored backend when config file exists", async () => {
-    const dir = join(tmpDir, "sandy")
+    const dir = join(tmpDir.path, "sandy")
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, "config.json"), JSON.stringify({ backend: "docker" }))
     const config = await readConfig()
