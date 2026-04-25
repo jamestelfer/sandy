@@ -14,8 +14,8 @@ Sandy runs TypeScript scripts in sandboxed microVMs with AWS SDK access via IMDS
 
 ## Installed packages
 
-- All `@aws-sdk/client-*` packages (ec2, ecs, ecr, s3, iam, lambda, cloudformation, ssm, secrets-manager, etc.)
-- `arquero` — data table manipulation and aggregation
+- ~175 `@aws-sdk/client-*` packages covering common investigation targets (compute, storage, data, messaging, identity, security, observability, cost). Run `pnpm list --depth=0` inside a session to see the exact set; if a client is missing, fall back to the AWS CLI via the host or request it be added
+- `arquero` — dplyr-style dataframes for JS. Use to group, join, filter, derive, and summarise records collected from paginated AWS responses. Reach for it when the answer involves counts per group, joins across clients (e.g. instances × tags), or sorting/top-N analysis
 - `simple-ascii-chart` — ASCII line and bar charts for terminal output
 - `console-table-printer` — table output
 - `@fast-csv/format` — CSV generation
@@ -61,8 +61,7 @@ Fetch current docs with context7:
 | AWS SDK JS v3 | `/aws/aws-sdk-js-v3` |
 | fast-csv | `/c2fo/fast-csv` |
 | JMESPath JS | `/jmespath/jmespath.js` |
-
-`console-table-printer` has no context7 entry — the README is the primary documentation.
+| console-table-printer | `/websites/console-table_netlify_app` |
 
 ## Examples
 
