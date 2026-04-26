@@ -52,7 +52,6 @@ Unit tests (`*.test.ts`) sit alongside source. Integration tests (`*.integration
 ```bash
 bun run fix                 # apply lint and format fixes
 bun run verify              # non-mutating quality gate: biome check + build + unit tests + Docker integration test
-bun run agent               # fix then verify
 bun test                    # unit tests only
 bun run integration:docker  # Docker integration test
 bun run build               # compile binary to dist/sandy
