@@ -8,7 +8,7 @@ import {
   listEmbeddedResourceUris,
   makeTmpDir,
   readEmbeddedResource,
-} from "./resources"
+} from "."
 
 describe("embedded filesystem", () => {
   test("memoises initialisation promise", () => {

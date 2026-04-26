@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test"
-import { runPrime } from "./cli/commands/prime"
-import { runResource } from "./cli/commands/resource"
+import { runPrime } from "./prime"
+import { runResource } from "./resource"
 
 describe("CLI prime", () => {
   it("prints CLI skill content", async () => {

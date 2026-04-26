@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { readConfig, writeConfig } from "./core"
-import { makeTmpDir, type TmpDir } from "./resources"
+import { makeTmpDir, type TmpDir } from "../resources"
+import { readConfig, writeConfig } from "."
 
 let tmpDir: TmpDir
 

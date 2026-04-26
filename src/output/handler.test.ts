@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { LineWriter, OutputHandler } from "./output"
+import { LineWriter, OutputHandler } from "."
 
 describe("OutputHandler", () => {
   test("stdoutLine accumulates line in output", () => {

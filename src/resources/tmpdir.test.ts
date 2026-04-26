@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
-import { makeTmpDir } from "./resources"
+import { makeTmpDir } from "."
 
 describe("makeTmpDir", () => {
   test("returns an existing directory under os.tmpdir()", async () => {

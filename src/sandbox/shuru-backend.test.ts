@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import * as fs from "node:fs/promises"
 import { join } from "node:path"
-import type { RunOptions } from "./core"
-import { OutputHandler } from "./output"
-import { makeTmpDir } from "./resources"
-import { type SandboxFactory, ShuruBackend } from "./sandbox"
-import { makeExecutor, makeSandboxFactory } from "./test-support"
+import type { RunOptions } from "../core"
+import { OutputHandler } from "../output"
+import { makeTmpDir } from "../resources"
+import { makeExecutor, makeSandboxFactory } from "../test-support"
+import { type SandboxFactory, ShuruBackend } from "."
 
 // Synthetic fixture paths — these never touch disk; the mock sandbox factory
 // inspects them as strings to assert mount/spawn wiring.

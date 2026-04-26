@@ -3,8 +3,8 @@
  * Run with: INTEGRATION=true bun test src/shuru-backend.integration.test.ts
  */
 import { describe, expect, test } from "bun:test"
-import { OutputHandler } from "./output"
-import { ShuruBackend } from "./sandbox"
+import { OutputHandler } from "../output"
+import { ShuruBackend } from "."
 
 const INTEGRATION = process.env.INTEGRATION === "true"
 const TIMEOUT = 300_000

@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { createLogger, noopLogger, stateDir } from "./logging"
-import { makeTmpDir, type TmpDir } from "./resources"
+import { makeTmpDir, type TmpDir } from "../resources"
+import { createLogger, noopLogger, stateDir } from "."
 
 let testTmpDir: TmpDir
 

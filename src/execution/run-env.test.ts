@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { DEFAULT_REGION, type RunOptions, VM_OUTPUT_DIR } from "./core"
-import { buildRunEnv } from "./execution"
+import { DEFAULT_REGION, type RunOptions, VM_OUTPUT_DIR } from "../core"
+import { buildRunEnv } from "."
 
 const baseOpts: RunOptions = {
   scriptPath: "/scripts/hello.ts",
