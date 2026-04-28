@@ -21,6 +21,59 @@ Sandy runs TypeScript scripts in sandboxed microVMs with AWS SDK access via IMDS
 - `@fast-csv/format` — CSV generation
 - `jmespath` — JSON query language
 
+## Library usage
+
+One-line idioms per library. **Before writing non-trivial library code, fetch full examples via context7** using the IDs in Library documentation below — these snippets cover only the most common shape.
+
+### arquero
+
+**Default choice for any analysis over collected records.** Reach for arquero any time the answer needs more than a trivial filter — it scales from counts-per-group to joins across clients, rollups with statistics (mean, median, stddev, quantile, correlation), window functions, pivots, and derived columns. Prefer it over hand-rolled loops and `Array.reduce`. Pair with the `aq.op.*` namespace for aggregates and row expressions.
+
+Use when: counting, grouping, joining, filtering, deriving, pivoting, or computing statistics over records from AWS generators.
+
+```typescript
+aq.from(rows)
+  .groupby("type")
+  .rollup({ n: aq.op.count(), p95: aq.op.quantile("latency", 0.95) })
+  .orderby(aq.desc("p95"))
+  .print()
+```
+
+### simple-ascii-chart
+
+Use when: rendering a small numeric series (e.g. daily counts) inline.
+
+```typescript
+console.log(plot(points, { width: 40, height: 8 })) // points: [number, number][]
+```
+
+### console-table-printer
+
+Use when: presenting results as a bordered terminal table.
+
+```typescript
+new Table({ columns: [{ name: "id" }, { name: "state" }] }).addRows(rows).printTable()
+```
+
+### @fast-csv/format
+
+Use when: writing rows to a CSV file under `process.env.SANDY_OUTPUT`.
+
+```typescript
+const csv = format({ headers: true })
+csv.pipe(createWriteStream(`${process.env.SANDY_OUTPUT}/out.csv`))
+for (const r of rows) csv.write(r)
+csv.end()
+```
+
+### jmespath
+
+Use when: projecting or filtering nested AWS response shapes.
+
+```typescript
+search(resp, "Reservations[].Instances[].{id: InstanceId, ip: PrivateIpAddress}")
+```
+
 ## AWS credentials
 
 Credentials resolved via IMDS. No static credentials needed — obtain an IMDS port from the imds-broker MCP before running.
