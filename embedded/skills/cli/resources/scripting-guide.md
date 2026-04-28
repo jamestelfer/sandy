@@ -76,7 +76,7 @@ search(resp, "Reservations[].Instances[].{id: InstanceId, ip: PrivateIpAddress}"
 
 ## AWS credentials
 
-Credentials resolved via IMDS. No static credentials needed — start an IMDS server and pass the port to `sandy run --imds-port`.
+Credentials resolved via IMDS. No static credentials needed — obtain an IMDS port from the imds-broker MCP before running.
 
 ## Constraints
 
