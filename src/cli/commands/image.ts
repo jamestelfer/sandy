@@ -29,18 +29,22 @@ export async function runImage(
 export function makeImageCommand(backend: Backend, onProgress: ProgressCallback): CommandModule {
   return {
     command: ["image <action>", "snapshot <action>"],
-    describe: "Manage the sandbox image",
+    describe: "Create or delete the sandbox image used by run and check",
     builder: (y) =>
       y
         .positional("action", {
           choices: ["create", "delete"] as const,
           demandOption: true,
+          describe: "create: build the image; delete: remove it",
         })
         .option("force", {
           type: "boolean",
           default: false,
-          describe: "Remove all cached layers for a clean rebuild, takes more time",
-        }),
+          describe: "Remove all cached layers for a clean rebuild",
+        })
+        .example("$0 image create", "Build the sandbox image")
+        .example("$0 image delete", "Remove the sandbox image")
+        .example("$0 image delete --force", "Remove all cached layers"),
     handler: async (argv) => runImage(argv as unknown as ImageArgs, backend, onProgress),
   }
 }

@@ -63,19 +63,35 @@ export async function runConnect(
 export function makeCheckCommand(backend: Backend, onProgress: ProgressCallback): CommandModule {
   return {
     command: "check",
-    describe: "Run health checks",
+    describe: "Run sandbox health checks (baseline executes a script; connect verifies IMDS)",
     builder: (y) =>
       y
-        .command("baseline", "Run baseline health check", {}, async () =>
-          runBaseline(backend, onProgress),
+        .command(
+          "baseline",
+          "Verify the sandbox can execute a TypeScript script",
+          (y) => y.example("$0 check baseline", "Run the baseline script inside the sandbox"),
+          async () => runBaseline(backend, onProgress),
         )
         .command(
           "connect",
-          "Run connectivity check",
+          "Verify the sandbox can reach the IMDS server on the host",
           (y) =>
             y
-              .option("imds-port", { type: "number", demandOption: true })
-              .option("region", { type: "string", default: DEFAULT_REGION }),
+              .option("imds-port", {
+                type: "number",
+                demandOption: true,
+                describe: "Port of a running IMDS server on the host",
+              })
+              .option("region", {
+                type: "string",
+                default: DEFAULT_REGION,
+                describe: `AWS region for the check (default ${DEFAULT_REGION})`,
+              })
+              .example("$0 check connect --imds-port 8080", "Check IMDS reachability on port 8080")
+              .example(
+                "$0 check connect --imds-port 8080 --region ap-southeast-2",
+                "Override the default region",
+              ),
           async (argv) => runConnect(argv as unknown as ConnectArgs, backend, onProgress),
         )
         .demandCommand(1),

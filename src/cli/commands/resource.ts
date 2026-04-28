@@ -21,8 +21,15 @@ export async function runResource(
 
 const resourceCommand: CommandModule<Record<string, never>, ResourceArgs> = {
   command: "resource [url]",
-  describe: "List or read embedded Sandy resources",
-  builder: (y) => y.positional("url", { type: "string" }),
+  describe: "List embedded sandy:// resources, or print one when a URI is given",
+  builder: (y) =>
+    y
+      .positional("url", {
+        type: "string",
+        describe: "sandy:// URI; omit to list all available URIs",
+      })
+      .example("$0 resource", "List all resource URIs")
+      .example("$0 resource sandy://skills/cli/SKILL.md", "Print the CLI skill"),
   handler: async (argv: ArgumentsCamelCase<ResourceArgs>) => runResource(argv),
 }
 

@@ -35,7 +35,12 @@ export async function runMcp(
 export function makeMcpCommand(backend: Backend): CommandModule {
   return {
     command: "mcp",
-    describe: "Start the MCP server",
+    describe:
+      "Start the MCP server on stdio (tools: sandy_image, sandy_check, sandy_run, sandy_resume_session)",
+    builder: (y) =>
+      y.epilogue(
+        "The MCP server uses the backend from 'sandy config'. See 'sandy resource sandy://skills/mcp/SKILL.md' for details.",
+      ),
     handler: async () => {
       const code = await runMcp(backend)
       if (code !== 0) {

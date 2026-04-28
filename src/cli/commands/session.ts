@@ -25,12 +25,12 @@ export async function runSessionCreate(
 
 const sessionCommand: CommandModule = {
   command: "session",
-  describe: "Manage sessions",
+  describe: "Manage Sandy sessions (currently: create)",
   builder: (y) =>
     y.command(
       "create",
-      "Create a new session and print its name and scripts directory path. Write scripts into that path before invoking `run`.",
-      () => {},
+      "Create a session and print its name and scripts directory",
+      (y) => y.example("$0 session create", "Allocate a new session directory"),
       async () => {
         await runSessionCreate()
       },

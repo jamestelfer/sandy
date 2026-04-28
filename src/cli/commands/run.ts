@@ -45,17 +45,46 @@ export async function runRun(
 export function makeRunCommand(backend: Backend, onProgress: ProgressCallback): CommandModule {
   return {
     command: "run",
-    describe: "Run a TypeScript script",
+    describe: "Execute a TypeScript script from <session>/scripts/ inside the sandbox",
     builder: (y) =>
       y
-        .option("script", { type: "string", demandOption: true })
-        .option("imds-port", { type: "number", demandOption: true })
-        .option("region", { type: "string", default: DEFAULT_REGION })
-        .option("session", { type: "string", demandOption: true })
+        .option("script", {
+          type: "string",
+          demandOption: true,
+          describe: "Script filename relative to the session scripts directory",
+        })
+        .option("imds-port", {
+          type: "number",
+          demandOption: true,
+          describe: "Port of a running IMDS server on the host",
+        })
+        .option("region", {
+          type: "string",
+          default: DEFAULT_REGION,
+          describe: `AWS region passed to the script (default ${DEFAULT_REGION})`,
+        })
+        .option("session", {
+          type: "string",
+          demandOption: true,
+          describe: "Session name from 'sandy session create'",
+        })
         .parserConfiguration({
           "populate--": true,
           "parse-positional-numbers": false,
-        }),
+        })
+        .example(
+          "$0 run --session s-abc --script list.ts --imds-port 8080",
+          "Run list.ts inside the sandbox",
+        )
+        .example(
+          "$0 run --session s-abc --script list.ts --imds-port 8080 --region ap-southeast-2",
+          "Override the default region",
+        )
+        .example(
+          "$0 run --session s-abc --script list.ts --imds-port 8080 -- --bucket my-bucket",
+          "Forward arguments after -- to the script",
+        )
+        .epilogue("Arguments after -- are forwarded to the script as process.argv."),
     handler: async (argv) => runRun(argv as unknown as RunArgs, backend, onProgress),
   }
 }

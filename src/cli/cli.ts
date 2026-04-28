@@ -11,6 +11,10 @@ export function makeCli(
 ): Argv {
   const parser = yargs(argv).scriptName("sandy")
   return registerCommands(parser, backend, onProgress)
+    .usage("$0 <command>\n\nRun sandboxed TypeScript scripts with AWS SDK access via IMDS.")
+    .epilog(
+      "Run 'sandy prime' for the full CLI skill, or 'sandy resource' to list embedded guides.",
+    )
     .demandCommand(1, "Specify a command")
     .strict()
     .help()
