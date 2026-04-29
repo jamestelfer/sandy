@@ -2,6 +2,7 @@ import { createHash } from "node:crypto"
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
+import { cleanupStaleSessions } from "./cleanup"
 
 function tryUseDir(dirPath: string): boolean {
   const probePath = path.join(dirPath, ".write-probe")
@@ -23,11 +24,19 @@ function ensureGitignore(): void {
   }
 }
 
+async function reportCleanup(baseDir: string): Promise<void> {
+  const count = await cleanupStaleSessions(baseDir)
+  if (count > 0) {
+    process.stderr.write(`cleaned up ${count} stale empty sessions\n`)
+  }
+}
+
 export async function establishWorkDir(): Promise<void> {
   const origin = process.cwd()
   const local = path.resolve(origin, ".sandy")
   if (tryUseDir(local)) {
     ensureGitignore()
+    await reportCleanup(local)
     return
   }
 
@@ -35,6 +44,7 @@ export async function establishWorkDir(): Promise<void> {
   const fallback = path.join(os.tmpdir(), "sandy", hash)
   if (tryUseDir(fallback)) {
     ensureGitignore()
+    await reportCleanup(fallback)
     return
   }
 

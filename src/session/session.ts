@@ -4,7 +4,7 @@ import { dirname, join, resolve, sep } from "node:path"
 import { humanId } from "human-id"
 
 // Matches the humanId output format: two or more lowercase words separated by hyphens.
-const SESSION_NAME_RE = /^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)+$/
+export const SESSION_NAME_RE = /^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)+$/
 const SESSION_NAME_FORMAT =
   "expected lowercase hyphen-separated words (for example: quick-brown-fox)"
 
