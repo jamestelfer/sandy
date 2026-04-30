@@ -184,12 +184,13 @@
     "@aws-sdk/client-workspaces": "latest",
     "@aws-sdk/client-xray": "latest",
     "arquero": "latest",
-    "simple-ascii-chart": "latest",
-    "console-table-printer": "latest",
     "@fast-csv/format": "latest",
-    "jmespath": "latest",
     "@types/jmespath": "latest",
     "@types/node": "latest",
+    "console-table-printer": "latest",
+    "jmespath": "latest",
+    "nanoid": "latest",
+    "simple-ascii-chart": "latest",
     "typescript": "latest"
   }
 }

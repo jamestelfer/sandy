@@ -206,6 +206,14 @@ describe("resources", () => {
     expect(content).toContain("# Sandy")
     expect(content).toContain("sandy://skills/mcp/resources/scripting-guide.md")
   })
+
+  test("prime includes research mode resource URIs", async () => {
+    const content = await server.handlePrime()
+
+    expect(content).toContain("sandy://skills/research/modes/firefight.md")
+    expect(content).toContain("sandy://skills/research/modes/audit.md")
+    expect(content).toContain("sandy://skills/research/modes/architect.md")
+  })
 })
 
 describe("sandy_check", () => {

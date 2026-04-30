@@ -12,6 +12,17 @@ describe("CLI prime", () => {
     expect(output).toContain("# Sandy")
     expect(output).toContain("sandy resource sandy://skills/cli/resources/scripting-guide.md")
   })
+
+  it("includes research mode resource URIs", async () => {
+    let output = ""
+    await runPrime((line) => {
+      output += line
+    })
+
+    expect(output).toContain("sandy://skills/research/modes/firefight.md")
+    expect(output).toContain("sandy://skills/research/modes/audit.md")
+    expect(output).toContain("sandy://skills/research/modes/architect.md")
+  })
 })
 
 describe("CLI resource", () => {

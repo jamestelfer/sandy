@@ -3,6 +3,8 @@ dist
 embedded.tar
 .bunli
 .claude/settings.local.json
+.claude/worktrees
+plans/
 
 # Sandbox environment bind-mount artifacts
 .bash_profile

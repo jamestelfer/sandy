@@ -132,3 +132,70 @@ resource: sandy://skills/mcp/resources/examples/ecs_services.ts
 6. Run `sandy_check(action: "connect", imdsPort: <port>)`.
 7. Run `sandy_run(session: <name>, script: "file.ts", imdsPort: <port>)`.
 8. Read outputs from `.sandy/<session>/output/` or from the returned `output` text.
+
+## Operating protocols
+
+These rules apply to every Sandy investigation, regardless of mode. Non-adherence defeats the tool.
+
+### Division of labour
+
+- Sandy is the engine for data retrieval, collation, and mathematical analysis.
+- The agent guides diagnosis, forms and tests hypotheses, and decides what to investigate next.
+- Do not spend agent tokens wading through raw data. Reduce it in-sandbox with Sandy scripts, `jq`, or local tooling, then summarise.
+
+### Query strategy
+
+- Prefer small, targeted queries. Escalate to wider scans only when a signal warrants depth.
+- Constrain `Describe*` and `List*` calls by tag, region, identifier, or time window wherever the API allows.
+- Write async-generator iterators for every paginated call. Do not accumulate whole result sets into arrays.
+
+### Data to disk, summary to stdout
+
+- Full data artefacts are written to files under `process.env.SANDY_OUTPUT`.
+- Stdout carries short summaries and the evidence that informs the next decision, not raw payloads.
+- Record what each file means, either in per-file metadata or via evidence-ledger entries.
+
+### Evidence ledger
+
+For each distinct data artefact relevant to the investigation, the script should call `Evidence.append` (exposed by the in-sandbox `sandy` module) so the ledger stays synchronised with the produced data. The append contract:
+
+```ts
+interface EvidenceEntry {
+  id: string          // ULID generated inline
+  timestamp: string   // ISO 8601
+  hypotheses: string[]
+  summary: string     // ≤ 20 words (guideline, not enforced)
+  dataFile?: string   // path relative to SANDY_OUTPUT
+}
+```
+
+`hypotheses` is a non-empty-compatible string array of hypothesis ids maintained by the agent in `hypotheses.json` under the session output directory. Dangling hypothesis ids are tolerated at write time and reconciled by the agent.
+
+### Companion MCPs
+
+Two companion MCPs, when available, raise code-generation and AWS-claim correctness. Treat them as recommended-but-optional:
+
+- **Context7** — library and SDK documentation. Use it whenever you need current API shapes, version-specific behaviour, or code examples for any library (including `@aws-sdk/*`). Prefer it over recall from training data.
+- **AWS Knowledge Base MCP** — `https://knowledge-mcp.global.api.aws`. Authoritative AWS service documentation: behaviour, limits, pricing, region availability. Prefer it over recall for any AWS-specific claim.
+
+When either companion is absent, ground claims in sandbox-observable evidence. Do not assert API shapes or service behaviour from memory; record any such gap as a known-unknown.
+
+## Triage
+
+On the first substantive research question of a session, classify the work into one of the research modes below, state the chosen mode, and load the matching resource at `sandy://skills/research/modes/<mode>.md`. When the user explicitly signals a mode change, reload the new mode's resource and announce the switch.
+
+### Modes
+
+- **Firefight** — an incident or active failure. Classification cues: words like "down", "errors spiking", "failing", "broken"; stated customer impact; recent deploy correlation.
+- **Audit** — discovery or inventory across existing resources. Classification cues: words like "how many", "which", "where is", "what owns"; cost or compliance framing; no stated failure.
+- **Architect** — design of a new or changing capability. Classification cues: words like "should we", "trade-off", "alternatives", "design"; discussion of non-existent-yet systems.
+
+If the question does not cleanly match any mode, default to Audit and note the ambiguity to the user.
+
+Where a matching service resource exists under `sandy://skills/research/services/<service>.md`, load it when the service becomes relevant. Missing service resources are non-blocking; record the gap as a known-unknown in `hypotheses.json` or in-context notes.
+
+### Research mode resources
+
+- `sandy://skills/research/modes/firefight.md`
+- `sandy://skills/research/modes/audit.md`
+- `sandy://skills/research/modes/architect.md`

@@ -96,3 +96,14 @@ All subprocess stdout + stderr flow through `OutputHandler` → written to **pro
 Use `DummyBackend` in CLI and MCP tests — not mocks. It records calls in `backend.calls`, returns configurable results via `backend.runResult` / `backend.imageExistsResult`, and fires `onProgress` for each string in `backend.progressLines`. This exercises real dispatch paths.
 
 Test isolation: config tests set `process.env.XDG_CONFIG_HOME` to a temp dir; session tests `chdir` to a temp dir. Both restore in `afterEach`.
+
+## Skill authoring
+
+Skill content under `embedded/skills/**` is calibrated for Claude Sonnet 4.6 or stronger. Procedural-tier files assume the model tolerates dense imperative rules; strategic-tier files assume it adapts a declared reasoning framework rather than template-matching a procedure. Behaviour on weaker models is out of scope — retune density and open-endedness before targeting a lower floor.
+
+Every skill file leads with a one-sentence trigger, two to four hard invariants, any data schemas in fenced `ts` blocks, then the tier-specific body.
+
+- **Procedural tier** (≤ 200 lines) — scripting guides, per-service notes. Body: DO / DO NOT list calibrated to observed failure modes, a minimal runnable Golden Path using the real Sandy runtime and AWS SDK, named Pitfalls with symptom and remedy. Voice is imperative.
+- **Strategic tier** (≤ 150 lines) — research modes. Body: framework, tactical set (≤ 4 techniques referenced by name), state-file usage, closure criteria. Voice is declarative, second-person, guidance-oriented. No SDK code.
+
+`embedded/skills/mcp/SKILL.md` is the canonical skill. `plugin/skills/sandy/SKILL.md` must match it byte-for-byte — enforced by the `skill sync contract` test. Update both when editing either.

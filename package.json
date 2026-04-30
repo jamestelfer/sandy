@@ -11,7 +11,7 @@
     "build-binary": "bun build --compile --target=bun src/main.ts --outfile dist/sandy",
     "resign": "./bin/resign.sh",
     "pretest": "bun scripts/pack-embedded.ts",
-    "test": "bun test",
+    "test": "bun test --ignore='embedded/**'",
     "lint": "biome lint .",
     "lint:fix": "biome lint --fix --unsafe .",
     "format": "biome format .",

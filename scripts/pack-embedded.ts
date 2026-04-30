@@ -12,7 +12,9 @@ if (!existsSync(sourceDir)) {
 
 await new Promise<void>((resolvePromise, rejectPromise) => {
   tar
-    .pack(sourceDir)
+    .pack(sourceDir, {
+      ignore: (name) => name.endsWith(".test.ts"),
+    })
     .pipe(createWriteStream(archivePath))
     .on("finish", resolvePromise)
     .on("error", rejectPromise)

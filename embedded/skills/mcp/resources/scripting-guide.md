@@ -21,6 +21,13 @@ Sandy runs TypeScript scripts in sandboxed microVMs with AWS SDK access via IMDS
 - `@fast-csv/format` — CSV generation
 - `jmespath` — JSON query language
 
+## Knowledge sources
+
+Query these before writing scripts — they substantially outperform training knowledge on specifics:
+
+- **AWS Knowledge Base MCP** (`awskb`) — service API behaviour, parameter enums, pagination shapes, filter value strings, date-range constraints, and quotas. Consult it for any service you are about to use; training knowledge misfires on exact enum values, per-API restrictions, and service-specific edge cases.
+- **context7** — current library docs. Use before writing non-trivial arquero, fast-csv, or jmespath code. IDs are in the Library documentation section below.
+
 ## Library usage
 
 One-line idioms per library. **Before writing non-trivial library code, fetch full examples via context7** using the IDs in Library documentation below — these snippets cover only the most common shape.
@@ -38,6 +45,10 @@ aq.from(rows)
   .orderby(aq.desc("p95"))
   .print()
 ```
+
+**Skip it for:** single totals (`rows.reduce`), simple filter-and-sort (plain JS), type-preserving transforms (plain `.map` keeps your TS type; arquero loses it).
+
+**Pitfalls:** empty tables have no columns — guard `if (rows.length === 0) return` before any derivation. `aq.escape` inside `aq.op.*` aggregators throws at evaluation — derive the column first, then aggregate by name. `.object()` / `.objects()` return untyped `object` — cast inline at every call site.
 
 ### simple-ascii-chart
 
@@ -118,7 +129,7 @@ Fetch current docs with context7:
 
 ## Examples
 
-Working examples are available as MCP resources:
+Working examples are available as embedded resources:
 
 - `sandy://skills/mcp/resources/examples/ec2_describe.ts` — Describe EC2 instances with filtering and table output
 - `sandy://skills/mcp/resources/examples/ecs_services.ts` — List ECS services across clusters
@@ -134,7 +145,26 @@ progress("fetching EC2 instances...")
 progress("processing page 3 of results")
 ```
 
+## Script sizing and resilience
+
+**Write retrieval artefacts to disk before analysis.** API calls are expensive; disk reads are not. If the script fails mid-analysis, rewrite it to read the artefact from `SANDY_OUTPUT` instead of re-fetching.
+
+**Split for agent control, not fault isolation.** Ask: what is the minimum needed to validate or invalidate this hypothesis? Run that first. A script that collects everything in one pass forecloses backoff. A script boundary creates a decision point — inspect partial results, then decide whether to proceed or redirect.
+
+Two levels of nesting with generators (e.g. clusters → services) is normal. Deeper nesting at high cardinality (clusters → services → tasks → metrics) warrants seams: write each level to disk before descending to the next.
+
+**Fan out per-entity sub-requests in parallel.** After loading an inventory, use `Promise.allSettled()` for the next level of API calls rather than sequential iteration. Handle individual failures from the results array explicitly.
+
+```typescript
+const results = await Promise.allSettled(entities.map(e => fetchMetrics(client, e.id)))
+for (const [i, r] of results.entries()) {
+  if (r.status === "rejected") { progress(`${entities[i].id}: ${r.reason.message}`); continue }
+  // use r.value
+}
+```
+
+**Let failures surface.** No generic error wrapping — a clear crash is better than silent partial data.
+
 ## Other guidelines
 
-- **Provide partial results on failure.** Wrap outer-loop iterations in try/catch.
 - **Break logic into functions** — generators for iteration, pure functions for analysis.
