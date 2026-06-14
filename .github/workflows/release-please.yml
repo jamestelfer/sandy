@@ -1,0 +1,16 @@
+name: release-please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  release-please:
+    uses: chinmina/.github/.github/workflows/release-please.yml@verified-actions
+    with:
+      token-source: octo-sts
+    secrets: inherit

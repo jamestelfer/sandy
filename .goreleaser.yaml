@@ -1,6 +1,6 @@
-# Alternative release pipeline using GoReleaser's bun builder.
-# Triggered manually via .github/workflows/release-goreleaser.yml to compare
-# against the inline workflow in release.yml.
+# GoReleaser configuration for the Sandy release pipeline.
+# Driven by the chinmina/.github goreleaser-release reusable workflow
+# (.github/workflows/release.yml) on tag push.
 version: 2
 
 project_name: sandy
@@ -37,6 +37,10 @@ release:
   github:
     owner: jamestelfer
     name: sandy
+  # release-please creates the draft first; goreleaser fills it without
+  # publishing. The reusable workflow publishes after attestation completes.
+  draft: true
+  mode: keep-existing
   prerelease: auto
 
 homebrew_casks:

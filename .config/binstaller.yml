@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/binary-install/binstaller/main/schema/InstallSpec.json
+# Generates install.sh, attached to each release by the chinmina goreleaser-release
+# workflow. Asset names must track .goreleaser.yaml archive name_template.
+schema: v1
+name: sandy
+repo: jamestelfer/sandy
+default_version: latest
+
+asset:
+  # Mirrors goreleaser: sandy-<version>-<os>-<arch>.tar.gz (version has no leading v).
+  template: ${NAME}-${VERSION}-${OS}-${ARCH}${EXT}
+  default_extension: .tar.gz
+  binaries:
+    - name: sandy
+      path: sandy
+  rules:
+    # goreleaser emits "x64" for amd64; binstaller detects "amd64".
+    - when:
+        arch: amd64
+      arch: x64
+
+checksums:
+  template: ${NAME}-${VERSION}-checksums.txt
+  algorithm: sha256
+
+supported_platforms:
+  - os: linux
+    arch: amd64
+  - os: linux
+    arch: arm64
+  - os: darwin
+    arch: amd64
+  - os: darwin
+    arch: arm64
+
+unpack:
+  strip_components: 0

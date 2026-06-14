@@ -87,6 +87,23 @@ npm install -g @jamestelfer/sandy
 </details>
 
 <details>
+<summary><strong>Install script</strong></summary>
+
+The install script fetches the correct binary for your platform from [GitHub Releases](https://github.com/jamestelfer/sandy/releases):
+
+```sh
+curl -fsSL https://github.com/jamestelfer/sandy/releases/latest/download/install.sh | sh
+```
+
+Verify the script's provenance before running it:
+
+```sh
+gh attestation verify install.sh --repo jamestelfer/sandy
+```
+
+</details>
+
+<details>
 <summary><strong>Nix</strong></summary>
 
 Install directly from the flake into your profile:
@@ -101,6 +118,12 @@ nix profile install github:jamestelfer/sandy
 <summary><strong>Manual download</strong></summary>
 
 Pre-built binaries for Linux and macOS (amd64/arm64) are on the [releases page](https://github.com/jamestelfer/sandy/releases). Download the archive for your OS and architecture, extract, and place the binary on your `PATH`.
+
+Each archive ships with a build provenance attestation. Verify it before extracting:
+
+```sh
+gh attestation verify sandy-<version>-<os>-<arch>.tar.gz --owner jamestelfer
+```
 
 </details>
 

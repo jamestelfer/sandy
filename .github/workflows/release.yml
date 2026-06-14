@@ -1,42 +1,22 @@
-name: Release
+name: release
+
+# Filename must remain release.yml: npm trusted publishing validates the
+# caller workflow filename when the npm channel lands (see plans/npm-release-channel.md).
 
 on:
   push:
-    tags:
-      - "v*.*.*"
+    tags: ["v*"]
 
 permissions:
   contents: write
   id-token: write
+  attestations: write
 
 jobs:
   release:
-    runs-on: ubuntu-latest
-    environment: release
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: "1.3.12"
-
-      - uses: goreleaser/goreleaser-action@v7
-        with:
-          distribution: goreleaser
-          version: "~> v2"
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_GITHUB_TOKEN: ${{ secrets.HOMEBREW_GITHUB_TOKEN }}
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Publish npm packages
-        run: .github/workflows/npm/publish.sh "${VERSION}"
-        env:
-          VERSION: ${{ github.ref_name }}
+    uses: chinmina/.github/.github/workflows/goreleaser-release.yml@verified-actions
+    with:
+      token-source: octo-sts
+      disable-binstaller: false
+      disable-homebrew: false
+    secrets: inherit
