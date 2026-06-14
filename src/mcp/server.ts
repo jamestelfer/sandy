@@ -2,6 +2,7 @@ import { join } from "node:path"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol"
 import type { ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types"
+import { version } from "../../package.json"
 import { DEFAULT_REGION, type ProgressCallback, type RunOptions } from "../core"
 import { type Logger, noopLogger } from "../logging"
 import { OutputHandler } from "../output"
@@ -211,7 +212,7 @@ export class SandyMcpServer {
   // ── MCP SDK wiring ───────────────────────────────────────────────────────
 
   createMcpServer(): McpServer {
-    const server = new McpServer({ name: "sandy", version: "0.1.0" })
+    const server = new McpServer({ name: "sandy", version })
 
     registerMcpTools(server, {
       logger: this.logger,
