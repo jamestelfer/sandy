@@ -6,7 +6,8 @@
     ".": {
       "release-type": "node",
       "package-name": "sandy",
-      "draft": true
+      "draft": true,
+      "extra-files": ["flake.nix"]
     }
   }
 }
