@@ -20,7 +20,9 @@ asset:
       arch: x64
 
 checksums:
-  template: ${NAME}-${VERSION}-checksums.txt
+  # chinmina's attest step expects dist/checksums.txt; goreleaser publishes it
+  # under that name, so the install script downloads the same asset.
+  template: checksums.txt
   algorithm: sha256
 
 supported_platforms:

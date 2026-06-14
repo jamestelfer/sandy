@@ -31,16 +31,16 @@ archives:
       {{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{- if eq .Arch "amd64" }}x64{{- else }}{{ .Arch }}{{- end }}
 
 checksum:
-  name_template: "{{ .ProjectName }}-{{ .Version }}-checksums.txt"
+  name_template: "checksums.txt"
 
 release:
   github:
     owner: jamestelfer
     name: sandy
-  # release-please creates the draft first; goreleaser fills it without
+  # release-please creates the draft first; goreleaser reuses it without
   # publishing. The reusable workflow publishes after attestation completes.
   draft: true
-  mode: keep-existing
+  use_existing_draft: true
   prerelease: auto
 
 homebrew_casks:
