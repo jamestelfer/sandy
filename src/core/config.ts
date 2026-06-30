@@ -8,7 +8,7 @@ export interface Config {
   backend: BackendType
 }
 
-const DEFAULT_CONFIG: Config = { backend: "shuru" }
+const DEFAULT_CONFIG: Config = { backend: "docker" }
 
 function configPath(): string {
   const xdg = process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config")

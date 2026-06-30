@@ -22,10 +22,10 @@ afterEach(() => {
 })
 
 describe("CLI config", () => {
-  it("reads and returns the current backend (default shuru)", async () => {
+  it("reads and returns the current backend (default docker)", async () => {
     const output: string[] = []
     await runConfig({ docker: false, shuru: false }, (line) => output.push(line))
-    expect(output.join("\n")).toContain("shuru")
+    expect(output.join("\n")).toContain("docker")
   })
 
   it("--shuru flag writes shuru config", async () => {

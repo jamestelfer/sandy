@@ -17,9 +17,9 @@ afterEach(async () => {
 })
 
 describe("readConfig", () => {
-  it("returns default shuru backend when no config file exists", async () => {
+  it("returns default docker backend when no config file exists", async () => {
     const config = await readConfig()
-    expect(config.backend).toBe("shuru")
+    expect(config.backend).toBe("docker")
   })
 
   it("returns stored backend when config file exists", async () => {

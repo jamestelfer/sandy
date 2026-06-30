@@ -118,7 +118,7 @@ The Claude Code plugin configures an agent to use Sandy as an MCP server and shi
 
 ### Prerequisites
 
-- [Shuru](https://github.com/nicholasgasior/shuru) or Docker — select with `sandy config` (defaults to Shuru)
+- [Shuru](https://github.com/nicholasgasior/shuru) or Docker — select with `sandy config` (defaults to Docker)
 - [imds-broker](https://github.com/jamestelfer/imds-broker) — serves AWS credentials via IMDS on the host
 - Claude Code (optional, required only for the plugin)
 
