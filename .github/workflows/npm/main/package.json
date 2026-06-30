@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jamestelfer/sandy.git"
+    "url": "https://github.com/jamestelfer/sandy"
   },
   "bin": {
     "sandy": "./bin/sandy.js"
