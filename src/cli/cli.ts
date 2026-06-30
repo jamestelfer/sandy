@@ -13,7 +13,8 @@ export function makeCli(
   return registerCommands(parser, backend, onProgress)
     .usage("$0 <command>\n\nRun sandboxed TypeScript scripts with AWS SDK access via IMDS.")
     .epilog(
-      "Run 'sandy prime' for the full CLI skill, or 'sandy resource' to list embedded guides.",
+      "Run 'sandy prime' for the full CLI skill, or 'sandy resource' to list embedded guides. " +
+        "'sandy prime' output is long: read it in full and do not truncate with head, tail, or a pager.",
     )
     .demandCommand(1, "Specify a command")
     .strict()

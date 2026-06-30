@@ -21,7 +21,8 @@ export async function runResource(
 
 const resourceCommand: CommandModule<Record<string, never>, ResourceArgs> = {
   command: "resource [url]",
-  describe: "List embedded sandy:// resources, or print one when a URI is given",
+  describe:
+    "List embedded sandy:// resources, or print one when a URI is given (read printed content in full; do not truncate)",
   builder: (y) =>
     y
       .positional("url", {

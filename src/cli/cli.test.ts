@@ -5,11 +5,21 @@ import yargs from "yargs"
 import { noopLogger } from "../logging"
 import { establishWorkDir, Session } from "../session"
 import { DummyBackend, useTestCwdIsolation } from "../test-support"
+import { makeCli } from "./cli"
 import { runBaseline, runConnect } from "./commands/check"
 import { runConfig } from "./commands/config"
 import { runImage } from "./commands/image"
 import { runMcp } from "./commands/mcp"
 import { makeRunCommand, runRun } from "./commands/run"
+
+async function helpFor(args: string[]): Promise<string> {
+  const backend = new DummyBackend()
+  return await new Promise<string>((resolve) => {
+    makeCli(backend, () => {}, args)
+      .exitProcess(false)
+      .parse(args, (_err: unknown, _argv: unknown, output: string) => resolve(output))
+  })
+}
 
 const isolatedCwd = useTestCwdIsolation()
 
@@ -444,6 +454,25 @@ describe("CLI run", () => {
     const combined = stderrLines.join("")
     expect(combined).toContain("output directory")
     expect(combined).not.toContain("[err]")
+  })
+})
+
+describe("CLI help truncation warnings", () => {
+  it("top-level help epilog warns prime output must not be truncated", async () => {
+    const output = await helpFor(["--help"])
+    expect(output).toMatch(/prime/i)
+    expect(output).toMatch(/full|truncat/i)
+    expect(output).toMatch(/head|tail/i)
+  })
+
+  it("prime --help warns the output must be read in full", async () => {
+    const output = await helpFor(["prime", "--help"])
+    expect(output).toMatch(/full|truncat/i)
+  })
+
+  it("resource --help warns printed content must be read in full", async () => {
+    const output = await helpFor(["resource", "--help"])
+    expect(output).toMatch(/full|truncat/i)
   })
 })
 
