@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/jamestelfer/sandy/compare/v0.6.1...v0.6.2) (2026-07-01)
+
+
+### Bug Fixes
+
+* **sandbox:** scope host.docker.internal alias to Linux ([#36](https://github.com/jamestelfer/sandy/issues/36)) ([2919915](https://github.com/jamestelfer/sandy/commit/29199155ca1be3b00fdd21862dd6443161a632cb))
+
 ## [0.6.1](https://github.com/jamestelfer/sandy/compare/v0.6.0...v0.6.1) (2026-06-30)
 
 
