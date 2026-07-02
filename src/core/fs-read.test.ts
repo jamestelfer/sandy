@@ -34,23 +34,20 @@ describe("readFileIfPresent", () => {
   })
 
   it("throws a chained error for other failures", async () => {
-    const target = path.join(dir, "locked.txt")
-    await fs.writeFile(target, "secret")
-    await fs.chmod(target, 0o000)
+    // Reading a directory fails with EISDIR for any user, including root.
+    const target = path.join(dir, "actually-a-dir")
+    await fs.mkdir(target)
+
+    expect(() => readFileIfPresent(target, "test file")).toThrow(
+      /Cannot read test file at .*actually-a-dir/,
+    )
+    let cause: unknown
     try {
-      expect(() => readFileIfPresent(target, "test file")).toThrow(
-        /Cannot read test file at .*locked\.txt/,
-      )
-      let cause: unknown
-      try {
-        readFileIfPresent(target, "test file")
-      } catch (error) {
-        cause = error instanceof Error ? error.cause : undefined
-      }
-      expect(cause).toBeInstanceOf(Error)
-    } finally {
-      await fs.chmod(target, 0o644)
+      readFileIfPresent(target, "test file")
+    } catch (error) {
+      cause = error instanceof Error ? error.cause : undefined
     }
+    expect(cause).toBeInstanceOf(Error)
   })
 })
 
@@ -65,14 +62,10 @@ describe("listDirIfPresent", () => {
     expect(listDirIfPresent(path.join(dir, "missing"), "test dir")).toEqual([])
   })
 
-  it("throws a chained error for other failures", async () => {
-    const locked = path.join(dir, "locked")
-    await fs.mkdir(locked)
-    await fs.chmod(locked, 0o000)
-    try {
-      expect(() => listDirIfPresent(locked, "test dir")).toThrow(/Cannot read test dir at/)
-    } finally {
-      await fs.chmod(locked, 0o755)
-    }
+  it("throws a chained error for other failures", () => {
+    // A path component over 255 bytes fails with ENAMETOOLONG for any user, including root.
+    const target = path.join(dir, "x".repeat(300))
+
+    expect(() => listDirIfPresent(target, "test dir")).toThrow(/Cannot read test dir at/)
   })
 })
