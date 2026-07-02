@@ -6,6 +6,7 @@ import { createFsFromVolume, Volume } from "memfs"
 import type { ExtractOptions } from "tar-fs"
 import tar from "tar-fs"
 import tarPath from "../../embedded.tar" with { type: "file" }
+import { errorCode } from "../core"
 
 type MemFs = ReturnType<typeof createFsFromVolume>
 
@@ -129,7 +130,7 @@ export async function readEmbeddedResource(uri: string): Promise<string> {
     }
     return raw
   } catch (err: unknown) {
-    if (err instanceof Error && "code" in err && (err as NodeJS.ErrnoException).code === "ENOENT") {
+    if (errorCode(err) === "ENOENT") {
       throw new Error(`embedded resource not found: ${uri}`)
     }
     throw err

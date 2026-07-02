@@ -2,6 +2,7 @@ import { existsSync } from "node:fs"
 import { lstat, mkdir, rm, writeFile } from "node:fs/promises"
 import { dirname, join, resolve, sep } from "node:path"
 import { humanId } from "human-id"
+import { errorCode } from "../core"
 
 // Matches the humanId output format: two or more lowercase words separated by hyphens.
 export const SESSION_NAME_RE = /^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)+$/
@@ -96,7 +97,7 @@ export class Session {
         throw new Error(`script must not be a symlink: ${JSON.stringify(target)}`)
       }
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      if (errorCode(err) !== "ENOENT") {
         throw err
       }
     }

@@ -71,6 +71,35 @@ describe("resolveDockerOptions", () => {
     ).toThrow(/does-not-exist/)
   })
 
+  it("surfaces permission errors when scanning contexts instead of reporting not-found", async () => {
+    const configDir = path.join(homeDir, ".docker")
+    await writeDockerContext(configDir, "orbstack", { Host: "unix:///some.sock" })
+    const metaRoot = path.join(configDir, "contexts", "meta")
+    await fs.chmod(metaRoot, 0o000)
+    try {
+      expect(() => resolveDockerOptions({ env: { DOCKER_CONTEXT: "orbstack" }, homeDir })).toThrow(
+        /Cannot read Docker contexts/,
+      )
+    } finally {
+      await fs.chmod(metaRoot, 0o755)
+    }
+  })
+
+  it("surfaces permission errors on a context's meta.json instead of skipping it", async () => {
+    const configDir = path.join(homeDir, ".docker")
+    await writeDockerContext(configDir, "orbstack", { Host: "unix:///some.sock" })
+    const metaDirs = await fs.readdir(path.join(configDir, "contexts", "meta"))
+    const metaPath = path.join(configDir, "contexts", "meta", metaDirs[0] ?? "", "meta.json")
+    await fs.chmod(metaPath, 0o000)
+    try {
+      expect(() => resolveDockerOptions({ env: { DOCKER_CONTEXT: "orbstack" }, homeDir })).toThrow(
+        /Cannot read Docker context metadata/,
+      )
+    } finally {
+      await fs.chmod(metaPath, 0o644)
+    }
+  })
+
   it("throws when the selected context exists but its meta.json is unparseable", async () => {
     const configDir = path.join(homeDir, ".docker")
     const metaDir = path.join(configDir, "contexts", "meta", "garbled-hash")

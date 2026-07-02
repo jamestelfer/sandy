@@ -1,5 +1,5 @@
 import { makeCli } from "./cli"
-import type { ProgressCallback } from "./core"
+import { describeError, type ProgressCallback } from "./core"
 import { createBackend } from "./sandbox"
 
 const onProgress: ProgressCallback = (msg: string) => {
@@ -14,7 +14,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error)
-  process.stderr.write(`sandy: ${message}\n`)
+  process.stderr.write(`sandy: ${describeError(error)}\n`)
   process.exitCode = 1
 })

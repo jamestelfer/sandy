@@ -1,8 +1,8 @@
-import { readdirSync, readFileSync } from "node:fs"
 import { Agent } from "node:https"
 import * as os from "node:os"
 import * as path from "node:path"
 import type { DockerOptions } from "dockerode"
+import { listDirIfPresent, readFileIfPresent } from "../core"
 
 export interface ResolvedDockerEndpoint {
   /** Options for `new Docker(options)`; undefined defers to dockerode's own resolution. */
@@ -16,57 +16,66 @@ interface ResolveDeps {
   homeDir?: string
 }
 
-interface ContextMeta {
-  Name?: string
-  Endpoints?: { docker?: { Host?: string; SkipTLSVerify?: boolean } }
+// docker-modem accepts an `agent` option at runtime; @types/dockerode omits it.
+interface DockerAgentOptions extends DockerOptions {
+  agent?: Agent
 }
 
-function isAbsent(error: unknown): boolean {
-  const code = (error as NodeJS.ErrnoException).code
-  return code === "ENOENT" || code === "ENOTDIR"
+/** The docker endpoint of a named context, extracted from its meta.json. */
+interface ContextEndpoint {
+  host?: string
+  skipTlsVerify: boolean
+  storeDir: string
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null
+}
+
+// JSON cannot encode undefined, so undefined unambiguously means "unparseable".
+function parseJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return undefined
+  }
 }
 
 function readCurrentContext(configDir: string): string | undefined {
   const configPath = path.join(configDir, "config.json")
-  let raw: string
-  try {
-    raw = readFileSync(configPath, "utf-8")
-  } catch (error) {
-    if (isAbsent(error)) {
-      return undefined
-    }
-    throw new Error(`Cannot read Docker config at ${configPath}: ${(error as Error).message}`)
+  const raw = readFileIfPresent(configPath, "Docker config")
+  if (raw === undefined) {
+    return undefined
   }
-  try {
-    return (JSON.parse(raw) as { currentContext?: string }).currentContext
-  } catch {
+  const config = parseJson(raw)
+  if (config === undefined) {
     throw new Error(
       `Docker config at ${configPath} is not valid JSON. ` +
         `Fix it, or set DOCKER_HOST to bypass context resolution.`,
     )
   }
+  const current = isRecord(config) ? config.currentContext : undefined
+  return typeof current === "string" ? current : undefined
 }
 
-function findContextMeta(
-  configDir: string,
-  name: string,
-): { meta: ContextMeta; storeDir: string } | undefined {
+function findContextEndpoint(configDir: string, name: string): ContextEndpoint | undefined {
   const metaRoot = path.join(configDir, "contexts", "meta")
-  let entries: string[]
-  try {
-    entries = readdirSync(metaRoot)
-  } catch {
-    return undefined
-  }
-  for (const entry of entries) {
-    let meta: ContextMeta
-    try {
-      meta = JSON.parse(readFileSync(path.join(metaRoot, entry, "meta.json"), "utf-8"))
-    } catch {
+  for (const storeDir of listDirIfPresent(metaRoot, "Docker contexts")) {
+    const metaPath = path.join(metaRoot, storeDir, "meta.json")
+    const raw = readFileIfPresent(metaPath, "Docker context metadata")
+    // Unparseable meta.json is treated as not-found; the caller's error covers it.
+    const meta = raw === undefined ? undefined : parseJson(raw)
+    if (!isRecord(meta) || meta.Name !== name) {
       continue
     }
-    if (meta.Name === name) {
-      return { meta, storeDir: entry }
+    const docker =
+      isRecord(meta.Endpoints) && isRecord(meta.Endpoints.docker)
+        ? meta.Endpoints.docker
+        : undefined
+    return {
+      host: typeof docker?.Host === "string" ? docker.Host : undefined,
+      skipTlsVerify: docker?.SkipTLSVerify === true,
+      storeDir,
     }
   }
   return undefined
@@ -79,19 +88,8 @@ function readTlsMaterial(
   storeDir: string,
 ): { ca?: string; cert?: string; key?: string } {
   const tlsDir = path.join(configDir, "contexts", "tls", storeDir, "docker")
-  const read = (file: string): string | undefined => {
-    const filePath = path.join(tlsDir, file)
-    try {
-      return readFileSync(filePath, "utf-8")
-    } catch (error) {
-      if (isAbsent(error)) {
-        return undefined
-      }
-      throw new Error(
-        `Cannot read Docker context TLS file ${filePath}: ${(error as Error).message}`,
-      )
-    }
-  }
+  const read = (file: string): string | undefined =>
+    readFileIfPresent(path.join(tlsDir, file), "Docker context TLS file")
   return { ca: read("ca.pem"), cert: read("cert.pem"), key: read("key.pem") }
 }
 
@@ -109,9 +107,9 @@ export function resolveDockerOptions({
     return { options: undefined, source: "default Docker socket (dockerode probing)" }
   }
 
-  const found = findContextMeta(configDir, contextName)
-  const host = found?.meta.Endpoints?.docker?.Host
-  if (!found || !host) {
+  const endpoint = findContextEndpoint(configDir, contextName)
+  const host = endpoint?.host
+  if (!endpoint || !host) {
     throw new Error(
       `Docker context '${contextName}' has no usable endpoint under ${configDir}/contexts/meta ` +
         `(context missing, unparseable, or lacking a docker endpoint). ` +
@@ -140,9 +138,8 @@ export function resolveDockerOptions({
           `Fix the context, or set DOCKER_HOST to bypass context resolution.`,
       )
     }
-    const skipVerify = found.meta.Endpoints?.docker?.SkipTLSVerify === true
-    const { ca, cert, key } = readTlsMaterial(configDir, found.storeDir)
-    const useTls = skipVerify || Boolean(ca || cert || key)
+    const { ca, cert, key } = readTlsMaterial(configDir, endpoint.storeDir)
+    const useTls = endpoint.skipTlsVerify || Boolean(ca || cert || key)
     // WHATWG URL keeps IPv6 brackets in hostname; node's http host option must not.
     const hostname = url.hostname.replace(/^\[(.*)\]$/, "$1")
     // Docker's conventions for portless tcp endpoints: 2376 with TLS, 2375 without.
@@ -151,13 +148,13 @@ export function resolveDockerOptions({
     // With SkipTLSVerify, client certs are still presented (matching docker CLI);
     // docker-modem forwards a custom agent to the https request, its only knob
     // for accepting a daemon certificate without verification.
-    const tls = skipVerify
-      ? { protocol: "https" as const, cert, key, agent: new Agent({ rejectUnauthorized: false }) }
+    const tls: DockerAgentOptions = endpoint.skipTlsVerify
+      ? { protocol: "https", cert, key, agent: new Agent({ rejectUnauthorized: false }) }
       : useTls
-        ? { protocol: "https" as const, ca, cert, key }
-        : { protocol: "http" as const }
+        ? { protocol: "https", ca, cert, key }
+        : { protocol: "http" }
     return {
-      options: { host: hostname, port, ...tls } as DockerOptions,
+      options: { host: hostname, port, ...tls },
       source: `context '${contextName}' → tcp://${url.hostname}:${port}`,
     }
   }
