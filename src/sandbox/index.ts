@@ -7,6 +7,7 @@ export {
   defaultBuildContextFactory,
   type ImageLike,
 } from "./docker-backend"
+export { type ResolvedDockerEndpoint, resolveDockerOptions } from "./docker-endpoint"
 export { createBackend } from "./factory"
 export {
   type SandboxFactory,
