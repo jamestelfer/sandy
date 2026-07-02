@@ -92,6 +92,57 @@ describe("resolveDockerOptions", () => {
     )
   })
 
+  it("resolves a tcp context with TLS material to host, port, protocol and certs", async () => {
+    const configDir = path.join(homeDir, ".docker")
+    await writeContext(configDir, "remote-tls", { Host: "tcp://daemon.example.com:2376" })
+    const tlsDir = path.join(configDir, "contexts", "tls", "remote-tls-hash", "docker")
+    await fs.mkdir(tlsDir, { recursive: true })
+    await fs.writeFile(path.join(tlsDir, "ca.pem"), "CA-PEM")
+    await fs.writeFile(path.join(tlsDir, "cert.pem"), "CERT-PEM")
+    await fs.writeFile(path.join(tlsDir, "key.pem"), "KEY-PEM")
+
+    const { options, source } = resolveDockerOptions({
+      env: { DOCKER_CONTEXT: "remote-tls" },
+      homeDir,
+    })
+
+    expect(options).toEqual({
+      host: "daemon.example.com",
+      port: 2376,
+      protocol: "https",
+      ca: "CA-PEM",
+      cert: "CERT-PEM",
+      key: "KEY-PEM",
+    })
+    expect(source).toContain("tcp://daemon.example.com:2376")
+  })
+
+  it("disables certificate verification for tcp contexts with SkipTLSVerify, without requiring certs", async () => {
+    const configDir = path.join(homeDir, ".docker")
+    await writeContext(configDir, "self-signed", {
+      Host: "tcp://daemon.example.com:2376",
+      SkipTLSVerify: true,
+    })
+
+    const { options } = resolveDockerOptions({ env: { DOCKER_CONTEXT: "self-signed" }, homeDir })
+
+    expect(options?.host).toBe("daemon.example.com")
+    expect(options?.port).toBe(2376)
+    expect(options?.protocol).toBe("https")
+    expect(options?.ca).toBeUndefined()
+    const agent = (options as { agent?: { options?: { rejectUnauthorized?: boolean } } })?.agent
+    expect(agent?.options?.rejectUnauthorized).toBe(false)
+  })
+
+  it("resolves a tcp context without TLS material to a plain http endpoint", async () => {
+    const configDir = path.join(homeDir, ".docker")
+    await writeContext(configDir, "plain-tcp", { Host: "tcp://10.0.0.5:2375" })
+
+    const { options } = resolveDockerOptions({ env: { DOCKER_CONTEXT: "plain-tcp" }, homeDir })
+
+    expect(options).toEqual({ host: "10.0.0.5", port: 2375, protocol: "http" })
+  })
+
   it("throws an actionable error naming DOCKER_HOST for ssh context endpoints", async () => {
     const configDir = path.join(homeDir, ".docker")
     await writeContext(configDir, "remote", { Host: "ssh://user@example.com" })

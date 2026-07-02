@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs"
+import { Agent } from "node:https"
 import * as os from "node:os"
 import * as path from "node:path"
 import type { DockerOptions } from "dockerode"
@@ -31,7 +32,10 @@ function readCurrentContext(configDir: string): string | undefined {
   }
 }
 
-function findContextMeta(configDir: string, name: string): ContextMeta | undefined {
+function findContextMeta(
+  configDir: string,
+  name: string,
+): { meta: ContextMeta; storeDir: string } | undefined {
   const metaRoot = path.join(configDir, "contexts", "meta")
   let entries: string[]
   try {
@@ -47,10 +51,27 @@ function findContextMeta(configDir: string, name: string): ContextMeta | undefin
       continue
     }
     if (meta.Name === name) {
-      return meta
+      return { meta, storeDir: entry }
     }
   }
   return undefined
+}
+
+// TLS material imported into the context store lives alongside the metadata,
+// keyed by the same hashed directory name: contexts/tls/<storeDir>/docker/*.pem.
+function readTlsMaterial(
+  configDir: string,
+  storeDir: string,
+): { ca?: string; cert?: string; key?: string } {
+  const tlsDir = path.join(configDir, "contexts", "tls", storeDir, "docker")
+  const read = (file: string): string | undefined => {
+    try {
+      return readFileSync(path.join(tlsDir, file), "utf-8")
+    } catch {
+      return undefined
+    }
+  }
+  return { ca: read("ca.pem"), cert: read("cert.pem"), key: read("key.pem") }
 }
 
 export function resolveDockerOptions({
@@ -67,8 +88,8 @@ export function resolveDockerOptions({
     return { options: undefined, source: "default Docker socket (dockerode probing)" }
   }
 
-  const meta = findContextMeta(configDir, contextName)
-  const host = meta?.Endpoints?.docker?.Host
+  const found = findContextMeta(configDir, contextName)
+  const host = found?.meta.Endpoints?.docker?.Host
   if (!host) {
     throw new Error(
       `Docker context '${contextName}' has no usable endpoint under ${configDir}/contexts/meta ` +
@@ -82,6 +103,23 @@ export function resolveDockerOptions({
       options: { socketPath },
       source: `context '${contextName}' → unix://${socketPath}`,
     }
+  }
+  if (host.startsWith("tcp://") && found) {
+    const url = new URL(host)
+    const base = { host: url.hostname, port: Number(url.port) }
+    const source = `context '${contextName}' → tcp://${url.hostname}:${url.port}`
+    if (found.meta.Endpoints?.docker?.SkipTLSVerify) {
+      // docker-modem forwards a custom agent to the https request; this is its
+      // only knob for accepting a daemon certificate without verification.
+      const agent = new Agent({ rejectUnauthorized: false })
+      return { options: { ...base, protocol: "https", agent } as DockerOptions, source }
+    }
+    const { ca, cert, key } = readTlsMaterial(configDir, found.storeDir)
+    if (ca || cert || key) {
+      return { options: { ...base, protocol: "https", ca, cert, key }, source }
+    }
+    // No TLS data and no skip flag: docker treats such endpoints as plain HTTP.
+    return { options: { ...base, protocol: "http" }, source }
   }
   if (host.startsWith("ssh://")) {
     throw new Error(
