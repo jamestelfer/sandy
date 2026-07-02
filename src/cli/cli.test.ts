@@ -94,34 +94,18 @@ describe("CLI image", () => {
 
   it("writes 'image created' to stderr after imageCreate completes", async () => {
     const backend = new DummyBackend()
-    const stderrLines: string[] = []
-    const originalWrite = process.stderr.write.bind(process.stderr)
-    process.stderr.write = (chunk: string | Uint8Array) => {
-      stderrLines.push(chunk.toString())
-      return true
-    }
-    try {
-      await runImage({ action: "create" }, backend)
-    } finally {
-      process.stderr.write = originalWrite
-    }
-    expect(stderrLines.join("")).toContain("image created")
+
+    const stderr = await captureStderr(() => runImage({ action: "create" }, backend))
+
+    expect(stderr).toContain("image created")
   })
 
   it("writes 'image deleted' to stderr after imageDelete completes", async () => {
     const backend = new DummyBackend()
-    const stderrLines: string[] = []
-    const originalWrite = process.stderr.write.bind(process.stderr)
-    process.stderr.write = (chunk: string | Uint8Array) => {
-      stderrLines.push(chunk.toString())
-      return true
-    }
-    try {
-      await runImage({ action: "delete" }, backend)
-    } finally {
-      process.stderr.write = originalWrite
-    }
-    expect(stderrLines.join("")).toContain("image deleted")
+
+    const stderr = await captureStderr(() => runImage({ action: "delete" }, backend))
+
+    expect(stderr).toContain("image deleted")
   })
 })
 
@@ -151,17 +135,10 @@ describe("CLI check", () => {
   it("when image does not exist, baseline writes message directing image create to stderr", async () => {
     const backend = new DummyBackend()
     const prevExitCode = process.exitCode
-    const stderrLines: string[] = []
-    const originalWrite = process.stderr.write.bind(process.stderr)
-    process.stderr.write = (chunk: string | Uint8Array) => {
-      stderrLines.push(chunk.toString())
-      return true
-    }
     try {
-      await runBaseline(backend)
-      expect(stderrLines.join("")).toContain("image create")
+      const stderr = await captureStderr(() => runBaseline(backend))
+      expect(stderr).toContain("image create")
     } finally {
-      process.stderr.write = originalWrite
       process.exitCode = prevExitCode ?? 0
     }
   })
@@ -444,26 +421,17 @@ describe("CLI run", () => {
 
   it("output directory message does not carry [err] prefix", async () => {
     const backend = new DummyBackend()
-    const stderrLines: string[] = []
-    const originalWrite = process.stderr.write.bind(process.stderr)
-    process.stderr.write = (chunk: string | Uint8Array) => {
-      stderrLines.push(chunk.toString())
-      return true
-    }
-
     const { session } = await stageScript()
-    try {
-      await runRun(
+
+    const stderr = await captureStderr(() =>
+      runRun(
         { script: "foo.ts", imdsPort: 9001, region: "us-west-2", session: session.name },
         backend,
-      )
-    } finally {
-      process.stderr.write = originalWrite
-    }
+      ),
+    )
 
-    const combined = stderrLines.join("")
-    expect(combined).toContain("output directory")
-    expect(combined).not.toContain("[err]")
+    expect(stderr).toContain("output directory")
+    expect(stderr).not.toContain("[err]")
   })
 })
 

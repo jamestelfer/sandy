@@ -21,14 +21,29 @@ interface ContextMeta {
   Endpoints?: { docker?: { Host?: string; SkipTLSVerify?: boolean } }
 }
 
+function isAbsent(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code
+  return code === "ENOENT" || code === "ENOTDIR"
+}
+
 function readCurrentContext(configDir: string): string | undefined {
+  const configPath = path.join(configDir, "config.json")
+  let raw: string
   try {
-    const config = JSON.parse(readFileSync(path.join(configDir, "config.json"), "utf-8")) as {
-      currentContext?: string
+    raw = readFileSync(configPath, "utf-8")
+  } catch (error) {
+    if (isAbsent(error)) {
+      return undefined
     }
-    return config.currentContext
+    throw new Error(`Cannot read Docker config at ${configPath}: ${(error as Error).message}`)
+  }
+  try {
+    return (JSON.parse(raw) as { currentContext?: string }).currentContext
   } catch {
-    return undefined
+    throw new Error(
+      `Docker config at ${configPath} is not valid JSON. ` +
+        `Fix it, or set DOCKER_HOST to bypass context resolution.`,
+    )
   }
 }
 
@@ -65,10 +80,16 @@ function readTlsMaterial(
 ): { ca?: string; cert?: string; key?: string } {
   const tlsDir = path.join(configDir, "contexts", "tls", storeDir, "docker")
   const read = (file: string): string | undefined => {
+    const filePath = path.join(tlsDir, file)
     try {
-      return readFileSync(path.join(tlsDir, file), "utf-8")
-    } catch {
-      return undefined
+      return readFileSync(filePath, "utf-8")
+    } catch (error) {
+      if (isAbsent(error)) {
+        return undefined
+      }
+      throw new Error(
+        `Cannot read Docker context TLS file ${filePath}: ${(error as Error).message}`,
+      )
     }
   }
   return { ca: read("ca.pem"), cert: read("cert.pem"), key: read("key.pem") }
@@ -103,22 +124,42 @@ export function resolveDockerOptions({
       source: `context '${contextName}' → ${host}`,
     }
   }
+  if (host.startsWith("npipe://")) {
+    return {
+      options: { socketPath: host.slice("npipe://".length) },
+      source: `context '${contextName}' → ${host}`,
+    }
+  }
   if (host.startsWith("tcp://")) {
-    const url = new URL(host)
-    const base = { host: url.hostname, port: Number(url.port) }
-    const source = `context '${contextName}' → tcp://${url.hostname}:${url.port}`
-    if (found.meta.Endpoints?.docker?.SkipTLSVerify) {
-      // docker-modem forwards a custom agent to the https request; this is its
-      // only knob for accepting a daemon certificate without verification.
-      const agent = new Agent({ rejectUnauthorized: false })
-      return { options: { ...base, protocol: "https", agent } as DockerOptions, source }
+    let url: URL
+    try {
+      url = new URL(host)
+    } catch {
+      throw new Error(
+        `Docker context '${contextName}' has a malformed tcp endpoint '${host}'. ` +
+          `Fix the context, or set DOCKER_HOST to bypass context resolution.`,
+      )
     }
+    const skipVerify = found.meta.Endpoints?.docker?.SkipTLSVerify === true
     const { ca, cert, key } = readTlsMaterial(configDir, found.storeDir)
-    if (ca || cert || key) {
-      return { options: { ...base, protocol: "https", ca, cert, key }, source }
-    }
+    const useTls = skipVerify || Boolean(ca || cert || key)
+    // WHATWG URL keeps IPv6 brackets in hostname; node's http host option must not.
+    const hostname = url.hostname.replace(/^\[(.*)\]$/, "$1")
+    // Docker's conventions for portless tcp endpoints: 2376 with TLS, 2375 without.
+    const port = url.port ? Number(url.port) : useTls ? 2376 : 2375
     // No TLS data and no skip flag: docker treats such endpoints as plain HTTP.
-    return { options: { ...base, protocol: "http" }, source }
+    // With SkipTLSVerify, client certs are still presented (matching docker CLI);
+    // docker-modem forwards a custom agent to the https request, its only knob
+    // for accepting a daemon certificate without verification.
+    const tls = skipVerify
+      ? { protocol: "https" as const, cert, key, agent: new Agent({ rejectUnauthorized: false }) }
+      : useTls
+        ? { protocol: "https" as const, ca, cert, key }
+        : { protocol: "http" as const }
+    return {
+      options: { host: hostname, port, ...tls } as DockerOptions,
+      source: `context '${contextName}' → tcp://${url.hostname}:${port}`,
+    }
   }
   if (host.startsWith("ssh://")) {
     throw new Error(

@@ -1,6 +1,8 @@
 // Shared test fakes for docker-backend.test.ts and shuru-backend.test.ts.
 // All factories return typed interfaces so tests stay decoupled from implementation details.
 
+import * as fs from "node:fs/promises"
+import * as path from "node:path"
 import { Readable } from "node:stream"
 import type { StartOptions } from "@superhq/shuru"
 import type {
@@ -141,6 +143,28 @@ export function dockerFrame(type: 1 | 2, payload: string): Buffer {
   header[0] = type
   header.writeUInt32BE(body.length, 4)
   return Buffer.concat([header, body])
+}
+
+// Write a Docker context-store fixture (contexts/meta/<dir>/meta.json),
+// optionally selecting it as currentContext in config.json.
+export async function writeDockerContext(
+  configDir: string,
+  name: string,
+  endpoint: { Host: string; SkipTLSVerify?: boolean },
+  opts: { current?: boolean } = {},
+): Promise<void> {
+  const metaDir = path.join(configDir, "contexts", "meta", `${name}-hash`)
+  await fs.mkdir(metaDir, { recursive: true })
+  await fs.writeFile(
+    path.join(metaDir, "meta.json"),
+    JSON.stringify({ Name: name, Endpoints: { docker: endpoint } }),
+  )
+  if (opts.current) {
+    await fs.writeFile(
+      path.join(configDir, "config.json"),
+      JSON.stringify({ currentContext: name }),
+    )
+  }
 }
 
 // Capture everything written to process.stderr while fn runs, restoring the

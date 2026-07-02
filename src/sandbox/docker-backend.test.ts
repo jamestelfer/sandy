@@ -5,7 +5,7 @@ import { Readable } from "node:stream"
 import { extract as extractTar } from "tar-stream"
 import { OutputHandler } from "../output"
 import { makeTmpDir } from "../resources"
-import { fakeBuildContext, makeDockerFake } from "../test-support"
+import { captureStderr, fakeBuildContext, makeDockerFake } from "../test-support"
 import { DockerBackend, type DockerClientLike, defaultBuildContextFactory } from "."
 
 describe("defaultBuildContextFactory", () => {
@@ -300,18 +300,12 @@ describe("DockerBackend.run", () => {
   test("logs container ID to stderr on non-zero exit", async () => {
     const { docker } = makeDockerFake({ containerConfig: { exitCode: 1 } })
     const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
-    const stderrOutput: string[] = []
-    const originalWrite = process.stderr.write.bind(process.stderr)
-    process.stderr.write = (chunk: string | Uint8Array) => {
-      stderrOutput.push(chunk.toString())
-      return true
-    }
-    try {
+
+    const stderr = await captureStderr(async () => {
       await backend.run(baseRunOpts, new OutputHandler(() => {}))
-    } finally {
-      process.stderr.write = originalWrite
-    }
-    expect(stderrOutput.join("")).toContain("test-container-id")
+    })
+
+    expect(stderr).toContain("test-container-id")
   })
 })
 
@@ -337,7 +331,7 @@ describe("DockerBackend reachability", () => {
       source: "context 'orbstack' → unix:///x.sock",
     })
 
-    expect(backend.imageExists(new OutputHandler(() => {}))).rejects.toThrow(/orbstack/)
+    await expect(backend.imageExists(new OutputHandler(() => {}))).rejects.toThrow(/orbstack/)
   })
 
   test("describe returns the resolved endpoint source", () => {
@@ -358,8 +352,8 @@ describe("DockerBackend reachability", () => {
     })
     const handler = new OutputHandler(() => {})
 
-    expect(backend.imageCreate(handler)).rejects.toThrow(/dead\.sock/)
-    expect(backend.imageDelete(handler)).rejects.toThrow(/dead\.sock/)
-    expect(backend.run(baseRunOpts, handler)).rejects.toThrow(/dead\.sock/)
+    await expect(backend.imageCreate(handler)).rejects.toThrow(/dead\.sock/)
+    await expect(backend.imageDelete(handler)).rejects.toThrow(/dead\.sock/)
+    await expect(backend.run(baseRunOpts, handler)).rejects.toThrow(/dead\.sock/)
   })
 })

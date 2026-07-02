@@ -11,6 +11,14 @@ interface CreateBackendDeps {
   resolveEndpoint?: () => ResolvedDockerEndpoint
 }
 
+// Endpoint-resolution failures surface when a Docker operation runs, not at
+// construction: commands that never touch Docker (config, help, MCP server
+// startup) keep working, and each MCP tool call reports the actionable error.
+function unavailableBackend(error: unknown): Backend {
+  const rethrow = () => Promise.reject(error)
+  return { imageCreate: rethrow, imageDelete: rethrow, imageExists: rethrow, run: rethrow }
+}
+
 export async function createBackend(deps: CreateBackendDeps = {}): Promise<Backend> {
   const getConfig = deps.readConfig ?? readConfig
   const makeDocker = deps.dockerFactory ?? ((options?: DockerOptions) => new Docker(options))
@@ -21,8 +29,13 @@ export async function createBackend(deps: CreateBackendDeps = {}): Promise<Backe
     case "shuru":
       return new ShuruBackend()
     case "docker": {
-      const { options, source } = resolveEndpoint()
-      return new DockerBackend(makeDocker(options), { source })
+      let resolved: ResolvedDockerEndpoint
+      try {
+        resolved = resolveEndpoint()
+      } catch (error) {
+        return unavailableBackend(error)
+      }
+      return new DockerBackend(makeDocker(resolved.options), { source: resolved.source })
     }
   }
 }

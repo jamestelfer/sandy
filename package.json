@@ -19,7 +19,7 @@
     "fix": "bun run lint:fix && bun run format:fix",
     "verify": "biome check . && bun run build && bun run test && bun run integration:docker",
     "integration": "INTEGRATION=true bun test --testPathPattern integration",
-    "integration:docker": "INTEGRATION=true bun test src/sandbox/docker-backend.integration.test.ts --max-concurrency 1",
+    "integration:docker": "INTEGRATION=true bun test src/sandbox/docker-backend.integration.test.ts src/sandbox/docker-endpoint.integration.test.ts --max-concurrency 1",
     "integration:shuru": "INTEGRATION=true bun test src/sandbox/shuru-backend.integration.test.ts"
   },
   "dependencies": {

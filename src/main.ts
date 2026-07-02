@@ -13,4 +13,8 @@ async function main(): Promise<void> {
   await makeCli(backend, onProgress).parseAsync()
 }
 
-main()
+main().catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error)
+  process.stderr.write(`sandy: ${message}\n`)
+  process.exitCode = 1
+})

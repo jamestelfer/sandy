@@ -1,28 +1,16 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import { existsSync } from "node:fs"
-import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
 import Docker from "dockerode"
 import { OutputHandler } from "../output"
-import { makeTmpDir, type TmpDir } from "../resources"
+import { makeTmpDir } from "../resources"
+import { writeDockerContext } from "../test-support"
 import { DockerBackend } from "./docker-backend"
 import { resolveDockerOptions } from "./docker-endpoint"
 
-const SKIP = !process.env.INTEGRATION
+const SKIP = process.env.INTEGRATION !== "true"
 const noop = new OutputHandler(() => {})
-
-let configTmp: TmpDir
-let configDir: string
-
-beforeEach(async () => {
-  configTmp = await makeTmpDir("sandy-docker-config-")
-  configDir = configTmp.path
-})
-
-afterEach(async () => {
-  await configTmp[Symbol.asyncDispose]()
-})
 
 // The same probing order dockerode uses for its default socket.
 function realDockerSocket(): string {
@@ -41,22 +29,16 @@ describe("docker endpoint resolution integration", () => {
   test.skipIf(SKIP)(
     "a context resolved from DOCKER_CONFIG reaches the real daemon",
     async () => {
-      const metaDir = path.join(configDir, "contexts", "meta", "sandy-integration")
-      await fs.mkdir(metaDir, { recursive: true })
-      await fs.writeFile(
-        path.join(metaDir, "meta.json"),
-        JSON.stringify({
-          Name: "sandy-it",
-          Endpoints: { docker: { Host: `unix://${realDockerSocket()}` } },
-        }),
-      )
-      await fs.writeFile(
-        path.join(configDir, "config.json"),
-        JSON.stringify({ currentContext: "sandy-it" }),
+      await using configTmp = await makeTmpDir("sandy-docker-config-")
+      await writeDockerContext(
+        configTmp.path,
+        "sandy-it",
+        { Host: `unix://${realDockerSocket()}` },
+        { current: true },
       )
 
       const { options, source } = resolveDockerOptions({
-        env: { DOCKER_CONFIG: configDir },
+        env: { DOCKER_CONFIG: configTmp.path },
         homeDir: "/nonexistent-home",
       })
 
