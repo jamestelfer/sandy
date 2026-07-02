@@ -69,6 +69,7 @@ export function makeDockerFake(
   config: {
     imageConfig?: { inspectThrows?: boolean }
     containerConfig?: { exitCode?: number; stdoutLines?: string[]; stderrLines?: string[] }
+    pingRejects?: boolean
   } = {},
 ): {
   docker: DockerClientLike
@@ -87,6 +88,12 @@ export function makeDockerFake(
   let lastContainer: ReturnType<typeof makeContainerFake> | null = null
 
   const docker: DockerClientLike = {
+    ping: async () => {
+      if (config.pingRejects) {
+        throw new Error("connect ECONNREFUSED /var/run/docker.sock")
+      }
+      return "OK"
+    },
     getImage: (name: string): ImageLike => ({
       inspect: () => imageFake.image.inspect(),
       remove: async () => {

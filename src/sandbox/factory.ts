@@ -21,8 +21,8 @@ export async function createBackend(deps: CreateBackendDeps = {}): Promise<Backe
     case "shuru":
       return new ShuruBackend()
     case "docker": {
-      const { options } = resolveEndpoint()
-      return new DockerBackend(makeDocker(options))
+      const { options, source } = resolveEndpoint()
+      return new DockerBackend(makeDocker(options), undefined, source)
     }
   }
 }

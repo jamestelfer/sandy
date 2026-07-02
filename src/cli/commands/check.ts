@@ -21,6 +21,10 @@ async function runCheck(
 ): Promise<void> {
   await establishWorkDir()
   const handler = new OutputHandler(onProgress)
+  const endpoint = backend.describe?.()
+  if (endpoint) {
+    handler.stdoutLine(`sandy: backend endpoint: ${endpoint}`)
+  }
   const imageExists = await backend.imageExists(handler)
   if (!imageExists) {
     const exe = basename(process.argv[1])

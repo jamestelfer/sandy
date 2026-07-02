@@ -14,6 +14,11 @@ export class DummyBackend implements Backend {
   runResult: RunResult = { exitCode: 0, output: "", outputFiles: [] }
   progressLines: string[] = []
   stdoutLines: string[] = []
+  describeResult: string | undefined
+
+  describe(): string | undefined {
+    return this.describeResult
+  }
 
   async imageCreate(handler: OutputHandler): Promise<void> {
     this.calls.push({ method: "imageCreate" })

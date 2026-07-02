@@ -221,6 +221,24 @@ describe("CLI check", () => {
     }
   })
 
+  it("baseline reports the backend endpoint source when the backend describes one", async () => {
+    const backend = new DummyBackend()
+    backend.imageExistsResult = true
+    backend.describeResult = "context 'orbstack' → unix:///x.sock"
+    const stderrLines: string[] = []
+    const originalWrite = process.stderr.write.bind(process.stderr)
+    process.stderr.write = (chunk: string | Uint8Array) => {
+      stderrLines.push(chunk.toString())
+      return true
+    }
+    try {
+      await runBaseline(backend)
+    } finally {
+      process.stderr.write = originalWrite
+    }
+    expect(stderrLines.join("")).toContain("context 'orbstack' → unix:///x.sock")
+  })
+
   it("baseline forwards onProgress to backend.run()", async () => {
     const backend = new DummyBackend()
     backend.imageExistsResult = true

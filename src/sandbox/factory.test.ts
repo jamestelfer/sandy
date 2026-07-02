@@ -41,6 +41,19 @@ describe("createBackend", () => {
     expect(received).toEqual([{ socketPath: "/resolved/docker.sock" }])
   })
 
+  it("threads the resolved source into the DockerBackend's describe()", async () => {
+    const backend = await createBackend({
+      readConfig: async () => ({ backend: "docker" }),
+      dockerFactory: () => ({ marker: "docker-client" }),
+      resolveEndpoint: () => ({
+        options: { socketPath: "/resolved/docker.sock" },
+        source: "context 'test' → unix:///resolved/docker.sock",
+      }),
+    })
+
+    expect(backend.describe?.()).toBe("context 'test' → unix:///resolved/docker.sock")
+  })
+
   it("does not resolve a docker endpoint for the shuru backend", async () => {
     const backend = await createBackend({
       readConfig: async () => ({ backend: "shuru" }),

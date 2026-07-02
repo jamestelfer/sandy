@@ -328,3 +328,37 @@ describe("DockerBackend.imageExists", () => {
     expect(await backend.imageExists(new OutputHandler(() => {}))).toBe(false)
   })
 })
+
+describe("DockerBackend reachability", () => {
+  test("imageExists throws an actionable error naming the source when the daemon is unreachable", async () => {
+    const { docker } = makeDockerFake({ pingRejects: true })
+    const backend = new DockerBackend(
+      docker,
+      fakeBuildContext,
+      "context 'orbstack' → unix:///x.sock",
+    )
+
+    expect(backend.imageExists(new OutputHandler(() => {}))).rejects.toThrow(/orbstack/)
+  })
+
+  test("describe returns the resolved endpoint source", () => {
+    const { docker } = makeDockerFake()
+    const backend = new DockerBackend(
+      docker,
+      fakeBuildContext,
+      "context 'orbstack' → unix:///x.sock",
+    )
+
+    expect(backend.describe()).toBe("context 'orbstack' → unix:///x.sock")
+  })
+
+  test("imageCreate, imageDelete and run reject when the daemon is unreachable", async () => {
+    const { docker } = makeDockerFake({ pingRejects: true })
+    const backend = new DockerBackend(docker, fakeBuildContext, "DOCKER_HOST=unix:///dead.sock")
+    const handler = new OutputHandler(() => {})
+
+    expect(backend.imageCreate(handler)).rejects.toThrow(/dead\.sock/)
+    expect(backend.imageDelete(handler)).rejects.toThrow(/dead\.sock/)
+    expect(backend.run(baseRunOpts, handler)).rejects.toThrow(/dead\.sock/)
+  })
+})
