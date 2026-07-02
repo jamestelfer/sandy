@@ -50,7 +50,7 @@ describe("DockerBackend.imageCreate", () => {
       buildImage: async (): Promise<NodeJS.ReadableStream> =>
         Readable.from([Buffer.from(`${errorLine}\n${progressAfterError}\n`)]),
     }
-    const backend = new DockerBackend(errorDocker, fakeBuildContext)
+    const backend = new DockerBackend(errorDocker, { buildContext: fakeBuildContext })
 
     const progress: string[] = []
     await backend.imageCreate(new OutputHandler((msg) => progress.push(msg))).catch(() => {})
@@ -60,7 +60,7 @@ describe("DockerBackend.imageCreate", () => {
 
   test("calls buildImage with tag sandy:latest", async () => {
     const { docker, buildImageCalls } = makeDockerFake()
-    const backend = new DockerBackend(docker, fakeBuildContext)
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     await backend.imageCreate(new OutputHandler(() => {}))
     expect(buildImageCalls.length).toBe(1)
     expect((buildImageCalls[0]?.opts as { t?: string })?.t).toBe("sandy:latest")
@@ -68,7 +68,7 @@ describe("DockerBackend.imageCreate", () => {
 
   test("tags sandy:layer-retention after successful build", async () => {
     const { docker, tagCalls } = makeDockerFake()
-    const backend = new DockerBackend(docker, fakeBuildContext)
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     await backend.imageCreate(new OutputHandler(() => {}))
     expect(tagCalls).toContainEqual({
       from: "sandy:latest",
@@ -88,7 +88,7 @@ describe("DockerBackend.imageCreate", () => {
       buildImage: async (): Promise<NodeJS.ReadableStream> =>
         Readable.from([Buffer.from(`${buildLine}\n`)]),
     }
-    const backend = new DockerBackend(progressDocker, fakeContextWithProgress)
+    const backend = new DockerBackend(progressDocker, { buildContext: fakeContextWithProgress })
     const progress: string[] = []
     await backend.imageCreate(new OutputHandler((msg) => progress.push(msg)))
     expect(progress).toContain("building layer")
@@ -137,7 +137,7 @@ type ContainerOpts = {
 describe("DockerBackend.run", () => {
   test("passes compiled script path as Cmd so Dockerfile ENTRYPOINT receives it as argument", async () => {
     const { docker, createContainerCalls } = makeDockerFake()
-    const backend = new DockerBackend(docker, fakeBuildContext)
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     await backend.run(baseRunOpts, new OutputHandler(() => {}))
     const opts = createContainerCalls[0]?.opts as ContainerOpts
     expect(opts?.Cmd).toEqual(["/workspace/dist/scripts/hello.js"])
@@ -146,7 +146,7 @@ describe("DockerBackend.run", () => {
 
   test("creates container with Image sandy:latest", async () => {
     const { docker, createContainerCalls } = makeDockerFake()
-    const backend = new DockerBackend(docker, fakeBuildContext)
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     await backend.run(baseRunOpts, new OutputHandler(() => {}))
     expect(createContainerCalls.length).toBe(1)
     expect((createContainerCalls[0]?.opts as ContainerOpts)?.Image).toBe("sandy:latest")
@@ -154,7 +154,7 @@ describe("DockerBackend.run", () => {
 
   test("sets IMDS endpoint to http://host.docker.internal:<port>", async () => {
     const { docker, createContainerCalls } = makeDockerFake()
-    const backend = new DockerBackend(docker, fakeBuildContext)
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     await backend.run({ ...baseRunOpts, imdsPort: 9001 }, new OutputHandler(() => {}))
     const env = (createContainerCalls[0]?.opts as ContainerOpts)?.Env ?? []
     expect(env).toContain("AWS_EC2_METADATA_SERVICE_ENDPOINT=http://host.docker.internal:9001")
@@ -162,7 +162,7 @@ describe("DockerBackend.run", () => {
 
   test("sets all AWS env vars in container", async () => {
     const { docker, createContainerCalls } = makeDockerFake()
-    const backend = new DockerBackend(docker, fakeBuildContext)
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     await backend.run({ ...baseRunOpts, region: "ap-southeast-2" }, new OutputHandler(() => {}))
     const env = (createContainerCalls[0]?.opts as ContainerOpts)?.Env ?? []
     expect(env).toContain("AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE=IPv4")
@@ -173,7 +173,7 @@ describe("DockerBackend.run", () => {
 
   test("defaults region to us-west-2 when not provided", async () => {
     const { docker, createContainerCalls } = makeDockerFake()
-    const backend = new DockerBackend(docker, fakeBuildContext)
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     await backend.run({ ...baseRunOpts, region: undefined }, new OutputHandler(() => {}))
     const env = (createContainerCalls[0]?.opts as ContainerOpts)?.Env ?? []
     expect(env).toContain("AWS_REGION=us-west-2")
@@ -181,7 +181,7 @@ describe("DockerBackend.run", () => {
 
   test("mounts session scripts dir read-only and session output dir read-write", async () => {
     const { docker, createContainerCalls } = makeDockerFake()
-    const backend = new DockerBackend(docker, fakeBuildContext)
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     await backend.run(baseRunOpts, new OutputHandler(() => {}))
     const binds = (createContainerCalls[0]?.opts as ContainerOpts)?.HostConfig?.Binds ?? []
     expect(binds).toContain("/home/user/.sandy/test-session/scripts:/workspace/scripts:ro")
@@ -190,7 +190,7 @@ describe("DockerBackend.run", () => {
 
   test("sets ExtraHosts host-gateway alias on linux", async () => {
     const { docker, createContainerCalls } = makeDockerFake()
-    const backend = new DockerBackend(docker, fakeBuildContext)
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     const originalPlatform = process.platform
     Object.defineProperty(process, "platform", { value: "linux" })
     try {
@@ -204,7 +204,7 @@ describe("DockerBackend.run", () => {
 
   test("omits ExtraHosts on non-linux platforms", async () => {
     const { docker, createContainerCalls } = makeDockerFake()
-    const backend = new DockerBackend(docker, fakeBuildContext)
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     const originalPlatform = process.platform
     Object.defineProperty(process, "platform", { value: "darwin" })
     try {
@@ -220,7 +220,7 @@ describe("DockerBackend.run", () => {
     const { docker } = makeDockerFake({
       containerConfig: { stdoutLines: ["[-->  compiling...", "normal output line"] },
     })
-    const backend = new DockerBackend(docker, fakeBuildContext)
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     const progress: string[] = []
     await backend.run(baseRunOpts, new OutputHandler((msg) => progress.push(msg)))
     expect(progress).toContain("compiling...")
@@ -231,7 +231,7 @@ describe("DockerBackend.run", () => {
     const { docker } = makeDockerFake({
       containerConfig: { exitCode: 2, stdoutLines: ["line one", "line two"] },
     })
-    const backend = new DockerBackend(docker, fakeBuildContext)
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     const result = await backend.run(baseRunOpts, new OutputHandler(() => {}))
     expect(result.output).toContain("line one")
     expect(result.output).toContain("line two")
@@ -242,14 +242,14 @@ describe("DockerBackend.run", () => {
     const { docker } = makeDockerFake({
       containerConfig: { stderrLines: ["container error"] },
     })
-    const backend = new DockerBackend(docker, fakeBuildContext)
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     const result = await backend.run(baseRunOpts, new OutputHandler(() => {}))
     expect(result.output).toContain("[err] container error")
   })
 
   test("removes container after run completes", async () => {
     const { docker, lastContainer } = makeDockerFake()
-    const backend = new DockerBackend(docker, fakeBuildContext)
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     await backend.run(baseRunOpts, new OutputHandler(() => {}))
     expect(lastContainer().removeCalls).toBe(1)
   })
@@ -278,7 +278,7 @@ describe("DockerBackend.run", () => {
       },
     }
 
-    const backend = new DockerBackend(writingDocker, fakeBuildContext)
+    const backend = new DockerBackend(writingDocker, { buildContext: fakeBuildContext })
     const result = await backend.run(
       { ...baseRunOpts, sessionDir: tmpDir.path },
       new OutputHandler(() => {}),
@@ -289,7 +289,7 @@ describe("DockerBackend.run", () => {
 
   test("returns empty outputFiles when sessionDir does not exist", async () => {
     const { docker } = makeDockerFake()
-    const backend = new DockerBackend(docker, fakeBuildContext)
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     const result = await backend.run(
       { ...baseRunOpts, sessionDir: "/nonexistent/path/that/does/not/exist" },
       new OutputHandler(() => {}),
@@ -299,7 +299,7 @@ describe("DockerBackend.run", () => {
 
   test("logs container ID to stderr on non-zero exit", async () => {
     const { docker } = makeDockerFake({ containerConfig: { exitCode: 1 } })
-    const backend = new DockerBackend(docker, fakeBuildContext)
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     const stderrOutput: string[] = []
     const originalWrite = process.stderr.write.bind(process.stderr)
     process.stderr.write = (chunk: string | Uint8Array) => {
@@ -332,29 +332,30 @@ describe("DockerBackend.imageExists", () => {
 describe("DockerBackend reachability", () => {
   test("imageExists throws an actionable error naming the source when the daemon is unreachable", async () => {
     const { docker } = makeDockerFake({ pingRejects: true })
-    const backend = new DockerBackend(
-      docker,
-      fakeBuildContext,
-      "context 'orbstack' → unix:///x.sock",
-    )
+    const backend = new DockerBackend(docker, {
+      buildContext: fakeBuildContext,
+      source: "context 'orbstack' → unix:///x.sock",
+    })
 
     expect(backend.imageExists(new OutputHandler(() => {}))).rejects.toThrow(/orbstack/)
   })
 
   test("describe returns the resolved endpoint source", () => {
     const { docker } = makeDockerFake()
-    const backend = new DockerBackend(
-      docker,
-      fakeBuildContext,
-      "context 'orbstack' → unix:///x.sock",
-    )
+    const backend = new DockerBackend(docker, {
+      buildContext: fakeBuildContext,
+      source: "context 'orbstack' → unix:///x.sock",
+    })
 
     expect(backend.describe()).toBe("context 'orbstack' → unix:///x.sock")
   })
 
   test("imageCreate, imageDelete and run reject when the daemon is unreachable", async () => {
     const { docker } = makeDockerFake({ pingRejects: true })
-    const backend = new DockerBackend(docker, fakeBuildContext, "DOCKER_HOST=unix:///dead.sock")
+    const backend = new DockerBackend(docker, {
+      buildContext: fakeBuildContext,
+      source: "DOCKER_HOST=unix:///dead.sock",
+    })
     const handler = new OutputHandler(() => {})
 
     expect(backend.imageCreate(handler)).rejects.toThrow(/dead\.sock/)

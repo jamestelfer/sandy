@@ -143,6 +143,23 @@ export function dockerFrame(type: 1 | 2, payload: string): Buffer {
   return Buffer.concat([header, body])
 }
 
+// Capture everything written to process.stderr while fn runs, restoring the
+// original writer afterwards.
+export async function captureStderr(fn: () => Promise<void>): Promise<string> {
+  const chunks: string[] = []
+  const originalWrite = process.stderr.write.bind(process.stderr)
+  process.stderr.write = (chunk: string | Uint8Array) => {
+    chunks.push(chunk.toString())
+    return true
+  }
+  try {
+    await fn()
+  } finally {
+    process.stderr.write = originalWrite
+  }
+  return chunks.join("")
+}
+
 // ── Shuru fakes ──────────────────────────────────────────────────────────────
 
 export function makeSandboxFactory(config: { exitCode?: number; stdoutLines?: string[] } = {}): {

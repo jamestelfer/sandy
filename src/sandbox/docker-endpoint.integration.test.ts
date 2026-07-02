@@ -5,20 +5,23 @@ import * as os from "node:os"
 import * as path from "node:path"
 import Docker from "dockerode"
 import { OutputHandler } from "../output"
+import { makeTmpDir, type TmpDir } from "../resources"
 import { DockerBackend } from "./docker-backend"
 import { resolveDockerOptions } from "./docker-endpoint"
 
 const SKIP = !process.env.INTEGRATION
 const noop = new OutputHandler(() => {})
 
+let configTmp: TmpDir
 let configDir: string
 
 beforeEach(async () => {
-  configDir = await fs.mkdtemp(path.join(os.tmpdir(), "sandy-docker-config-"))
+  configTmp = await makeTmpDir("sandy-docker-config-")
+  configDir = configTmp.path
 })
 
 afterEach(async () => {
-  await fs.rm(configDir, { recursive: true, force: true })
+  await configTmp[Symbol.asyncDispose]()
 })
 
 // The same probing order dockerode uses for its default socket.

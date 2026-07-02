@@ -1,17 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import * as fs from "node:fs/promises"
-import * as os from "node:os"
 import * as path from "node:path"
+import { makeTmpDir, type TmpDir } from "../resources"
 import { resolveDockerOptions } from "./docker-endpoint"
 
+let home: TmpDir
 let homeDir: string
 
 beforeEach(async () => {
-  homeDir = await fs.mkdtemp(path.join(os.tmpdir(), "sandy-docker-endpoint-"))
+  home = await makeTmpDir("sandy-docker-endpoint-")
+  homeDir = home.path
 })
 
 afterEach(async () => {
-  await fs.rm(homeDir, { recursive: true, force: true })
+  await home[Symbol.asyncDispose]()
 })
 
 async function writeContext(

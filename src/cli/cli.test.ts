@@ -4,7 +4,7 @@ import { join } from "node:path"
 import yargs from "yargs"
 import { noopLogger } from "../logging"
 import { establishWorkDir, Session } from "../session"
-import { DummyBackend, useTestCwdIsolation } from "../test-support"
+import { captureStderr, DummyBackend, useTestCwdIsolation } from "../test-support"
 import { makeCli } from "./cli"
 import { runBaseline, runConnect } from "./commands/check"
 import { runConfig } from "./commands/config"
@@ -225,18 +225,10 @@ describe("CLI check", () => {
     const backend = new DummyBackend()
     backend.imageExistsResult = true
     backend.describeResult = "context 'orbstack' → unix:///x.sock"
-    const stderrLines: string[] = []
-    const originalWrite = process.stderr.write.bind(process.stderr)
-    process.stderr.write = (chunk: string | Uint8Array) => {
-      stderrLines.push(chunk.toString())
-      return true
-    }
-    try {
-      await runBaseline(backend)
-    } finally {
-      process.stderr.write = originalWrite
-    }
-    expect(stderrLines.join("")).toContain("context 'orbstack' → unix:///x.sock")
+
+    const stderr = await captureStderr(() => runBaseline(backend))
+
+    expect(stderr).toContain("context 'orbstack' → unix:///x.sock")
   })
 
   it("baseline forwards onProgress to backend.run()", async () => {

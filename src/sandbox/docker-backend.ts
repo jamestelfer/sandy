@@ -92,11 +92,16 @@ async function demuxDockerStream(
 }
 
 export class DockerBackend implements Backend {
+  private buildContext: BuildContextFactory
+  private source: string | undefined
+
   constructor(
     private docker: DockerClientLike,
-    private buildContext: BuildContextFactory = defaultBuildContextFactory,
-    private source?: string,
-  ) {}
+    opts: { buildContext?: BuildContextFactory; source?: string } = {},
+  ) {
+    this.buildContext = opts.buildContext ?? defaultBuildContextFactory
+    this.source = opts.source
+  }
 
   describe(): string | undefined {
     return this.source

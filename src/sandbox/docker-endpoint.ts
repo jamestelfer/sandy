@@ -90,7 +90,7 @@ export function resolveDockerOptions({
 
   const found = findContextMeta(configDir, contextName)
   const host = found?.meta.Endpoints?.docker?.Host
-  if (!host) {
+  if (!found || !host) {
     throw new Error(
       `Docker context '${contextName}' has no usable endpoint under ${configDir}/contexts/meta ` +
         `(context missing, unparseable, or lacking a docker endpoint). ` +
@@ -98,13 +98,12 @@ export function resolveDockerOptions({
     )
   }
   if (host.startsWith("unix://")) {
-    const socketPath = host.slice("unix://".length)
     return {
-      options: { socketPath },
-      source: `context '${contextName}' → unix://${socketPath}`,
+      options: { socketPath: host.slice("unix://".length) },
+      source: `context '${contextName}' → ${host}`,
     }
   }
-  if (host.startsWith("tcp://") && found) {
+  if (host.startsWith("tcp://")) {
     const url = new URL(host)
     const base = { host: url.hostname, port: Number(url.port) }
     const source = `context '${contextName}' → tcp://${url.hostname}:${url.port}`
