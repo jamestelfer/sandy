@@ -6,4 +6,6 @@ export interface Backend {
   imageDelete(handler: OutputHandler, force?: boolean): Promise<void>
   imageExists(handler: OutputHandler): Promise<boolean>
   run(opts: RunOptions, handler: OutputHandler): Promise<RunResult>
+  /** Human-readable description of the backend's endpoint, when it has one. */
+  describe?(): string | undefined
 }

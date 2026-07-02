@@ -27,6 +27,7 @@ export interface ContainerLike {
 }
 
 export interface DockerClientLike {
+  ping(): Promise<unknown>
   getImage(name: string): ImageLike
   buildImage(context: NodeJS.ReadableStream, opts: { t: string }): Promise<NodeJS.ReadableStream>
   createContainer(opts: object): Promise<ContainerLike>
@@ -91,12 +92,39 @@ async function demuxDockerStream(
 }
 
 export class DockerBackend implements Backend {
+  private buildContext: BuildContextFactory
+  private source: string | undefined
+
   constructor(
     private docker: DockerClientLike,
-    private buildContext: BuildContextFactory = defaultBuildContextFactory,
-  ) {}
+    opts: { buildContext?: BuildContextFactory; source?: string } = {},
+  ) {
+    this.buildContext = opts.buildContext ?? defaultBuildContextFactory
+    this.source = opts.source
+  }
+
+  describe(): string | undefined {
+    return this.source
+  }
+
+  // Fail fast with an actionable message when the daemon is unreachable, so
+  // connection failures are never misreported as (for example) a missing image.
+  private async ensureReachable(): Promise<void> {
+    try {
+      await this.docker.ping()
+    } catch (cause) {
+      const endpoint = this.source ?? "the configured Docker endpoint"
+      throw new Error(
+        `Docker daemon is unreachable via ${endpoint}. ` +
+          `Start the daemon, select a different context with 'docker context use', ` +
+          `or set DOCKER_HOST.`,
+        { cause },
+      )
+    }
+  }
 
   async imageExists(_handler: OutputHandler): Promise<boolean> {
+    await this.ensureReachable()
     try {
       await this.docker.getImage(IMAGE_NAME).inspect()
       return true
@@ -106,6 +134,7 @@ export class DockerBackend implements Backend {
   }
 
   async imageDelete(_handler: OutputHandler, force = false): Promise<void> {
+    await this.ensureReachable()
     await this.docker.getImage(IMAGE_NAME).remove()
     if (force) {
       await this.docker.getImage(LAYER_RETENTION_IMAGE).remove()
@@ -113,6 +142,7 @@ export class DockerBackend implements Backend {
   }
 
   async imageCreate(handler: OutputHandler): Promise<void> {
+    await this.ensureReachable()
     await using context = await this.buildContext()
     const stream = await this.docker.buildImage(context, { t: IMAGE_NAME })
     // Parse build output JSON, feed stream content through OutputHandler (stderr + progress)
@@ -148,6 +178,7 @@ export class DockerBackend implements Backend {
   }
 
   async run(opts: RunOptions, handler: OutputHandler): Promise<RunResult> {
+    await this.ensureReachable()
     const sessionDir = path.resolve(opts.sessionDir)
     const scriptDirPath = path.join(sessionDir, "scripts")
     const outputDirPath = path.join(sessionDir, "output")

@@ -1,5 +1,6 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import type { CommandModule } from "yargs"
+import { describeError } from "../../core"
 import { createLogger, type Logger } from "../../logging"
 import { SandyMcpServer } from "../../mcp"
 import type { Backend } from "../../sandbox"
@@ -27,7 +28,7 @@ export async function runMcp(
     return 0
   } catch (err) {
     logger.error({ err }, "MCP server failed")
-    printErr(`sandy mcp: ${err instanceof Error ? err.message : String(err)}`)
+    printErr(`sandy mcp: ${describeError(err)}`)
     return 1
   }
 }
