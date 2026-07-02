@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/jamestelfer/sandy/compare/v0.6.2...v0.7.0) (2026-07-02)
+
+
+### Features
+
+* **sandbox:** resolve Docker endpoint from the selected docker context ([#38](https://github.com/jamestelfer/sandy/issues/38)) ([af88734](https://github.com/jamestelfer/sandy/commit/af88734eb1838b49b867a563177aab17b8c69b9d))
+
 ## [0.6.2](https://github.com/jamestelfer/sandy/compare/v0.6.1...v0.6.2) (2026-07-01)
 
 
