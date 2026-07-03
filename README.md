@@ -57,6 +57,18 @@ Two workarounds dominate AI-agent access to AWS today, and both have sharp edges
 
 ## Installation
 
+> [!IMPORTANT]
+> **On macOS** local signing of the binary is required for direct and mise
+> downloads in some environments: in particular when managed by an MDM profile.
+>
+> If you run `sandy --help; echo "Exit code $?"`, you're running into this issue.
+>
+> **Follow the signing instructions** with your install method to fix this.
+
+Unsigned binaries that access native APIs are _sometimes_ blocked by policy.
+This application bundles the ability to access the Shuru API, which _may_ cause
+the issue.
+
 <details>
 <summary><strong>Homebrew (macOS)</strong></summary>
 
@@ -72,7 +84,13 @@ brew install jamestelfer/tap/sandy
 [mise](https://mise.jdx.dev/) installs directly from GitHub Releases via the [github backend](https://mise.jdx.dev/dev-tools/backends/github.html):
 
 ```sh
-mise use -g github:jamestelfer/sandy
+mise config set --cd "${MISE_CONFIG_DIR:-~/.config/mise}" \
+  tools.github:jamestelfer/sandy.version latest
+mise config set --cd "${MISE_CONFIG_DIR:-~/.config/mise}" \
+  tools.github:jamestelfer/sandy.postinstall \
+  'xattr -dr com.apple.quarantine "${MISE_TOOL_INSTALL_PATH}" 2>/dev/null; codesign --remove-signature "${MISE_TOOL_INSTALL_PATH}/sandy" 2>/dev/null; codesign -s - --force "${MISE_TOOL_INSTALL_PATH}/sandy"'
+
+mise install
 ```
 
 </details>
@@ -92,13 +110,24 @@ npm install -g @jamestelfer/sandy
 The install script fetches the correct binary for your platform from [GitHub Releases](https://github.com/jamestelfer/sandy/releases):
 
 ```sh
+# download and install with binary attestation
+curl -fsSL -o install.sh https://github.com/jamestelfer/sandy/releases/latest/download/install.sh \
+  && gh attestation verify install.sh --repo jamestelfer/sandy \
+  && chmod u+x install.sh \
+  && ./install.sh
+
+
+# or for YOLO mode where `gh` is not in use
 curl -fsSL https://github.com/jamestelfer/sandy/releases/latest/download/install.sh | sh
 ```
 
-Verify the script's provenance before running it:
+After installation, locally sign the binary to avoid MDM issues:
 
 ```sh
-gh attestation verify install.sh --repo jamestelfer/sandy
+bin="~/.local/bin/sandy";
+xattr -dr com.apple.quarantine "${bin}" 2>/dev/null || true; 
+codesign --remove-signature "${bin}" 2>/dev/null || true; 
+codesign -s - --force "${bin}" && codesign -dv "${bin}" ;
 ```
 
 </details>
@@ -152,7 +181,7 @@ The Claude Code plugin configures an agent to use Sandy as an MCP server and shi
 
 ### Prerequisites
 
-- [Shuru](https://github.com/nicholasgasior/shuru) or Docker — select with `sandy config` (defaults to Docker)
+- Docker or [Shuru](https://shuru.run/) — select with `sandy config` (defaults to Docker)
 - [imds-broker](https://github.com/jamestelfer/imds-broker) — serves AWS credentials via IMDS on the host
 - Claude Code (optional, required only for the plugin)
 
