@@ -3,25 +3,5 @@
   "version": "0.0.0-dev",
   "description": "Sandboxed TypeScript runtime with AWS SDK access for AI agents",
   "homepage": "https://github.com/jamestelfer/sandy",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/jamestelfer/sandy"
-  },
-  "bin": {
-    "sandy": "./bin/sandy.js"
-  },
-  "files": [
-    "bin/sandy.js",
-    "README.md"
-  ],
-  "optionalDependencies": {
-    "@jamestelfer/sandy-linux-x64": "0.0.0-dev",
-    "@jamestelfer/sandy-linux-arm64": "0.0.0-dev",
-    "@jamestelfer/sandy-darwin-x64": "0.0.0-dev",
-    "@jamestelfer/sandy-darwin-arm64": "0.0.0-dev"
-  },
-  "engines": {
-    "node": ">=18"
-  }
+  "license": "MIT"
 }
