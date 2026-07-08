@@ -40,6 +40,7 @@ release:
   # release-please creates the draft first; goreleaser reuses it without
   # publishing. The reusable workflow publishes after attestation completes.
   draft: true
+  mode: keep-existing
   use_existing_draft: true
   prerelease: auto
 
