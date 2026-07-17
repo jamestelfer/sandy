@@ -25,7 +25,7 @@ jobs:
     uses: chinmina/.github/.github/workflows/goreleaser-release.yml@verified-actions
     with:
       token-source: octo-sts
-      disable-npm: false
+      disable-docker-login: true # no container image published; opt out of default-on Docker Hub login
       npm-package-name: "@jamestelfer/sandy"
     # No `secrets:` block: the octo-sts path is keyless — the release and tap
     # tokens are minted against the centralised org policies. (On the `app` path
