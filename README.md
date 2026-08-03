@@ -43,7 +43,7 @@ flowchart LR
 
 ## How to use it
 
-- **As an MCP server** — `sandy mcp`, registered automatically by the Claude Code plugin. Exposes the `sandy_image`, `sandy_check`, `sandy_run`, `sandy_resume_session`, and `prime` tools, plus embedded `sandy://skills/mcp/...` resources for script-authoring guidance.
+- **As an MCP server** — `sandy mcp`, registered automatically by the `sandy-mcp` Claude Code plugin. Exposes the `sandy_image`, `sandy_check`, `sandy_run`, `sandy_create_session`, `sandy_resume_session`, and `prime` tools, plus embedded `sandy://skills/mcp/...` resources for script-authoring guidance.
 - **As a CLI** — `sandy run --script path/to/script.ts --imds-port <port>`. Same backends, same guarantees. Suited to scripted workflows and agents that prefer driving binaries through a shell rather than MCP.
 
 Both modes select from the same `Backend` implementation and share every runtime constraint.
@@ -171,19 +171,32 @@ bun run build
 
 </details>
 
-### Claude Code plugin
+### Claude Code plugins
 
-The Claude Code plugin configures an agent to use Sandy as an MCP server and ships the agent-facing skill documentation. It does not install the binary — install via one of the methods above first.
+Sandy ships two Claude Code plugins, one per channel. Neither installs the binary — install via one
+of the methods above first.
 
-```
-/plugin install sandy
-```
+| Plugin | Channel | MCP server | Install |
+|---|---|---|---|
+| `sandy-mcp` | MCP tools | Yes — registers `sandy mcp` | `/plugin install sandy-mcp` |
+| `sandy-cli` | Shell commands | No | `/plugin install sandy-cli` |
+
+Install `sandy-mcp` when the agent has MCP support and should call `sandy_run` and friends
+directly. Install `sandy-cli` when the agent drives Sandy through shell commands instead. Install
+both to support either style, or when unsure which the agent will use — the skills carry distinct
+names and don't collide.
+
+Each plugin's skill is a short bootstrap: it tells the agent to call that channel's `prime` — the
+MCP `prime` tool for `sandy-mcp`, `sandy prime` for `sandy-cli` — and read the complete output
+before acting. The instructions themselves live in the embedded skill docs
+(`embedded/skills/mcp/SKILL.md` and `embedded/skills/cli/SKILL.md`), not in the published skill
+files, so `prime` always reflects the current binary.
 
 ### Prerequisites
 
 - Docker or [Shuru](https://shuru.run/) — select with `sandy config` (defaults to Docker)
 - [imds-broker](https://github.com/jamestelfer/imds-broker) — serves AWS credentials via IMDS on the host
-- Claude Code (optional, required only for the plugin)
+- Claude Code (optional, required only for the plugins)
 
 Create the sandbox image once, then verify the environment:
 
@@ -197,7 +210,7 @@ sandy check connect --imds-port <port>      # verifies AWS connectivity
 
 ### Via MCP
 
-The Claude Code plugin launches `sandy mcp` and exposes four tools plus one resource. Start an IMDS server from the agent (through the `imds-broker` MCP), then call `sandy_run` with the port and the script:
+The `sandy-mcp` Claude Code plugin launches `sandy mcp` and exposes four tools plus one resource. Start an IMDS server from the agent (through the `imds-broker` MCP), then call `sandy_run` with the port and the script:
 
 ```
 sandy_image(action: "create")
@@ -274,7 +287,7 @@ Backends are modality-agnostic. Swapping Shuru for Docker changes where the proc
 - **Credentials depend on `imds-broker`.** Sandy does not issue or cache credentials. The broker must be reachable on the IMDS port you pass in.
 - **One MCP session at a time.** The MCP server holds a single active session in memory. Resume with `sandy_resume_session`; parallel sessions are not supported.
 - **No persistent state between runs.** Each run starts from a clean sandbox image. Recreate the image after editing `embedded/bootstrap/` files.
-- **Skill source of truth.** `embedded/skills/mcp/SKILL.md` is canonical for MCP skill content. `plugin/skills/sandy/SKILL.md` must stay synchronised; a test enforces equality.
+- **Skill source of truth.** `embedded/skills/mcp/SKILL.md` and `embedded/skills/cli/SKILL.md` are canonical for the MCP and CLI skill content respectively. The published plugin skills (`plugins/mcp/skills/sandy-mcp/SKILL.md`, `plugins/cli/skills/sandy-cli/SKILL.md`) are bootstraps that dispatch to `prime` — they carry no copy of the instructions to keep in sync.
 
 ## Acknowledgements
 
