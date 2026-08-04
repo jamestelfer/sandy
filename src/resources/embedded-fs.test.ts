@@ -1,14 +1,29 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
+import * as fs from "node:fs/promises"
 import * as path from "node:path"
+import tar from "tar-fs"
 import {
   copyDirectoryRecursive,
   embeddedPathFromUri,
+  extractTarBufferToMemfs,
   getEmbeddedFS,
   listEmbeddedResourceUris,
   makeTmpDir,
   readEmbeddedResource,
 } from "."
+
+async function packDirToBuffer(dir: string): Promise<Buffer> {
+  const chunks: Buffer[] = []
+  await new Promise<void>((resolve, reject) => {
+    tar
+      .pack(dir)
+      .on("data", (chunk: Buffer) => chunks.push(chunk))
+      .on("end", resolve)
+      .on("error", reject)
+  })
+  return Buffer.concat(chunks)
+}
 
 describe("embedded filesystem", () => {
   test("memoises initialisation promise", () => {
@@ -29,6 +44,33 @@ describe("embedded filesystem", () => {
     const content = await readEmbeddedResource("sandy://skills/mcp/resources/scripting-guide.md")
 
     expect(content).toContain("SANDY_OUTPUT")
+  })
+
+  test("preserves every file when extracting an archive with many entries", async () => {
+    await using srcDir = await makeTmpDir("embedded-fs-scale-")
+    const fileCount = 100
+    for (let i = 0; i < fileCount; i++) {
+      const dir = path.join(srcDir.path, `svc${i}`, "resources")
+      await fs.mkdir(dir, { recursive: true })
+      await fs.writeFile(path.join(dir, "same.md"), `CONTENT-${i}`)
+    }
+
+    const tarBuffer = await packDirToBuffer(srcDir.path)
+    const memfs = await extractTarBufferToMemfs(tarBuffer)
+
+    for (let i = 0; i < fileCount; i++) {
+      const content = memfs.readFileSync(`/svc${i}/resources/same.md`, "utf-8")
+      expect(content).toBe(`CONTENT-${i}`)
+    }
+  })
+
+  test("sibling subtrees sharing a leaf filename both survive extraction intact", async () => {
+    const cli = await readEmbeddedResource("sandy://skills/cli/resources/scripting-guide.md")
+    const mcp = await readEmbeddedResource("sandy://skills/mcp/resources/scripting-guide.md")
+
+    expect(cli).not.toBe(mcp)
+    expect(cli).toContain("sandy resource sandy://skills/cli")
+    expect(mcp).not.toContain("sandy resource sandy://skills/cli")
   })
 
   test("rejects non-sandy URIs", () => {

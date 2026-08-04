@@ -63,6 +63,115 @@ function memoize<T>(factory: () => T): () => T {
 export const getEmbeddedFS: () => Promise<MemFs> = memoize(() => initEmbeddedFS())
 
 async function initEmbeddedFS(): Promise<MemFs> {
+  return extractTarBufferToMemfs(readFileSync(tarPath))
+}
+
+// tar-fs's underlying tar-stream Extract can emit "finish" before every
+// mkdir/write/chmod it triggered against the destination fs has actually
+// settled (an interop timing quirk between streamx and Node streams that
+// shows up once the destination's async callbacks resolve fast enough to
+// race ahead of it — memfs is fast enough to hit this on large archives).
+// Wrap the destination fs in a Proxy that tracks every in-flight operation
+// tar-fs triggers, so extraction can wait for them all to settle before
+// handing back the volume.
+function withDrainTracking(fs: TarExtractFs): {
+  fs: TarExtractFs
+  whenDrained: () => Promise<void>
+} {
+  let pending = 0
+  let waiters: Array<() => void> = []
+
+  function settle() {
+    pending -= 1
+    if (pending === 0) {
+      const toResolve = waiters
+      waiters = []
+      for (const resolve of toResolve) {
+        resolve()
+      }
+    }
+  }
+
+  function whenDrained(): Promise<void> {
+    if (pending === 0) {
+      return Promise.resolve()
+    }
+    return new Promise((resolve) => waiters.push(resolve))
+  }
+
+  function isCallback(value: unknown): value is (...cbArgs: unknown[]) => void {
+    return typeof value === "function"
+  }
+
+  // tar-fs always passes a trailing callback for these methods (see
+  // TAR_EXTRACT_FS_METHODS), but guard the assumption explicitly rather than
+  // casting: if a future call has no callback in the last position, skip
+  // tracking it instead of wrapping something that isn't a function.
+  function trackCallbackStyle(
+    args: unknown[],
+    callback: (...cbArgs: unknown[]) => void,
+  ): unknown[] {
+    return [
+      ...args.slice(0, -1),
+      (...cbArgs: unknown[]) => {
+        settle()
+        callback(...cbArgs)
+      },
+    ]
+  }
+
+  // Settles as soon as the stream itself finishes, which is before tar-fs's
+  // subsequent metadata calls (utimes/chmod) for the same entry begin — so
+  // `pending` can briefly touch zero while those metadata operations are
+  // still in flight. That's fine for sandy: file content is fully flushed by
+  // the time "finish" fires, and callers only ever read file content off the
+  // returned volume, never permissions or timestamps. Don't reorder settle()
+  // to run after metadata completion without re-verifying that still holds.
+  function trackWriteStream(stream: nodeFsTypes.WriteStream): nodeFsTypes.WriteStream {
+    let settled = false
+    const settleOnce = () => {
+      if (settled) {
+        return
+      }
+      settled = true
+      settle()
+    }
+    stream.on("finish", settleOnce)
+    stream.on("close", settleOnce)
+    stream.on("error", settleOnce)
+    return stream
+  }
+
+  const tracked = new Proxy(fs, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver)
+      if (typeof value !== "function") {
+        return value
+      }
+
+      const method = value as (...args: unknown[]) => unknown
+
+      return (...args: unknown[]) => {
+        if (prop === "createWriteStream") {
+          pending += 1
+          return trackWriteStream(method.apply(target, args) as nodeFsTypes.WriteStream)
+        }
+
+        const callback = args[args.length - 1]
+        if (!isCallback(callback)) {
+          return method.apply(target, args)
+        }
+
+        pending += 1
+        return method.apply(target, trackCallbackStyle(args, callback))
+      }
+    },
+  })
+
+  return { fs: tracked, whenDrained }
+}
+
+export async function extractTarBufferToMemfs(tarBuffer: Buffer): Promise<MemFs> {
   const volume = new Volume()
   const memfs = createFsFromVolume(volume)
 
@@ -70,12 +179,16 @@ async function initEmbeddedFS(): Promise<MemFs> {
     throw new Error("memfs does not satisfy tar-fs extract filesystem contract")
   }
 
+  const { fs: trackedFs, whenDrained } = withDrainTracking(memfs)
+
   await new Promise<void>((resolve, reject) => {
-    Readable.from(readFileSync(tarPath))
-      .pipe(tar.extract("/", { fs: memfs } as ExtractOptions & { fs: TarExtractFs }))
+    Readable.from(tarBuffer)
+      .pipe(tar.extract("/", { fs: trackedFs } as ExtractOptions & { fs: TarExtractFs }))
       .on("finish", resolve)
       .on("error", reject)
   })
+
+  await whenDrained()
 
   return memfs
 }
