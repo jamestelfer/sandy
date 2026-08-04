@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.0](https://github.com/jamestelfer/sandy/compare/v0.7.0...v0.8.0) (2026-08-04)
+
+
+### Features
+
+* publish sandy-mcp and sandy-cli as prime-bootstrap plugins ([#43](https://github.com/jamestelfer/sandy/issues/43)) ([63e7a1a](https://github.com/jamestelfer/sandy/commit/63e7a1a88ab1cfda7efbe9d76afaaf2df5b5fe6e))
+
+
+### Bug Fixes
+
+* **resources:** wait for extraction to fully settle before using embedded fs ([#44](https://github.com/jamestelfer/sandy/issues/44)) ([147f5ae](https://github.com/jamestelfer/sandy/commit/147f5ae890f62de261d586643e43bfb39177a5c4))
+
 ## [0.7.0](https://github.com/jamestelfer/sandy/compare/v0.6.2...v0.7.0) (2026-07-02)
 
 
