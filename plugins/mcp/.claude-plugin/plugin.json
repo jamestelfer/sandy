@@ -1,6 +1,6 @@
 {
   "name": "sandy-mcp",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Sandy: sandboxed TypeScript execution for AWS queries via MCP",
   "author": {
     "name": "James Telfer"
