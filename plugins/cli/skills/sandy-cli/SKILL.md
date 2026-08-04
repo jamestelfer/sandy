@@ -12,7 +12,7 @@ This plugin bootstraps the `sandy` command-line tool. Sandy's real instructions 
 
 Run in a shell:
 
-```
+```sh
 sandy prime
 ```
 

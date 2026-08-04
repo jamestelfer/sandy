@@ -12,7 +12,7 @@ not here.
 
 Call the MCP `prime` tool:
 
-```
+```text
 prime()
 ```
 

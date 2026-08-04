@@ -210,7 +210,7 @@ sandy check connect --imds-port <port>      # verifies AWS connectivity
 
 ### Via MCP
 
-The `sandy-mcp` Claude Code plugin launches `sandy mcp` and exposes four tools plus one resource. Start an IMDS server from the agent (through the `imds-broker` MCP), then call `sandy_run` with the port and the script:
+The `sandy-mcp` Claude Code plugin launches `sandy mcp` and exposes the `sandy_image`, `sandy_check`, `sandy_run`, `sandy_create_session`, and `sandy_resume_session` tools, plus a separate `prime` tool and multiple embedded `sandy://skills/mcp/...` resources for script-authoring guidance. Start an IMDS server from the agent (through the `imds-broker` MCP), then call `sandy_run` with the port and the script:
 
 ```
 sandy_image(action: "create")
