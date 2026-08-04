@@ -23,20 +23,20 @@
     "integration:shuru": "INTEGRATION=true bun test src/sandbox/shuru-backend.integration.test.ts"
   },
   "dependencies": {
-    "@biomejs/biome": "^2.4.10",
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@biomejs/biome": "^2.5.7",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@superhq/shuru": "^0.4.2",
-    "dockerode": "^4.0.10",
-    "human-id": "^4.0.0",
-    "memfs": "^4.49.0",
-    "tar-fs": "^3.1.1",
-    "yargs": "^18.0.0"
+    "dockerode": "^5.0.1",
+    "human-id": "^4.2.0",
+    "memfs": "^4.67.0",
+    "tar-fs": "^3.1.3",
+    "yargs": "^18.1.0"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.12",
+    "@types/bun": "^1.3.14",
     "@types/dockerode": "^4.0.1",
     "@types/yargs": "^17.0.35",
-    "typescript": "^6.0.2",
-    "typescript-language-server": "^5.1.3"
+    "typescript": "^7.0.2",
+    "typescript-language-server": "^5.3.0"
   }
 }

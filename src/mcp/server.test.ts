@@ -408,7 +408,7 @@ describe("handlerProgressCallback", () => {
 
     await cb("msg")
 
-    expect((sent[0]?.params as { progressToken: unknown }).progressToken).toBe(42)
+    expect((sent[0]!.params as { progressToken: unknown }).progressToken).toBe(42)
   })
 })
 
