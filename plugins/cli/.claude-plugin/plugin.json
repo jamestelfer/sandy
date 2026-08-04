@@ -1,0 +1,8 @@
+{
+  "name": "sandy-cli",
+  "version": "0.7.0",
+  "description": "Sandy: sandboxed TypeScript execution for AWS queries via the sandy CLI",
+  "author": {
+    "name": "James Telfer"
+  }
+}

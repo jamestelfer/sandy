@@ -8,8 +8,12 @@
   },
   "plugins": [
     {
-      "name": "sandy",
-      "source": "./plugin"
+      "name": "sandy-mcp",
+      "source": "./plugins/mcp"
+    },
+    {
+      "name": "sandy-cli",
+      "source": "./plugins/cli"
     }
   ]
 }
