@@ -20,7 +20,7 @@
       packages = {
         sandy = pkgs.stdenv.mkDerivation {
           pname = "sandy";
-          version = "0.8.0"; # x-release-please-version
+          version = "0.8.1"; # x-release-please-version
 
           src = ./.;
 
