@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/jamestelfer/sandy/compare/v0.8.0...v0.8.1) (2026-08-05)
+
+
+### Bug Fixes
+
+* **deps:** update mise and bun dependencies, harden CI workflow ([#46](https://github.com/jamestelfer/sandy/issues/46)) ([d871bfe](https://github.com/jamestelfer/sandy/commit/d871bfed21fa1fca480a1729a16cebb0e2dfb788))
+
 ## [0.8.0](https://github.com/jamestelfer/sandy/compare/v0.7.0...v0.8.0) (2026-08-04)
 
 
