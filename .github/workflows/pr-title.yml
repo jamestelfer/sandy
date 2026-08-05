@@ -5,7 +5,7 @@ on:
     types: [opened, edited, reopened, synchronize]
 
 permissions:
-  pull-requests: read
+  pull-requests: read # required to read PR title and post lint status
 
 jobs:
   conventional-pr-title:
