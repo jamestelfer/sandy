@@ -146,7 +146,12 @@ describe("establishWorkDir", () => {
         "unable to establish sandy working directory",
       )
     } finally {
-      process.env.TMPDIR = originalTmp
+      // Assigning undefined stores the string "undefined" in process.env.
+      if (originalTmp === undefined) {
+        delete process.env.TMPDIR
+      } else {
+        process.env.TMPDIR = originalTmp
+      }
       chmodSync(roParent, 0o755)
       chmodSync(blockedTmp, 0o755)
     }
