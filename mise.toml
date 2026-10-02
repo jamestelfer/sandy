@@ -5,5 +5,5 @@ binstaller = "github:binary-install/binstaller"
 go = "1.26"
 node = "24"
 bun = "1.3.14"
-goreleaser = "2.17.1"
+goreleaser = "2.18.2"
 binstaller = { version = "0.12.0", rename_exe = "binst" }

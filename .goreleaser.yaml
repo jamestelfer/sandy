@@ -51,8 +51,6 @@ homebrew_casks:
     directory: Casks
     homepage: https://github.com/jamestelfer/sandy
     description: Sandboxed TypeScript runtime with AWS SDK access for AI agents
-    url:
-      verified: github.com/jamestelfer/sandy
     repository:
       owner: jamestelfer
       name: homebrew-tap
@@ -62,11 +60,17 @@ homebrew_casks:
       - sandy
     commit_msg_template: "sandy {{ .Version }}"
     skip_upload: auto
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/sandy"]
-            system_command "/usr/bin/codesign", args: ["--remove-signature", "#{staged_path}/sandy"], print_stderr: false, must_succeed: false
-            system_command "/usr/bin/codesign", args: ["-s", "-", "--force", "#{staged_path}/sandy"]
-          end
+    # hooks.post.install emits the `postflight` stanza, which Homebrew has
+    # deprecated in favour of `postflight_steps`. custom_block carries the step
+    # until goreleaser ships hooks.post.install_steps (goreleaser/goreleaser#6873).
+    # `{{ "{{staged_path}}" }}` escapes Homebrew's `{{staged_path}}` token past
+    # goreleaser's template pass over the rendered cask.
+    # Bun's ad-hoc signature can fail at runtime on arm64, so strip it (best-effort) and re-sign.
+    custom_block: |
+      postflight_steps do
+        on_macos do
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ "{{staged_path}}" }}/sandy"]
+          run "/usr/bin/codesign", args: ["--remove-signature", "{{ "{{staged_path}}" }}/sandy"], print_stderr: false, must_succeed: false
+          run "/usr/bin/codesign", args: ["-s", "-", "--force", "{{ "{{staged_path}}" }}/sandy"]
+        end
+      end
