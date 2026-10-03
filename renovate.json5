@@ -1,0 +1,12 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    // Floats on chinmina/.github's default branch by design: a shared-config
+    // fix reaches every consuming repo without a migration. Do not pin.
+    "github>chinmina/.github//renovate/shared.json5"
+  ],
+  // Repo-specific rules only. Order broad -> narrow: grouping rules first,
+  // narrowing overrides (pinDigests, enabled, allowedVersions, single-dependency
+  // exceptions) last. The ordering is intentional -- last match wins per-option.
+  "packageRules": []
+}
