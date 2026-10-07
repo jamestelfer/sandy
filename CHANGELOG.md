@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/jamestelfer/sandy/compare/v0.8.1...v0.9.0) (2026-10-07)
+
+
+### Features
+
+* **sandbox:** install workspace dependencies with Aube instead of pnpm ([#59](https://github.com/jamestelfer/sandy/issues/59)) ([ea61685](https://github.com/jamestelfer/sandy/commit/ea6168555638ab0b5c82625d6ac235b96309e056))
+
 ## [0.8.1](https://github.com/jamestelfer/sandy/compare/v0.8.0...v0.8.1) (2026-10-07)
 
 
