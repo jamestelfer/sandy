@@ -1,10 +1,10 @@
 #!/bin/sh
 #
 # Initialise the sandy VM snapshot: install certificates, Node.js,
-# pnpm, workspace dependencies, and profile.d environment scripts.
+# Aube, workspace dependencies, and profile.d environment scripts.
 #
 # Usage: init.sh <step>
-#   Steps: prerequisites, certificates, nodejs, pnpm, workspace,
+#   Steps: prerequisites, certificates, nodejs, aube, workspace,
 #          profiles, dependencies, all
 
 set -eu
@@ -49,10 +49,9 @@ nodejs() {
   apt-get clean -y
 }
 
-setup_pnpm() {
-  echo "[--> install pnpm"
-  corepack enable
-  corepack prepare pnpm@latest --activate
+setup_aube() {
+  echo "[--> install Aube"
+  npm install -g --ignore-scripts=false @endevco/aube@latest
 }
 
 workspace() {
@@ -73,14 +72,14 @@ profiles() {
 dependencies() {
   echo "[--> install workspace dependencies"
   cd /workspace
-  pnpm install
+  aube install
 }
 
 run_all() {
   prerequisites
   certificates
   nodejs
-  setup_pnpm
+  setup_aube
   workspace
   profiles
   dependencies
@@ -91,14 +90,14 @@ main() {
     prerequisites) prerequisites ;;
     certificates) certificates ;;
     nodejs) nodejs ;;
-    pnpm) setup_pnpm ;;
+    aube) setup_aube ;;
     workspace) workspace ;;
     profiles) profiles ;;
     dependencies) dependencies ;;
     all) run_all ;;
     *)
       echo "Usage: init.sh <step>" >&2
-      echo "  Steps: prerequisites, certificates, nodejs, pnpm," >&2
+      echo "  Steps: prerequisites, certificates, nodejs, aube," >&2
       echo "         workspace, profiles, dependencies, all" >&2
       exit 1
       ;;
