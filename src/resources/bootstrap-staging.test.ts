@@ -6,22 +6,56 @@ import { getEmbeddedFS, makeTmpDir, stageBootstrapFiles } from "."
 const noopLogger = () => {}
 
 describe("stageBootstrapFiles", () => {
-  test("writes all six bootstrap files into destDir", async () => {
+  test("writes bootstrap scripts and nested workspace files into destDir", async () => {
     await using tmpDir = await makeTmpDir("bootstrap-staging-")
     await stageBootstrapFiles(tmpDir.path, noopLogger)
 
     const expected = [
       "init.sh",
       "node_certs.sh",
-      "package.json",
-      "tsconfig.json",
-      "entrypoint",
-      "sandy.ts",
+      "workspace/package.json",
+      "workspace/pnpm-workspace.yaml",
+      "workspace/tsconfig.json",
+      "workspace/entrypoint",
+      "workspace/sandy.ts",
     ]
     for (const name of expected) {
       const stat = await fs.stat(path.join(tmpDir.path, name))
       expect(stat.isFile()).toBe(true)
     }
+  })
+
+  test("workspace step copies all runtime files without bootstrap machinery", async () => {
+    await using tmpDir = await makeTmpDir("bootstrap-workspace-")
+    const bootstrapDir = path.join(tmpDir.path, "bootstrap")
+    const workspaceDir = path.join(tmpDir.path, "workspace")
+    await stageBootstrapFiles(bootstrapDir, noopLogger)
+    await fs.writeFile(path.join(bootstrapDir, "workspace", ".runtime-config"), "runtime")
+
+    const init = await fs.readFile(path.join(bootstrapDir, "init.sh"), "utf-8")
+    const testInit = path.join(tmpDir.path, "init.sh")
+    await fs.writeFile(
+      testInit,
+      init.replaceAll("/tmp/bootstrap", bootstrapDir).replaceAll(" /workspace", ` ${workspaceDir}`),
+    )
+    const process = Bun.spawn(["sh", testInit, "workspace"], { stdout: "pipe", stderr: "pipe" })
+    expect(await process.exited).toBe(0)
+
+    expect((await fs.readdir(workspaceDir)).sort()).toEqual([
+      ".runtime-config",
+      "entrypoint",
+      "package.json",
+      "pnpm-workspace.yaml",
+      "sandy.ts",
+      "tsconfig.json",
+    ])
+    for (const name of await fs.readdir(workspaceDir)) {
+      expect(await fs.readFile(path.join(workspaceDir, name), "utf-8")).toBe(
+        await fs.readFile(path.join(bootstrapDir, "workspace", name), "utf-8"),
+      )
+    }
+    const entrypoint = await fs.stat(path.join(workspaceDir, "entrypoint"))
+    expect(entrypoint.mode & 0o111).toBe(0o111)
   })
 
   test("creates a certs/ subdirectory inside destDir", async () => {

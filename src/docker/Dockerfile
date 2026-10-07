@@ -10,7 +10,7 @@ ENV NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
     REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
     SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
     GIT_SSL_CAINFO=/etc/ssl/certs/ca-certificates.crt
-RUN chmod +x /tmp/bootstrap/init.sh /tmp/bootstrap/entrypoint
+RUN chmod +x /tmp/bootstrap/init.sh
 RUN sh /tmp/bootstrap/init.sh prerequisites
 RUN sh /tmp/bootstrap/init.sh certificates
 RUN sh /tmp/bootstrap/init.sh pnpm

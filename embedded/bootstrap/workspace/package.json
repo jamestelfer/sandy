@@ -183,6 +183,7 @@
     "@aws-sdk/client-wellarchitected": "latest",
     "@aws-sdk/client-workspaces": "latest",
     "@aws-sdk/client-xray": "latest",
+    "@aws/agentcore": "latest",
     "arquero": "latest",
     "@fast-csv/format": "latest",
     "@types/jmespath": "latest",
