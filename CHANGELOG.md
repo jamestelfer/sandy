@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.8.1](https://github.com/jamestelfer/sandy/compare/v0.8.0...v0.8.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* apply pnpm 12 security configuration during image creation ([#54](https://github.com/jamestelfer/sandy/issues/54)) ([f97cd86](https://github.com/jamestelfer/sandy/commit/f97cd86f55ad23e61ce71f27cf91a4ef1d8c2a0c))
+* **deps:** update dependency bun to v1.4.2 ([#49](https://github.com/jamestelfer/sandy/issues/49)) ([ab47ac3](https://github.com/jamestelfer/sandy/commit/ab47ac357011e2c4b10df0ca24356e2c8e633efb))
+* **deps:** update dependency go to v1.27.1 ([#50](https://github.com/jamestelfer/sandy/issues/50)) ([5247bb8](https://github.com/jamestelfer/sandy/commit/5247bb8766080f49e3282793fcd7274839612014))
+* **deps:** update dependency typescript-language-server to v6 ([#53](https://github.com/jamestelfer/sandy/issues/53)) ([c9b9a67](https://github.com/jamestelfer/sandy/commit/c9b9a6714a619eaabfecb54f2d72bfdb6985c1c2))
+* **deps:** update jamestelfer/.github digest to eff8850 ([#52](https://github.com/jamestelfer/sandy/issues/52)) ([5c23f15](https://github.com/jamestelfer/sandy/commit/5c23f1594dbaf4e5fe52c451050d51d09e2dcfb7))
+* **deps:** update mise and bun dependencies, harden CI workflow ([#46](https://github.com/jamestelfer/sandy/issues/46)) ([d871bfe](https://github.com/jamestelfer/sandy/commit/d871bfed21fa1fca480a1729a16cebb0e2dfb788))
+* replace deprecated Homebrew cask stanzas ([#47](https://github.com/jamestelfer/sandy/issues/47)) ([3719b2f](https://github.com/jamestelfer/sandy/commit/3719b2f7ed317649e7ba599ec640009ab2901c56))
+* **test:** use application Docker endpoint resolution ([#55](https://github.com/jamestelfer/sandy/issues/55)) ([937db7b](https://github.com/jamestelfer/sandy/commit/937db7bb6f0275c9cc87bd4fa8294398855f465f))
+
 ## [0.8.0](https://github.com/jamestelfer/sandy/compare/v0.7.0...v0.8.0) (2026-08-04)
 
 
