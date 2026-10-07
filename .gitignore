@@ -6,6 +6,9 @@ embedded.tar
 .claude/worktrees
 plans/
 
+# Local package-manager benchmark output
+benchmark-results/
+
 # Sandbox environment bind-mount artifacts
 .bash_profile
 .bashrc
