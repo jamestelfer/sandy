@@ -10,11 +10,11 @@ Sandy runs TypeScript scripts in sandboxed microVMs with AWS SDK access via IMDS
 | Scripts mount | `/workspace/scripts/` (read-only) |
 | Output mount | `/workspace/output/` (read-write) |
 | Output env var | `process.env.SANDY_OUTPUT` → `/workspace/output` |
-| Runtime | Node.js 24, pnpm, tsc (compiled JS executed by node) |
+| Runtime | Node.js 24, Aube, tsc (compiled JS executed by node) |
 
 ## Installed packages
 
-- ~175 `@aws-sdk/client-*` packages covering common investigation targets (compute, storage, data, messaging, identity, security, observability, cost). Run `pnpm list --depth=0` inside a session to see the exact set; if a client is missing, fall back to the AWS CLI via the host or request it be added
+- ~175 `@aws-sdk/client-*` packages covering common investigation targets (compute, storage, data, messaging, identity, security, observability, cost). Run `aube list --depth=0` inside a session to see the exact set; if a client is missing, fall back to the AWS CLI via the host or request it be added
 - `arquero` — dplyr-style dataframes for JS. Use to group, join, filter, derive, and summarise records collected from paginated AWS responses. Reach for it when the answer involves counts per group, joins across clients (e.g. instances × tags), or sorting/top-N analysis
 - `simple-ascii-chart` — ASCII line and bar charts for terminal output
 - `console-table-printer` — table output

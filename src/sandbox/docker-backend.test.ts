@@ -31,7 +31,7 @@ describe("defaultBuildContextFactory", () => {
     expect(entries.has("bootstrap/init.sh")).toBe(true)
     expect(entries.has("bootstrap/node_certs.sh")).toBe(true)
     expect(entries.has("bootstrap/workspace/package.json")).toBe(true)
-    expect(entries.has("bootstrap/workspace/pnpm-workspace.yaml")).toBe(true)
+    expect(entries.has("bootstrap/workspace/aube-workspace.yaml")).toBe(true)
     expect(entries.has("bootstrap/workspace/tsconfig.json")).toBe(true)
     expect(entries.has("bootstrap/workspace/entrypoint")).toBe(true)
     expect(entries.has("bootstrap/workspace/sandy.ts")).toBe(true)

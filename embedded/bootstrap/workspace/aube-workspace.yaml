@@ -1,4 +1,4 @@
-verifyDepsBeforeRun: false
+aubeNoAutoInstall: true
 
 allowBuilds:
   "@aws/agentcore": false

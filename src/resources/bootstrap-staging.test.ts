@@ -14,7 +14,7 @@ describe("stageBootstrapFiles", () => {
       "init.sh",
       "node_certs.sh",
       "workspace/package.json",
-      "workspace/pnpm-workspace.yaml",
+      "workspace/aube-workspace.yaml",
       "workspace/tsconfig.json",
       "workspace/entrypoint",
       "workspace/sandy.ts",
@@ -43,9 +43,9 @@ describe("stageBootstrapFiles", () => {
 
     expect((await fs.readdir(workspaceDir)).sort()).toEqual([
       ".runtime-config",
+      "aube-workspace.yaml",
       "entrypoint",
       "package.json",
-      "pnpm-workspace.yaml",
       "sandy.ts",
       "tsconfig.json",
     ])

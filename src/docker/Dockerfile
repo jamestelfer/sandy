@@ -13,9 +13,9 @@ ENV NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
 RUN chmod +x /tmp/bootstrap/init.sh
 RUN sh /tmp/bootstrap/init.sh prerequisites
 RUN sh /tmp/bootstrap/init.sh certificates
-RUN sh /tmp/bootstrap/init.sh pnpm
+RUN sh /tmp/bootstrap/init.sh aube
 RUN sh /tmp/bootstrap/init.sh workspace
 RUN sh /tmp/bootstrap/init.sh profiles
 RUN sh /tmp/bootstrap/init.sh dependencies
 WORKDIR /workspace
-ENTRYPOINT ["pnpm", "run", "-s", "entrypoint"]
+ENTRYPOINT ["aube", "run", "-s", "entrypoint"]
