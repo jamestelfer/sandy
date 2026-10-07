@@ -4,6 +4,7 @@ import { OutputHandler } from "../output"
 import { establishWorkDir, Session } from "../session"
 import { useTestCwdIsolation } from "../test-support"
 import { DockerBackend } from "."
+import { resolveDockerOptions } from "./docker-endpoint"
 
 useTestCwdIsolation()
 
@@ -13,12 +14,17 @@ const SKIP = !process.env.INTEGRATION
 const SKIP_SLOW = SKIP || !process.env.SLOW_TEST
 const TIMEOUT = 300_000
 
+function createDockerBackend() {
+  const { options, source } = resolveDockerOptions()
+  const docker = new Docker(options)
+  return { docker, backend: new DockerBackend(docker, { source }) }
+}
+
 describe("DockerBackend integration", () => {
   test.skipIf(SKIP)(
     "imageCreate builds sandy:latest image and tags sandy:layer-retention",
     async () => {
-      const docker = new Docker()
-      const backend = new DockerBackend(docker)
+      const { docker, backend } = createDockerBackend()
       await backend.imageCreate(noop)
       expect(await backend.imageExists(noop)).toBe(true)
       await expect(docker.getImage("sandy:layer-retention").inspect()).resolves.toBeDefined()
@@ -29,7 +35,7 @@ describe("DockerBackend integration", () => {
   test.skipIf(SKIP)(
     "run executes script and returns stdout",
     async () => {
-      const backend = new DockerBackend(new Docker())
+      const { backend } = createDockerBackend()
       if (!(await backend.imageExists(noop))) {
         await backend.imageCreate(noop)
       }
@@ -59,8 +65,7 @@ describe("DockerBackend integration", () => {
   test.skipIf(SKIP)(
     "imageDelete removes sandy:latest but retains sandy:layer-retention",
     async () => {
-      const docker = new Docker()
-      const backend = new DockerBackend(docker)
+      const { docker, backend } = createDockerBackend()
       // Prune stopped containers so none hold a reference to the image
       try {
         await docker.pruneContainers()
@@ -82,8 +87,7 @@ describe("DockerBackend integration", () => {
   test.skipIf(SKIP_SLOW)(
     "imageDelete with force removes sandy:latest and sandy:layer-retention",
     async () => {
-      const docker = new Docker()
-      const backend = new DockerBackend(docker)
+      const { docker, backend } = createDockerBackend()
       try {
         await docker.pruneContainers()
       } catch {
@@ -102,8 +106,7 @@ describe("DockerBackend integration", () => {
   test.skipIf(SKIP)(
     "imageExists returns false when image is absent",
     async () => {
-      const docker = new Docker()
-      const backend = new DockerBackend(docker)
+      const { docker, backend } = createDockerBackend()
       // Prune stopped containers then remove the primary image tag.
       // Keep sandy:layer-retention to preserve cache warmth.
       try {
