@@ -1,0 +1,11 @@
+verifyDepsBeforeRun: false
+
+allowBuilds:
+  "@aws/agentcore": false
+  esbuild: true
+  protobufjs: false
+
+minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  - "@cultureamp/*"
+  - "@kaizen/*"

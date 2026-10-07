@@ -58,10 +58,7 @@ setup_pnpm() {
 workspace() {
   echo "[--> setup workspace runtime environment"
   mkdir -p /workspace
-  cp "${BOOTSTRAP}/package.json" /workspace/
-  cp "${BOOTSTRAP}/tsconfig.json" /workspace/
-  cp "${BOOTSTRAP}/sandy.ts" /workspace/
-  cp "${BOOTSTRAP}/entrypoint" /workspace/entrypoint
+  cp -R "${BOOTSTRAP}/workspace/." /workspace/
   chmod +x /workspace/entrypoint
 }
 
