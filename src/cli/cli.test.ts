@@ -461,3 +461,16 @@ describe("CLI mcp", () => {
     expect(exitCode).toBe(0)
   })
 })
+
+describe("makeCli version", () => {
+  it("--version reports the package version", async () => {
+    const { version } = await import("../../package.json")
+    let out = ""
+    await makeCli(new DummyBackend(), () => {}, ["--version"])
+      .exitProcess(false)
+      .parseAsync(undefined, {}, (_err, _argv, output) => {
+        out += output
+      })
+    expect(out.trim()).toBe(version)
+  })
+})

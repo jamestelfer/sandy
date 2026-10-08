@@ -1,5 +1,6 @@
 import yargs, { type Argv } from "yargs"
 import { hideBin } from "yargs/helpers"
+import { version } from "../../package.json"
 import type { ProgressCallback } from "../core"
 import type { Backend } from "../sandbox"
 import { registerCommands } from "./commands"
@@ -18,5 +19,6 @@ export function makeCli(
     )
     .demandCommand(1, "Specify a command")
     .strict()
+    .version(version)
     .help()
 }
