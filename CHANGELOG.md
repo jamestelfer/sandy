@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/jamestelfer/sandy/compare/v0.9.0...v0.10.0) (2026-10-08)
+
+
+### Features
+
+* **sandbox:** add yaml package to sandbox workspace ([#61](https://github.com/jamestelfer/sandy/issues/61)) ([544ac22](https://github.com/jamestelfer/sandy/commit/544ac2206eca6183398bb3e6fa0369b9679f583c))
+
 ## [0.9.0](https://github.com/jamestelfer/sandy/compare/v0.8.1...v0.9.0) (2026-10-07)
 
 
