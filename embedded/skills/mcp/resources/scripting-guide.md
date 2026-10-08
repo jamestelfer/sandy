@@ -20,13 +20,14 @@ Sandy runs TypeScript scripts in sandboxed microVMs with AWS SDK access via IMDS
 - `console-table-printer` — table output
 - `@fast-csv/format` — CSV generation
 - `jmespath` — JSON query language
+- `yaml` — YAML parsing and stringifying
 
 ## Knowledge sources
 
 Query these before writing scripts — they substantially outperform training knowledge on specifics:
 
 - **AWS Knowledge Base MCP** (`awskb`) — service API behaviour, parameter enums, pagination shapes, filter value strings, date-range constraints, and quotas. Consult it for any service you are about to use; training knowledge misfires on exact enum values, per-API restrictions, and service-specific edge cases.
-- **context7** — current library docs. Use before writing non-trivial arquero, fast-csv, or jmespath code. IDs are in the Library documentation section below.
+- **context7** — current library docs. Use before writing non-trivial arquero, fast-csv, jmespath, or yaml code. IDs are in the Library documentation section below.
 
 ## Library usage
 
@@ -85,6 +86,15 @@ Use when: projecting or filtering nested AWS response shapes.
 search(resp, "Reservations[].Instances[].{id: InstanceId, ip: PrivateIpAddress}")
 ```
 
+### yaml
+
+Use when: reading YAML input (CloudFormation templates, SSM documents, config) or writing YAML output.
+
+```typescript
+import { parse, stringify } from "yaml"
+const doc = parse(text) as unknown
+```
+
 ## AWS credentials
 
 Credentials resolved via IMDS. No static credentials needed — obtain an IMDS port from the imds-broker MCP before running.
@@ -126,6 +136,7 @@ Fetch current docs with context7:
 | fast-csv | `/c2fo/fast-csv` |
 | JMESPath JS | `/jmespath/jmespath.js` |
 | console-table-printer | `/websites/console-table_netlify_app` |
+| yaml | `/eemeli/yaml` |
 
 ## Examples
 

@@ -192,6 +192,7 @@
     "jmespath": "latest",
     "nanoid": "latest",
     "simple-ascii-chart": "latest",
-    "typescript": "latest"
+    "typescript": "latest",
+    "yaml": "latest"
   }
 }
