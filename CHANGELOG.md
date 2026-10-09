@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/jamestelfer/sandy/compare/v0.10.0...v0.10.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **cli:** report package version from compiled binary ([#63](https://github.com/jamestelfer/sandy/issues/63)) ([6c95811](https://github.com/jamestelfer/sandy/commit/6c95811d71f23f2f4f1ae40fa653c8f212543a4f))
+
 ## [0.10.0](https://github.com/jamestelfer/sandy/compare/v0.9.0...v0.10.0) (2026-10-08)
 
 
