@@ -37,7 +37,7 @@ describe("runRun", () => {
 
     const runCall = backend.calls.find((c) => c.method === "run")
     expect(runCall).toBeDefined()
-    if (!runCall || runCall.method !== "run") {
+    if (runCall?.method !== "run") {
       return
     }
     expect(runCall.opts.scriptPath).toBe(scriptPath)
