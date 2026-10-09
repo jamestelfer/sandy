@@ -19,17 +19,22 @@ import type {
 export const fakeBuildContext: BuildContextFactory = async () =>
   Object.assign(Readable.from([]), { [Symbol.asyncDispose]: async () => {} })
 
-export function makeImageFake(config: { inspectThrows?: boolean } = {}): {
+export function makeImageFake(
+  config: { inspectThrows?: boolean; inspectError?: Error; inspectResult?: object } = {},
+): {
   image: ImageLike
   removeCalls: string[]
 } {
   const removeCalls: string[] = []
   const image: ImageLike = {
     inspect: async () => {
-      if (config.inspectThrows) {
-        throw new Error("No such image")
+      if (config.inspectError) {
+        throw config.inspectError
       }
-      return {}
+      if (config.inspectThrows) {
+        throw Object.assign(new Error("(HTTP code 404) no such image"), { statusCode: 404 })
+      }
+      return config.inspectResult ?? {}
     },
     remove: async () => {
       removeCalls.push("remove")
@@ -69,7 +74,7 @@ export function makeContainerFake(
 
 export function makeDockerFake(
   config: {
-    imageConfig?: { inspectThrows?: boolean }
+    imageConfig?: { inspectThrows?: boolean; inspectError?: Error; inspectResult?: object }
     containerConfig?: { exitCode?: number; stdoutLines?: string[]; stderrLines?: string[] }
     pingRejects?: boolean
   } = {},

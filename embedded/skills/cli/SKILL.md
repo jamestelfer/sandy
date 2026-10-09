@@ -27,13 +27,16 @@ Start an IMDS server separately and pass its port to `sandy run` and `sandy chec
 
 ### sandy image
 
-Create or delete the Sandy sandbox image.
+Create, delete, or describe the Sandy sandbox image.
 
 ```
 sandy image create
 sandy image delete
 sandy image delete --force
+sandy image current
 ```
+
+`sandy image current` prints the Sandy version that built the image and its creation time. Versions missing from older images print `(unknown)`. Docker backend only.
 
 ### sandy session create
 

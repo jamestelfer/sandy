@@ -67,6 +67,15 @@ describe("DockerBackend.imageCreate", () => {
     expect((buildImageCalls[0]?.opts as { t?: string })?.t).toBe("sandy:latest")
   })
 
+  test("labels the image with the Sandy version", async () => {
+    const { docker, buildImageCalls } = makeDockerFake()
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext, version: "1.2.3" })
+    await backend.imageCreate(new OutputHandler(() => {}))
+    expect((buildImageCalls[0]?.opts as { labels?: object })?.labels).toEqual({
+      "sandy.version": "1.2.3",
+    })
+  })
+
   test("tags sandy:layer-retention after successful build", async () => {
     const { docker, tagCalls } = makeDockerFake()
     const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
@@ -93,6 +102,47 @@ describe("DockerBackend.imageCreate", () => {
     const progress: string[] = []
     await backend.imageCreate(new OutputHandler((msg) => progress.push(msg)))
     expect(progress).toContain("building layer")
+  })
+})
+
+describe("DockerBackend.imageInfo", () => {
+  test("reads the version label and creation time from the image", async () => {
+    const { docker } = makeDockerFake({
+      imageConfig: {
+        inspectResult: {
+          Created: "2026-10-09T04:01:47.123456789Z",
+          Config: { Labels: { "sandy.version": "1.2.3" } },
+        },
+      },
+    })
+    const info = await new DockerBackend(docker).imageInfo(new OutputHandler(() => {}))
+    expect(info?.sandyVersion).toBe("1.2.3")
+    expect(info?.created?.toISOString()).toBe("2026-10-09T04:01:47.123Z")
+  })
+
+  test("leaves the version undefined when the image has no labels", async () => {
+    const { docker } = makeDockerFake({
+      imageConfig: { inspectResult: { Created: "2026-10-09T04:01:47Z", Config: { Labels: null } } },
+    })
+    const info = await new DockerBackend(docker).imageInfo(new OutputHandler(() => {}))
+    expect(info).toBeDefined()
+    expect(info?.sandyVersion).toBeUndefined()
+  })
+
+  test("resolves undefined when the image does not exist", async () => {
+    const { docker } = makeDockerFake({ imageConfig: { inspectThrows: true } })
+    const info = await new DockerBackend(docker).imageInfo(new OutputHandler(() => {}))
+    expect(info).toBeUndefined()
+  })
+
+  test("rethrows inspect errors other than a missing image", async () => {
+    const serverError = Object.assign(new Error("(HTTP code 500) server error"), {
+      statusCode: 500,
+    })
+    const { docker } = makeDockerFake({ imageConfig: { inspectError: serverError } })
+    await expect(new DockerBackend(docker).imageInfo(new OutputHandler(() => {}))).rejects.toThrow(
+      "server error",
+    )
   })
 })
 
