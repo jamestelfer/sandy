@@ -150,8 +150,11 @@ export class DockerBackend implements Backend {
     let inspect: ImageInspect
     try {
       inspect = (await this.docker.getImage(IMAGE_NAME).inspect()) as ImageInspect
-    } catch {
-      return undefined
+    } catch (error) {
+      if ((error as { statusCode?: number }).statusCode === 404) {
+        return undefined
+      }
+      throw error
     }
     const created = inspect.Created ? new Date(inspect.Created) : undefined
     return {

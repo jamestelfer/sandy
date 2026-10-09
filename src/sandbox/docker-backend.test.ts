@@ -134,6 +134,16 @@ describe("DockerBackend.imageInfo", () => {
     const info = await new DockerBackend(docker).imageInfo(new OutputHandler(() => {}))
     expect(info).toBeUndefined()
   })
+
+  test("rethrows inspect errors other than a missing image", async () => {
+    const serverError = Object.assign(new Error("(HTTP code 500) server error"), {
+      statusCode: 500,
+    })
+    const { docker } = makeDockerFake({ imageConfig: { inspectError: serverError } })
+    await expect(new DockerBackend(docker).imageInfo(new OutputHandler(() => {}))).rejects.toThrow(
+      "server error",
+    )
+  })
 })
 
 describe("DockerBackend.imageDelete", () => {
