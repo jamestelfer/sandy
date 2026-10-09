@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import yargs from "yargs"
 import { noopLogger } from "../logging"
+import { ShuruBackend } from "../sandbox"
 import { establishWorkDir, Session } from "../session"
 import { captureStderr, DummyBackend, useTestCwdIsolation } from "../test-support"
 import { makeCli } from "./cli"
@@ -106,6 +107,73 @@ describe("CLI image", () => {
     const stderr = await captureStderr(() => runImage({ action: "delete" }, backend))
 
     expect(stderr).toContain("image deleted")
+  })
+
+  describe("current", () => {
+    afterEach(() => {
+      process.exitCode = 0
+    })
+
+    it("prints the Sandy version and creation time from backend.imageInfo()", async () => {
+      const backend = new DummyBackend()
+      backend.imageInfoResult = {
+        sandyVersion: "1.2.3",
+        created: new Date("2026-10-09T04:01:47.000Z"),
+      }
+      const output: string[] = []
+      await runImage(
+        { action: "current" },
+        backend,
+        () => {},
+        (line) => output.push(line),
+      )
+      expect(backend.calls).toEqual([{ method: "imageInfo" }])
+      expect(output).toEqual([
+        "created by sandy version: 1.2.3",
+        "created: 2026-10-09T04:01:47.000Z",
+      ])
+    })
+
+    it("prints (unknown) when the version label and creation time are missing", async () => {
+      const backend = new DummyBackend()
+      backend.imageInfoResult = {}
+      const output: string[] = []
+      await runImage(
+        { action: "current" },
+        backend,
+        () => {},
+        (line) => output.push(line),
+      )
+      expect(output).toEqual(["created by sandy version: (unknown)", "created: (unknown)"])
+    })
+
+    it("rejects with a create hint when no image exists", async () => {
+      const backend = new DummyBackend()
+      await expect(
+        runImage(
+          { action: "current" },
+          backend,
+          () => {},
+          () => {},
+        ),
+      ).rejects.toThrow("image create")
+    })
+
+    it("reports unsupported and exits -1 (status 255) on the shuru backend", async () => {
+      const backend = new ShuruBackend()
+      const output: string[] = []
+      const stderr = await captureStderr(() =>
+        runImage(
+          { action: "current" },
+          backend,
+          () => {},
+          (line) => output.push(line),
+        ),
+      )
+      expect(stderr).toContain("unsupported by this backend")
+      expect(process.exitCode).toBe(255)
+      expect(output).toEqual([])
+    })
   })
 })
 

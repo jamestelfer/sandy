@@ -19,7 +19,7 @@ import type {
 export const fakeBuildContext: BuildContextFactory = async () =>
   Object.assign(Readable.from([]), { [Symbol.asyncDispose]: async () => {} })
 
-export function makeImageFake(config: { inspectThrows?: boolean } = {}): {
+export function makeImageFake(config: { inspectThrows?: boolean; inspectResult?: object } = {}): {
   image: ImageLike
   removeCalls: string[]
 } {
@@ -29,7 +29,7 @@ export function makeImageFake(config: { inspectThrows?: boolean } = {}): {
       if (config.inspectThrows) {
         throw new Error("No such image")
       }
-      return {}
+      return config.inspectResult ?? {}
     },
     remove: async () => {
       removeCalls.push("remove")
@@ -69,7 +69,7 @@ export function makeContainerFake(
 
 export function makeDockerFake(
   config: {
-    imageConfig?: { inspectThrows?: boolean }
+    imageConfig?: { inspectThrows?: boolean; inspectResult?: object }
     containerConfig?: { exitCode?: number; stdoutLines?: string[]; stderrLines?: string[] }
     pingRejects?: boolean
   } = {},

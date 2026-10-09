@@ -1,16 +1,18 @@
 import type { RunOptions, RunResult } from "../core"
 import type { OutputHandler } from "../output"
-import type { Backend } from "../sandbox"
+import type { Backend, ImageInfo } from "../sandbox"
 
 type BackendCall =
   | { method: "imageCreate" }
   | { method: "imageDelete"; force: boolean }
   | { method: "imageExists" }
+  | { method: "imageInfo" }
   | { method: "run"; opts: RunOptions }
 
 export class DummyBackend implements Backend {
   calls: BackendCall[] = []
   imageExistsResult = false
+  imageInfoResult: ImageInfo | undefined
   runResult: RunResult = { exitCode: 0, output: "", outputFiles: [] }
   progressLines: string[] = []
   stdoutLines: string[] = []
@@ -38,6 +40,11 @@ export class DummyBackend implements Backend {
     // imageExists is a silent probe — no progress output, matching real backends
     this.calls.push({ method: "imageExists" })
     return this.imageExistsResult
+  }
+
+  async imageInfo(_handler: OutputHandler): Promise<ImageInfo | undefined> {
+    this.calls.push({ method: "imageInfo" })
+    return this.imageInfoResult
   }
 
   async run(opts: RunOptions, handler: OutputHandler): Promise<RunResult> {

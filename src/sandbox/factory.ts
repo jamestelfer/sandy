@@ -16,7 +16,13 @@ interface CreateBackendDeps {
 // startup) keep working, and each MCP tool call reports the actionable error.
 function unavailableBackend(error: unknown): Backend {
   const rethrow = () => Promise.reject(error)
-  return { imageCreate: rethrow, imageDelete: rethrow, imageExists: rethrow, run: rethrow }
+  return {
+    imageCreate: rethrow,
+    imageDelete: rethrow,
+    imageExists: rethrow,
+    imageInfo: rethrow,
+    run: rethrow,
+  }
 }
 
 export async function createBackend(deps: CreateBackendDeps = {}): Promise<Backend> {

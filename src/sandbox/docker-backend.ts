@@ -2,13 +2,14 @@ import { readFileSync } from "node:fs"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import { pack as packTar } from "tar-fs"
+import { version as packageVersion } from "../../package.json"
 import { type RunOptions, type RunResult, VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "../core"
 // Dockerfile — embedded in binary by Bun at build time
 import dockerfilePath from "../docker/Dockerfile" with { type: "file" }
 import { buildRunEnv, OutputTracker } from "../execution"
 import type { OutputHandler } from "../output"
 import { makeTmpDir, stageBootstrapFiles } from "../resources"
-import type { Backend } from "./backend"
+import type { Backend, ImageInfo } from "./backend"
 
 const DOCKERFILE = readFileSync(dockerfilePath, "utf-8")
 
@@ -29,7 +30,10 @@ export interface ContainerLike {
 export interface DockerClientLike {
   ping(): Promise<unknown>
   getImage(name: string): ImageLike
-  buildImage(context: NodeJS.ReadableStream, opts: { t: string }): Promise<NodeJS.ReadableStream>
+  buildImage(
+    context: NodeJS.ReadableStream,
+    opts: { t: string; labels: Record<string, string> },
+  ): Promise<NodeJS.ReadableStream>
   createContainer(opts: object): Promise<ContainerLike>
 }
 
@@ -37,6 +41,12 @@ export type BuildContextFactory = () => Promise<NodeJS.ReadableStream & AsyncDis
 
 const IMAGE_NAME = "sandy:latest"
 const LAYER_RETENTION_IMAGE = "sandy:layer-retention"
+export const VERSION_LABEL = "sandy.version"
+
+interface ImageInspect {
+  Created?: string
+  Config?: { Labels?: Record<string, string> | null }
+}
 
 export async function defaultBuildContextFactory(): Promise<
   NodeJS.ReadableStream & AsyncDisposable
@@ -94,13 +104,15 @@ async function demuxDockerStream(
 export class DockerBackend implements Backend {
   private buildContext: BuildContextFactory
   private source: string | undefined
+  private version: string
 
   constructor(
     private docker: DockerClientLike,
-    opts: { buildContext?: BuildContextFactory; source?: string } = {},
+    opts: { buildContext?: BuildContextFactory; source?: string; version?: string } = {},
   ) {
     this.buildContext = opts.buildContext ?? defaultBuildContextFactory
     this.source = opts.source
+    this.version = opts.version ?? packageVersion
   }
 
   describe(): string | undefined {
@@ -133,6 +145,21 @@ export class DockerBackend implements Backend {
     }
   }
 
+  async imageInfo(_handler: OutputHandler): Promise<ImageInfo | undefined> {
+    await this.ensureReachable()
+    let inspect: ImageInspect
+    try {
+      inspect = (await this.docker.getImage(IMAGE_NAME).inspect()) as ImageInspect
+    } catch {
+      return undefined
+    }
+    const created = inspect.Created ? new Date(inspect.Created) : undefined
+    return {
+      sandyVersion: inspect.Config?.Labels?.[VERSION_LABEL],
+      created: created && !Number.isNaN(created.getTime()) ? created : undefined,
+    }
+  }
+
   async imageDelete(_handler: OutputHandler, force = false): Promise<void> {
     await this.ensureReachable()
     await this.docker.getImage(IMAGE_NAME).remove()
@@ -144,7 +171,10 @@ export class DockerBackend implements Backend {
   async imageCreate(handler: OutputHandler): Promise<void> {
     await this.ensureReachable()
     await using context = await this.buildContext()
-    const stream = await this.docker.buildImage(context, { t: IMAGE_NAME })
+    const stream = await this.docker.buildImage(context, {
+      t: IMAGE_NAME,
+      labels: { [VERSION_LABEL]: this.version },
+    })
     // Parse build output JSON, feed stream content through OutputHandler (stderr + progress)
     await new Promise<void>((resolve, reject) => {
       const onData = (chunk: Buffer) => {

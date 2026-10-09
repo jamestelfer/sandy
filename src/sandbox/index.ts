@@ -1,4 +1,4 @@
-export type { Backend } from "./backend"
+export type { Backend, ImageInfo } from "./backend"
 export {
   type BuildContextFactory,
   type ContainerLike,
