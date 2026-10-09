@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/jamestelfer/sandy/compare/v0.10.1...v0.11.0) (2026-10-09)
+
+
+### Features
+
+* **docker:** record Sandy version on image and add `image current` ([#65](https://github.com/jamestelfer/sandy/issues/65)) ([5b1cc53](https://github.com/jamestelfer/sandy/commit/5b1cc53bd1ccb3781f05d4936254793f24af41b5))
+
 ## [0.10.1](https://github.com/jamestelfer/sandy/compare/v0.10.0...v0.10.1) (2026-10-09)
 
 
