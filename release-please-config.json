@@ -3,6 +3,7 @@
   "draft": true,
   "pull-request-header": "Automated release prepared by Release Please. Changes since the previous release are listed below.\n",
   "include-component-in-tag": false,
+  "force-tag-creation": true,
   "packages": {
     ".": {
       "release-type": "node",
