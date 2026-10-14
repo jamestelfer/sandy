@@ -5,7 +5,7 @@ import {
   type Service,
 } from "@aws-sdk/client-ecs"
 import { Table } from "console-table-printer"
-import { progress } from "../sandy.js"
+import { chunks, progress } from "../sandy.js"
 
 const args = process.argv.slice(2)
 if (args.length < 1) {
@@ -17,24 +17,25 @@ const clusterName = args[0]
 const region = process.env.AWS_REGION ?? "us-west-2"
 const ecs = new ECSClient({ region })
 
-// Generator: yields batches of service ARNs, one page at a time
-async function* listServiceArns(cluster: string): AsyncGenerator<string[]> {
+// Generator: yields individual service ARNs, one page at a time
+async function* listServiceArns(cluster: string): AsyncGenerator<string> {
   let nextToken: string | undefined
   do {
     const resp = await ecs.send(new ListServicesCommand({ cluster, nextToken }))
     const arns = resp.serviceArns ?? []
-    if (arns.length > 0) {
-      progress(`listed ${arns.length} services`)
-      yield arns
+    progress(`listed ${arns.length} services`)
+    for (const arn of arns) {
+      yield arn
     }
     nextToken = resp.nextToken
   } while (nextToken)
 }
 
-// Generator: takes ARN batches, describes each batch, yields individual services
+// Generator: DescribeServices accepts at most 10 services per call, so group
+// the ARN stream into chunks of 10 here, and yield individual services
 async function* describeServices(cluster: string): AsyncGenerator<Service> {
-  for await (const arnBatch of listServiceArns(cluster)) {
-    const resp = await ecs.send(new DescribeServicesCommand({ cluster, services: arnBatch }))
+  for await (const arns of chunks(listServiceArns(cluster), 10)) {
+    const resp = await ecs.send(new DescribeServicesCommand({ cluster, services: arns }))
     for (const service of resp.services ?? []) {
       yield service
     }
