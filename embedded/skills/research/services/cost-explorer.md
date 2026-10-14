@@ -50,30 +50,29 @@ const COVERAGE_END = "2026-04-01"  // required for Coverage/Utilization endpoint
 
 async function* getCostAndUsage(
   input: GetCostAndUsageCommandInput,
-): AsyncGenerator<ResultByTime[]> {
+): AsyncGenerator<ResultByTime> {
   let nextToken: string | undefined
   do {
     const resp = await ce.send(
       new GetCostAndUsageCommand({ ...input, NextPageToken: nextToken }),
     )
-    const rows = resp.ResultsByTime ?? []
-    if (rows.length > 0) yield rows
+    for (const row of resp.ResultsByTime ?? []) {
+      yield row
+    }
     nextToken = resp.NextPageToken
   } while (nextToken)
 }
 
 progress("fetching monthly costs...")
-for await (const batch of getCostAndUsage({
+for await (const r of getCostAndUsage({
   TimePeriod: { Start: START, End: END },
   Granularity: "MONTHLY",
   Metrics: ["AmortizedCost"],
   GroupBy: [{ Type: "DIMENSION", Key: "SERVICE" }],
 })) {
-  for (const r of batch) {
-    for (const g of r.Groups ?? []) {
-      const amount = Number(g.Metrics?.AmortizedCost?.Amount ?? "0")
-      progress(`${r.TimePeriod?.Start} ${g.Keys?.[0]}: ${amount.toFixed(2)}`)
-    }
+  for (const g of r.Groups ?? []) {
+    const amount = Number(g.Metrics?.AmortizedCost?.Amount ?? "0")
+    progress(`${r.TimePeriod?.Start} ${g.Keys?.[0]}: ${amount.toFixed(2)}`)
   }
 }
 ```

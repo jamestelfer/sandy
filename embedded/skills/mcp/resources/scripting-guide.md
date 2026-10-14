@@ -106,23 +106,26 @@ Credentials resolved via IMDS. No static credentials needed — obtain an IMDS p
 
 ## Mandatory: async generators for all AWS iteration
 
-Every paginated AWS call MUST be an `async function*` generator. Do not accumulate results into arrays.
+Every paginated AWS call MUST be an `async function*` generator that yields individual items. Do not accumulate results into arrays.
 
 ```typescript
-async function* listThings(client: SomeClient): AsyncGenerator<Thing[]> {
+async function* listThings(client: SomeClient): AsyncGenerator<Thing> {
   let nextToken: string | undefined;
   do {
     const resp = await client.send(new ListThingsCommand({ NextToken: nextToken }));
-    const items = resp.Things ?? [];
-    if (items.length > 0) yield items;
+    for (const item of resp.Things ?? []) {
+      yield item;
+    }
     nextToken = resp.NextToken;
   } while (nextToken);
 }
 
-for await (const batch of listThings(client)) {
-  // process batch
+for await (const thing of listThings(client)) {
+  // use thing directly
 }
 ```
+
+Generators yield individual items. When a downstream API takes a bulk input (e.g. `DescribeServices` accepts at most 10 ARNs), the stage that needs it groups the stream with `chunks(source, size)` rather than relying on the source's page size — see `ecs_services.ts`.
 
 ## Library documentation
 
@@ -155,6 +158,29 @@ import { progress } from "../sandy.js"
 progress("fetching EC2 instances...")
 progress("processing page 3 of results")
 ```
+
+## Stream helpers
+
+The `sandy` module exports lazy async iterator helpers that work on any async generator, AWS SDK `paginateX()` result, or array. They follow the names and semantics of the TC39 Async Iterator Helpers and Iterator Chunking proposals as standalone functions (Node has no native async iterator helpers yet). Callbacks may be async and receive `(item, index)`.
+
+| Helper | Purpose |
+|--------|---------|
+| `map(source, fn)` | Transform each item |
+| `filter(source, predicate)` | Keep matching items; type-guard predicates narrow the item type |
+| `flatMap(source, fn)` | Expand each item into an iterable (e.g. cluster → its services) and flatten |
+| `chunks(source, size)` | Consume the whole stream in groups of up to `size` items, for bulk APIs with per-call limits |
+| `take(source, n)` | Stop after `n` items and close the source — no further pages are fetched |
+
+```typescript
+import { filter, flatMap, take } from "../sandy.js"
+
+const services = flatMap(listClusterArns(ecs), (arn) => listServices(ecs, arn))
+for await (const svc of take(filter(services, (s) => s.runningCount === 0), 20)) {
+  table.addRow({ /* ... */ })
+}
+```
+
+Use `take` while exploring to cap API calls.
 
 ## Script sizing and resilience
 
