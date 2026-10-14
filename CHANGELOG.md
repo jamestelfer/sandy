@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/jamestelfer/sandy/compare/v0.11.0...v0.12.0) (2026-10-14)
+
+
+### Features
+
+* **sandbox:** add async iterator helpers and stream AWS results item-by-item ([#68](https://github.com/jamestelfer/sandy/issues/68)) ([4e50975](https://github.com/jamestelfer/sandy/commit/4e509755b7ca2aea178087477eff089ebaeb027b))
+
 ## [0.11.0](https://github.com/jamestelfer/sandy/compare/v0.10.1...v0.11.0) (2026-10-09)
 
 
