@@ -52,6 +52,7 @@ nodejs() {
 setup_aube() {
   echo "[--> install Aube"
   npm install -g --ignore-scripts=false @endevco/aube@latest
+  npm cache clean --force
 }
 
 workspace() {
@@ -73,6 +74,10 @@ dependencies() {
   echo "[--> install workspace dependencies"
   cd /workspace
   aube install
+  # minimumReleaseAge makes aube fetch full packuments to read publish times.
+  # They are install-time metadata only, aube has no switch to skip caching
+  # them, and `aube cache delete/prune` do not manage this directory.
+  rm -rf "$(aube cache path)/packuments-full-v1"
 }
 
 run_all() {

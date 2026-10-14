@@ -5,6 +5,50 @@ import { getEmbeddedFS, makeTmpDir, stageBootstrapFiles } from "."
 
 const noopLogger = () => {}
 
+// Stages init.sh against temp dirs with stub `aube` and `npm` binaries on PATH.
+// Stubs record their argv; `aube cache path` prints a temp cache dir.
+async function stageStubbedInit(root: string) {
+  const bootstrapDir = path.join(root, "bootstrap")
+  const workspaceDir = path.join(root, "workspace")
+  const binDir = path.join(root, "bin")
+  const cacheDir = path.join(root, "cache")
+  const callLog = path.join(root, "calls.log")
+  await stageBootstrapFiles(bootstrapDir, noopLogger)
+  await Promise.all([workspaceDir, binDir, cacheDir].map((d) => fs.mkdir(d, { recursive: true })))
+
+  for (const name of ["aube", "npm"]) {
+    const stub = path.join(binDir, name)
+    await fs.writeFile(
+      stub,
+      [
+        "#!/bin/sh",
+        `echo "${name} $*" >> "${callLog}"`,
+        `if [ "$1 $2" = "cache path" ]; then echo "${cacheDir}"; fi`,
+        "",
+      ].join("\n"),
+    )
+    await fs.chmod(stub, 0o755)
+  }
+
+  const init = await fs.readFile(path.join(bootstrapDir, "init.sh"), "utf-8")
+  const testInit = path.join(root, "init.sh")
+  await fs.writeFile(
+    testInit,
+    init.replaceAll("/tmp/bootstrap", bootstrapDir).replaceAll(" /workspace", ` ${workspaceDir}`),
+  )
+
+  const run = async (step: string) => {
+    const proc = Bun.spawn(["sh", testInit, step], {
+      env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` },
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    return proc.exited
+  }
+  const calls = async () => (await fs.readFile(callLog, "utf-8")).trim().split("\n")
+  return { run, calls, cacheDir }
+}
+
 describe("stageBootstrapFiles", () => {
   test("writes bootstrap scripts and nested workspace files into destDir", async () => {
     await using tmpDir = await makeTmpDir("bootstrap-staging-")
@@ -56,6 +100,31 @@ describe("stageBootstrapFiles", () => {
     }
     const entrypoint = await fs.stat(path.join(workspaceDir, "entrypoint"))
     expect(entrypoint.mode & 0o111).toBe(0o111)
+  })
+
+  test("dependencies step removes the full packument cache and keeps the virtual store", async () => {
+    await using tmpDir = await makeTmpDir("bootstrap-dependencies-")
+    const { run, calls, cacheDir } = await stageStubbedInit(tmpDir.path)
+    await fs.mkdir(path.join(cacheDir, "packuments-full-v1", "origin-x"), { recursive: true })
+    await fs.writeFile(path.join(cacheDir, "packuments-full-v1", "origin-x", "a.json"), "{}")
+    await fs.mkdir(path.join(cacheDir, "virtual-store", "v1"), { recursive: true })
+
+    expect(await run("dependencies")).toBe(0)
+
+    expect(await calls()).toEqual(["aube install", "aube cache path"])
+    expect(await fs.readdir(cacheDir)).toEqual(["virtual-store"])
+  })
+
+  test("aube step clears the npm cache after the global install", async () => {
+    await using tmpDir = await makeTmpDir("bootstrap-aube-")
+    const { run, calls } = await stageStubbedInit(tmpDir.path)
+
+    expect(await run("aube")).toBe(0)
+
+    expect(await calls()).toEqual([
+      "npm install -g --ignore-scripts=false @endevco/aube@latest",
+      "npm cache clean --force",
+    ])
   })
 
   test("creates a certs/ subdirectory inside destDir", async () => {
