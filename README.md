@@ -255,18 +255,19 @@ import { ECSClient, ListServicesCommand } from "@aws-sdk/client-ecs"
 
 const ecs = new ECSClient({ region: process.env.AWS_REGION })
 
-async function* listServiceArns(cluster: string): AsyncGenerator<string[]> {
+async function* listServiceArns(cluster: string): AsyncGenerator<string> {
   let nextToken: string | undefined
   do {
     const resp = await ecs.send(new ListServicesCommand({ cluster, nextToken }))
-    const arns = resp.serviceArns ?? []
-    if (arns.length > 0) yield arns
+    for (const arn of resp.serviceArns ?? []) {
+      yield arn
+    }
     nextToken = resp.nextToken
   } while (nextToken)
 }
 
-for await (const batch of listServiceArns("my-cluster")) {
-  console.log(`Got ${batch.length} services`)
+for await (const arn of listServiceArns("my-cluster")) {
+  console.log(arn)
 }
 ```
 
