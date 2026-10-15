@@ -5,7 +5,7 @@ import { Readable } from "node:stream"
 import { extract as extractTar } from "tar-stream"
 import { OutputHandler } from "../output"
 import { makeTmpDir } from "../resources"
-import { captureStderr, fakeBuildContext, makeDockerFake } from "../test-support"
+import { captureStderr, fakeBuildContext, makeDockerFake, traceLine } from "../test-support"
 import { DockerBackend, type DockerClientLike, defaultBuildContextFactory } from "."
 
 describe("defaultBuildContextFactory", () => {
@@ -102,6 +102,78 @@ describe("DockerBackend.imageCreate", () => {
     const progress: string[] = []
     await backend.imageCreate(new OutputHandler((msg) => progress.push(msg)))
     expect(progress).toContain("building layer")
+  })
+})
+
+describe("DockerBackend.imageCreate with BuildKit", () => {
+  test("requests BuildKit with a numeric version so dockerode opens no session", async () => {
+    // dockerode opens a gRPC session for version === "2", which Bun cannot upgrade to.
+    const { docker, buildImageCalls } = makeDockerFake()
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
+    await backend.imageCreate(new OutputHandler(() => {}))
+    expect((buildImageCalls[0]?.opts as { version?: unknown })?.version).toBe(2)
+  })
+
+  test("does not pull the base image when it is present", async () => {
+    const { docker, pullCalls } = makeDockerFake()
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
+    await backend.imageCreate(new OutputHandler(() => {}))
+    expect(pullCalls).toEqual([])
+  })
+
+  test("pulls a missing base image before building and reports progress", async () => {
+    const { docker, pullCalls, buildImageCalls } = makeDockerFake({
+      missingImages: ["node:24-slim"],
+      pullLines: [JSON.stringify({ status: "Pull complete" })],
+    })
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
+    const progress: string[] = []
+    await backend.imageCreate(
+      new OutputHandler((msg) => {
+        progress.push(msg)
+      }),
+    )
+    expect(pullCalls).toEqual(["node:24-slim"])
+    expect(progress).toContain("pull base image node:24-slim")
+    expect(buildImageCalls).toHaveLength(1)
+  })
+
+  test("fails without building when the base image pull reports an error", async () => {
+    const { docker, buildImageCalls } = makeDockerFake({
+      missingImages: ["node:24-slim"],
+      pullLines: [JSON.stringify({ error: "toomanyrequests: rate limited" })],
+    })
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
+    await expect(backend.imageCreate(new OutputHandler(() => {}))).rejects.toThrow(
+      "docker pull node:24-slim: toomanyrequests: rate limited",
+    )
+    expect(buildImageCalls).toEqual([])
+  })
+
+  test("forwards progress from BuildKit step output", async () => {
+    const step = {
+      digest: "sha256:deps",
+      name: "[11/12] RUN sh /tmp/bootstrap/init.sh dependencies",
+    }
+    const { docker } = makeDockerFake({
+      buildLines: [
+        traceLine({ vertexes: [step] }).trim(),
+        traceLine({
+          logs: [{ vertex: step.digest, msg: "[--> install workspace dependencies\n" }],
+        }).trim(),
+      ],
+    })
+    const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
+    const progress: string[] = []
+    await backend.imageCreate(
+      new OutputHandler(
+        (msg) => {
+          progress.push(msg)
+        },
+        () => {},
+      ),
+    )
+    expect(progress).toEqual(["install workspace dependencies"])
   })
 })
 
