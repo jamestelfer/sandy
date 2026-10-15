@@ -236,7 +236,7 @@ describe("ShuruBackend.imageCreate", () => {
 
     const sepIdx = cmd.indexOf("--")
     expect(sepIdx).toBeGreaterThan(-1)
-    expect(cmd.slice(sepIdx + 1)).toEqual(["sh", "/tmp/bootstrap/init.sh", "all"])
+    expect(cmd.slice(sepIdx + 1)).toEqual(["sh", "/tmp/bootstrap/system/init.sh", "all"])
   })
 
   test("forwards [-->-prefixed executor output as progress", async () => {

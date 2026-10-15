@@ -9,8 +9,11 @@
 
 set -eu
 
-readonly BOOTSTRAP=/tmp/bootstrap
-readonly CERT_FILE="${BOOTSTRAP}/certs/nscacert.pem"
+# Bootstrap root, one directory per image stage: system/ (this script and
+# certs/), profile/ (profile.d scripts), workspace/ (runtime files).
+BOOTSTRAP="$(cd "$(dirname "$0")/.." && pwd)"
+readonly BOOTSTRAP
+readonly CERT_FILE="${BOOTSTRAP}/system/certs/nscacert.pem"
 
 prerequisites() {
   echo "[--> install prerequisites"
@@ -64,8 +67,7 @@ workspace() {
 
 profiles() {
   echo "[--> setup profile scripts for environment configuration"
-  for f in "${BOOTSTRAP}"/*.sh; do
-    [ "$(basename "${f}")" = "init.sh" ] && continue
+  for f in "${BOOTSTRAP}"/profile/*.sh; do
     cp "${f}" /etc/profile.d/
   done
 }

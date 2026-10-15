@@ -28,8 +28,8 @@ describe("defaultBuildContextFactory", () => {
       contextStream.pipe(extractor)
     })
 
-    expect(entries.has("bootstrap/init.sh")).toBe(true)
-    expect(entries.has("bootstrap/node_certs.sh")).toBe(true)
+    expect(entries.has("bootstrap/system/init.sh")).toBe(true)
+    expect(entries.has("bootstrap/profile/node_certs.sh")).toBe(true)
     expect(entries.has("bootstrap/workspace/package.json")).toBe(true)
     expect(entries.has("bootstrap/workspace/aube-workspace.yaml")).toBe(true)
     expect(entries.has("bootstrap/workspace/tsconfig.json")).toBe(true)
