@@ -89,7 +89,13 @@ All subprocess stdout + stderr flow through `OutputHandler` → written to **pro
 
 ### Bootstrap files
 
-`embedded/bootstrap/` files are packed into `embedded.tar` and loaded via memfs. Both backends copy them to a temp staging dir and mount it into the sandbox as `/tmp/bootstrap/`. `init.sh` sets up the Node.js workspace at `/workspace/` inside the sandbox.
+`embedded/bootstrap/` files are packed into `embedded.tar` and loaded via memfs. Both backends copy them to a temp staging dir and place it in the sandbox as `/tmp/bootstrap/`. The tree has one directory per image stage, so the Dockerfile copies each directory whole just before the steps that use it:
+
+- `system/` — `init.sh` and the staged `certs/`; drives every step
+- `profile/` — scripts installed into `/etc/profile.d/`
+- `workspace/` — runtime files copied to `/workspace/`, where `init.sh` installs dependencies
+
+`init.sh` resolves the bootstrap root from its own location.
 
 ## Testing
 

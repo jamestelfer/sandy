@@ -119,7 +119,7 @@ export class ShuruBackend implements Backend {
         `${staging.path}:${VM_BOOTSTRAP}`,
         "--",
         "sh",
-        `${VM_BOOTSTRAP}/init.sh`,
+        `${VM_BOOTSTRAP}/system/init.sh`,
         "all",
       ],
       { handler },

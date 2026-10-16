@@ -10,8 +10,19 @@ import { buildRunEnv, OutputTracker } from "../execution"
 import type { OutputHandler } from "../output"
 import { makeTmpDir, stageBootstrapFiles } from "../resources"
 import type { Backend, ImageInfo } from "./backend"
+import { consumeBuildStream, readJsonLines } from "./build-stream"
 
 const DOCKERFILE = readFileSync(dockerfilePath, "utf-8")
+
+// BuildKit without a client session cannot resolve images from a registry, so
+// the base image is pulled through the Engine API before building.
+const BASE_IMAGE = (() => {
+  const match = /^FROM\s+(\S+)/m.exec(DOCKERFILE)
+  if (!match?.[1]) {
+    throw new Error("Dockerfile has no FROM instruction")
+  }
+  return match[1]
+})()
 
 export interface ImageLike {
   inspect(): Promise<unknown>
@@ -32,8 +43,9 @@ export interface DockerClientLike {
   getImage(name: string): ImageLike
   buildImage(
     context: NodeJS.ReadableStream,
-    opts: { t: string; labels: Record<string, string> },
+    opts: { t: string; labels: Record<string, string>; version: number },
   ): Promise<NodeJS.ReadableStream>
+  pull(repoTag: string): Promise<NodeJS.ReadableStream>
   createContainer(opts: object): Promise<ContainerLike>
 }
 
@@ -171,42 +183,40 @@ export class DockerBackend implements Backend {
     }
   }
 
+  private async ensureBaseImage(handler: OutputHandler): Promise<void> {
+    try {
+      await this.docker.getImage(BASE_IMAGE).inspect()
+      return
+    } catch (error) {
+      if ((error as { statusCode?: number }).statusCode !== 404) {
+        throw error
+      }
+    }
+    handler.feedStdout(Buffer.from(`[--> pull base image ${BASE_IMAGE}\n`))
+    const stream = await this.docker.pull(BASE_IMAGE)
+    await readJsonLines(stream, (msg) => {
+      if (typeof msg.error === "string") {
+        throw new Error(`docker pull ${BASE_IMAGE}: ${msg.error.trim()}`)
+      }
+    })
+  }
+
   async imageCreate(handler: OutputHandler): Promise<void> {
     await this.ensureReachable()
+    await this.ensureBaseImage(handler)
     await using context = await this.buildContext()
+    // version=2 selects BuildKit; the classic builder is deprecated.
+    // It is passed as a number on purpose: dockerode opens a gRPC session via an
+    // HTTP upgrade when `version === "2"`, and Bun's HTTP client rejects the
+    // upgrade (UnrequestedUpgrade). The query string is identical either way.
+    // Without a session BuildKit cannot reach registries, hence ensureBaseImage.
+    // consumeBuildStream also accepts classic-builder output.
     const stream = await this.docker.buildImage(context, {
       t: IMAGE_NAME,
       labels: { [VERSION_LABEL]: this.version },
+      version: 2,
     })
-    // Parse build output JSON, feed stream content through OutputHandler (stderr + progress)
-    await new Promise<void>((resolve, reject) => {
-      const onData = (chunk: Buffer) => {
-        for (const line of chunk.toString().split("\n")) {
-          if (!line.trim()) {
-            continue
-          }
-          try {
-            const msg = JSON.parse(line) as { stream?: string; error?: string }
-            if (msg.stream) {
-              handler.feedStdout(Buffer.from(msg.stream))
-            }
-            if (msg.error) {
-              stream.off("data", onData)
-              reject(new Error(`docker build: ${msg.error.trim()}`))
-              return
-            }
-          } catch {
-            // non-JSON line, ignore
-          }
-        }
-      }
-      stream.on("data", onData)
-      stream.on("end", () => {
-        handler.flush()
-        resolve()
-      })
-      stream.on("error", reject)
-    })
+    await consumeBuildStream(stream, handler)
     await this.docker.getImage(IMAGE_NAME).tag({ repo: "sandy", tag: "layer-retention" })
   }
 
