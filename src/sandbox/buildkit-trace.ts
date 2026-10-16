@@ -75,11 +75,14 @@ function* readFields(buf: Uint8Array): Generator<Field> {
         break
       }
       case WIRE_I64:
-        pos += 8
+      case WIRE_I32: {
+        const width = wire === WIRE_I64 ? 8 : 4
+        if (pos + width > buf.length) {
+          throw new Error("buildkit trace: truncated field")
+        }
+        pos += width
         break
-      case WIRE_I32:
-        pos += 4
-        break
+      }
       default:
         throw new Error(`buildkit trace: unsupported wire type ${wire}`)
     }

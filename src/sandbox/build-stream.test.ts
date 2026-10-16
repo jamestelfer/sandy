@@ -109,6 +109,21 @@ describe("consumeBuildStream", () => {
     ])
   })
 
+  test("emits buffered partial step output when the build fails", async () => {
+    const { handler, lines } = capture()
+    const step = { digest: "sha256:run", name: "[2/2] RUN false" }
+    const run = consumeBuildStream(
+      chunks(
+        traceLine({ vertexes: [step] }),
+        traceLine({ logs: [{ vertex: step.digest, msg: "fatal: no newline" }] }),
+        `${JSON.stringify({ error: "exit code: 1" })}\n`,
+      ),
+      handler,
+    )
+    await expect(run).rejects.toThrow("exit code: 1")
+    expect(lines).toEqual(["#1 [2/2] RUN false", "fatal: no newline"])
+  })
+
   test("returns the image ID reported by BuildKit", async () => {
     const { handler } = capture()
     const result = await consumeBuildStream(

@@ -76,48 +76,53 @@ export async function consumeBuildStream(
   const steps = new Map<string, { n: number; cached: boolean; errored: boolean }>()
   const out = (text: string) => handler.feedStdout(Buffer.from(text))
 
-  await readJsonLines(stream, (msg) => {
-    if (typeof msg.error === "string") {
-      throw new Error(`docker build: ${msg.error.trim()}`)
-    }
-    if (typeof msg.stream === "string") {
-      out(msg.stream)
-      return
-    }
-    if (msg.id === "moby.image.id") {
-      const id = (msg.aux as { ID?: unknown } | undefined)?.ID
-      if (typeof id === "string") {
-        result.imageId = id
+  // Flush in finally so a partial final line (often the failure diagnostic)
+  // is emitted even when an error frame ends the build.
+  try {
+    await readJsonLines(stream, (msg) => {
+      if (typeof msg.error === "string") {
+        throw new Error(`docker build: ${msg.error.trim()}`)
       }
-      return
-    }
-    if (msg.id !== "moby.buildkit.trace" || typeof msg.aux !== "string") {
-      return
-    }
-    const status = decodeTrace(msg.aux)
-    for (const v of status.vertexes) {
-      if (!v.started || v.name.startsWith("[internal]")) {
-        continue
+      if (typeof msg.stream === "string") {
+        out(msg.stream)
+        return
       }
-      let step = steps.get(v.digest)
-      if (!step) {
-        step = { n: steps.size + 1, cached: false, errored: false }
-        steps.set(v.digest, step)
-        out(`#${step.n} ${v.name}\n`)
+      if (msg.id === "moby.image.id") {
+        const id = (msg.aux as { ID?: unknown } | undefined)?.ID
+        if (typeof id === "string") {
+          result.imageId = id
+        }
+        return
       }
-      if (v.cached && !step.cached) {
-        step.cached = true
-        out(`#${step.n} CACHED\n`)
+      if (msg.id !== "moby.buildkit.trace" || typeof msg.aux !== "string") {
+        return
       }
-      if (v.error && !step.errored) {
-        step.errored = true
-        out(`#${step.n} ERROR: ${v.error}\n`)
+      const status = decodeTrace(msg.aux)
+      for (const v of status.vertexes) {
+        if (!v.started || v.name.startsWith("[internal]")) {
+          continue
+        }
+        let step = steps.get(v.digest)
+        if (!step) {
+          step = { n: steps.size + 1, cached: false, errored: false }
+          steps.set(v.digest, step)
+          out(`#${step.n} ${v.name}\n`)
+        }
+        if (v.cached && !step.cached) {
+          step.cached = true
+          out(`#${step.n} CACHED\n`)
+        }
+        if (v.error && !step.errored) {
+          step.errored = true
+          out(`#${step.n} ERROR: ${v.error}\n`)
+        }
       }
-    }
-    for (const log of status.logs) {
-      handler.feedStdout(Buffer.from(log.data))
-    }
-  })
-  handler.flush()
+      for (const log of status.logs) {
+        handler.feedStdout(Buffer.from(log.data))
+      }
+    })
+  } finally {
+    handler.flush()
+  }
   return result
 }

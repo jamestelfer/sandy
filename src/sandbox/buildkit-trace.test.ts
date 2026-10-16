@@ -69,6 +69,12 @@ describe("decodeTrace", () => {
     ])
   })
 
+  test("rejects truncated fixed-width fields", () => {
+    // Field 1 with wire types 1 (64-bit) and 5 (32-bit), each one byte short.
+    expect(() => decodeTrace(b64([(1 << 3) | 1, 0, 0, 0, 0, 0, 0, 0]))).toThrow("truncated")
+    expect(() => decodeTrace(b64([(1 << 3) | 5, 0, 0, 0]))).toThrow("truncated")
+  })
+
   test("rejects truncated payloads", () => {
     const truncated = len(3, [1, 2, 3]).slice(0, -1)
     expect(() => decodeTrace(b64(truncated))).toThrow("truncated")
