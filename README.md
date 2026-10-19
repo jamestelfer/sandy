@@ -135,10 +135,8 @@ codesign -s - --force "${bin}" && codesign -dv "${bin}" ;
 <details>
 <summary><strong>Nix</strong></summary>
 
-Install directly from the flake into your profile:
-
 ```sh
-nix profile install github:jamestelfer/sandy
+nix profile install github:jamestelfer/nixpkgs#sandy
 ```
 
 </details>

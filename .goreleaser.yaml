@@ -74,3 +74,15 @@ homebrew_casks:
           run "/usr/bin/codesign", args: ["-s", "-", "--force", "{{ "{{staged_path}}" }}/sandy"]
         end
       end
+
+nix:
+  - name: sandy
+    repository:
+      owner: jamestelfer
+      name: nixpkgs
+      token: "{{ .Env.NIX_GITHUB_TOKEN }}"
+    # skip publishing the recipe on a prerelease, as for the cask.
+    skip_upload: auto
+    homepage: "https://github.com/jamestelfer/sandy"
+    description: "Sandboxed TypeScript runtime for AI coding agents to query AWS — full SDK access with in-sandbox aggregation, credentials flow via IMDS and never enter the VM. Ships as a Claude Code plugin (MCP) and a standalone CLI, backed by Shuru microVMs or Docker."
+    license: "asl20"

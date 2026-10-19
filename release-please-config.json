@@ -10,7 +10,6 @@
       "package-name": "sandy",
       "draft": true,
       "extra-files": [
-        "flake.nix",
         {
           "type": "json",
           "path": "plugins/mcp/.claude-plugin/plugin.json",
