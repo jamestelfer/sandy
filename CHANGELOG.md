@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.12.0](https://github.com/jamestelfer/sandy/compare/v0.11.0...v0.12.0) (2026-10-20)
+
+
+### Features
+
+* **sandbox:** add async iterator helpers and stream AWS results item-by-item ([#68](https://github.com/jamestelfer/sandy/issues/68)) ([4e50975](https://github.com/jamestelfer/sandy/commit/4e509755b7ca2aea178087477eff089ebaeb027b))
+
+
+### Bug Fixes
+
+* **ci:** publish a Nix recipe ([#74](https://github.com/jamestelfer/sandy/issues/74)) ([1bf2c6f](https://github.com/jamestelfer/sandy/commit/1bf2c6f0e20a1a68dac71c2217984111fa5b8f2c))
+* **ci:** put imds-broker on sandy's PATH in the Nix recipe ([#75](https://github.com/jamestelfer/sandy/issues/75)) ([00cfa26](https://github.com/jamestelfer/sandy/commit/00cfa267e95c1b35351f747a46695241c3e1ae89))
+
 ## [0.11.0](https://github.com/jamestelfer/sandy/compare/v0.10.1...v0.11.0) (2026-10-09)
 
 
