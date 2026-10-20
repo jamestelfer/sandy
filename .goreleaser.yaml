@@ -86,3 +86,8 @@ nix:
     homepage: "https://github.com/jamestelfer/sandy"
     description: "Sandboxed TypeScript runtime for AI coding agents to query AWS — full SDK access with in-sandbox aggregation, credentials flow via IMDS and never enter the VM. Ships as a Claude Code plugin (MCP) and a standalone CLI, backed by Shuru microVMs or Docker."
     license: "asl20"
+    # Wraps sandy so imds-broker, from the same nixpkgs repo, is on its PATH,
+    # matching the in-repo flake this recipe replaced. Needs jamestelfer/nixpkgs#3,
+    # which lets a recipe depend on a sibling package.
+    dependencies:
+      - imds-broker
