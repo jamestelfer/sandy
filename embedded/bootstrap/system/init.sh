@@ -9,8 +9,11 @@
 
 set -eu
 
-readonly BOOTSTRAP=/tmp/bootstrap
-readonly CERT_FILE="${BOOTSTRAP}/certs/nscacert.pem"
+# Bootstrap root, one directory per image stage: system/ (this script and
+# certs/), profile/ (profile.d scripts), workspace/ (runtime files).
+BOOTSTRAP="$(cd "$(dirname "$0")/.." && pwd)"
+readonly BOOTSTRAP
+readonly CERT_FILE="${BOOTSTRAP}/system/certs/nscacert.pem"
 
 prerequisites() {
   echo "[--> install prerequisites"
@@ -52,6 +55,7 @@ nodejs() {
 setup_aube() {
   echo "[--> install Aube"
   npm install -g --ignore-scripts=false @endevco/aube@latest
+  npm cache clean --force
 }
 
 workspace() {
@@ -63,8 +67,7 @@ workspace() {
 
 profiles() {
   echo "[--> setup profile scripts for environment configuration"
-  for f in "${BOOTSTRAP}"/*.sh; do
-    [ "$(basename "${f}")" = "init.sh" ] && continue
+  for f in "${BOOTSTRAP}"/profile/*.sh; do
     cp "${f}" /etc/profile.d/
   done
 }
@@ -73,6 +76,10 @@ dependencies() {
   echo "[--> install workspace dependencies"
   cd /workspace
   aube install
+  # minimumReleaseAge makes aube fetch full packuments to read publish times.
+  # They are install-time metadata only, aube has no switch to skip caching
+  # them, and `aube cache delete/prune` do not manage this directory.
+  rm -rf "$(aube cache path)/packuments-full-v1"
 }
 
 run_all() {

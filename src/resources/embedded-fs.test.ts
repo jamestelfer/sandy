@@ -90,8 +90,8 @@ describe("copyDirectoryRecursive", () => {
     const memfs = await getEmbeddedFS()
     await using destDir = await makeTmpDir("copy-recursive-")
     await copyDirectoryRecursive(memfs, "/bootstrap", destDir.path)
-    const original = memfs.readFileSync("/bootstrap/init.sh", "utf-8") as string
-    const copied = readFileSync(path.join(destDir.path, "init.sh"), "utf-8")
+    const original = memfs.readFileSync("/bootstrap/system/init.sh", "utf-8") as string
+    const copied = readFileSync(path.join(destDir.path, "system", "init.sh"), "utf-8")
     expect(copied).toBe(original)
   })
 

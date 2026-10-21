@@ -77,10 +77,17 @@ export function makeDockerFake(
     imageConfig?: { inspectThrows?: boolean; inspectError?: Error; inspectResult?: object }
     containerConfig?: { exitCode?: number; stdoutLines?: string[]; stderrLines?: string[] }
     pingRejects?: boolean
+    /** Images whose inspect returns 404 until pulled. */
+    missingImages?: string[]
+    /** JSON lines streamed by pull(). */
+    pullLines?: string[]
+    /** JSON lines streamed by buildImage(). */
+    buildLines?: string[]
   } = {},
 ): {
   docker: DockerClientLike
   buildImageCalls: Array<{ opts: object }>
+  pullCalls: string[]
   createContainerCalls: Array<{ opts: object }>
   imageFake: ReturnType<typeof makeImageFake>
   removedImages: string[]
@@ -92,6 +99,10 @@ export function makeDockerFake(
   const imageFake = makeImageFake(config.imageConfig)
   const removedImages: string[] = []
   const tagCalls: Array<{ from: string; opts: { repo: string; tag: string } }> = []
+  const pullCalls: string[] = []
+  const missing = new Set(config.missingImages ?? [])
+  const lineStream = (lines: string[] = []) =>
+    Readable.from(lines.map((l) => Buffer.from(`${l}\n`)))
   let lastContainer: ReturnType<typeof makeContainerFake> | null = null
 
   const docker: DockerClientLike = {
@@ -102,7 +113,12 @@ export function makeDockerFake(
       return "OK"
     },
     getImage: (name: string): ImageLike => ({
-      inspect: () => imageFake.image.inspect(),
+      inspect: async () => {
+        if (missing.has(name)) {
+          throw Object.assign(new Error("(HTTP code 404) no such image"), { statusCode: 404 })
+        }
+        return imageFake.image.inspect()
+      },
       remove: async () => {
         removedImages.push(name)
       },
@@ -115,7 +131,12 @@ export function makeDockerFake(
       opts: object,
     ): Promise<NodeJS.ReadableStream> => {
       buildImageCalls.push({ opts })
-      return Readable.from([])
+      return lineStream(config.buildLines)
+    },
+    pull: async (repoTag: string): Promise<NodeJS.ReadableStream> => {
+      pullCalls.push(repoTag)
+      missing.delete(repoTag)
+      return lineStream(config.pullLines)
     },
     createContainer: async (opts: object): Promise<ContainerLike> => {
       createContainerCalls.push({ opts })
@@ -127,6 +148,7 @@ export function makeDockerFake(
   return {
     docker,
     buildImageCalls,
+    pullCalls,
     createContainerCalls,
     imageFake,
     removedImages,
