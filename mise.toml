@@ -2,7 +2,7 @@
 binstaller = "github:binary-install/binstaller"
 
 [tools]
-go = "1.27.1"
+go = "1.27.2"
 node = "24"
 bun = "1.4.3"
 goreleaser = "2.18.2"
