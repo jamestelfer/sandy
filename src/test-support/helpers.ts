@@ -17,6 +17,9 @@ import type {
 
 // ── Docker fakes ─────────────────────────────────────────────────────────────
 
+type BuildImageOptions = Parameters<DockerClientLike["buildImage"]>[1]
+type ContainerCreateOptions = Parameters<DockerClientLike["createContainer"]>[0]
+
 export const fakeBuildContext: BuildContextFactory = async () =>
   Object.assign(Readable.from([]), { [Symbol.asyncDispose]: async () => {} })
 
@@ -81,15 +84,15 @@ export function makeDockerFake(
   } = {},
 ): {
   docker: DockerClientLike
-  buildImageCalls: Array<{ opts: object }>
-  createContainerCalls: Array<{ opts: object }>
+  buildImageCalls: Array<{ opts: BuildImageOptions }>
+  createContainerCalls: Array<{ opts: ContainerCreateOptions }>
   imageFake: ReturnType<typeof makeImageFake>
   removedImages: string[]
   tagCalls: Array<{ from: string; opts: { repo: string; tag: string } }>
   lastContainer: () => ReturnType<typeof makeContainerFake>
 } {
-  const buildImageCalls: Array<{ opts: object }> = []
-  const createContainerCalls: Array<{ opts: object }> = []
+  const buildImageCalls: Array<{ opts: BuildImageOptions }> = []
+  const createContainerCalls: Array<{ opts: ContainerCreateOptions }> = []
   const imageFake = makeImageFake(config.imageConfig)
   const removedImages: string[] = []
   const tagCalls: Array<{ from: string; opts: { repo: string; tag: string } }> = []
@@ -113,12 +116,12 @@ export function makeDockerFake(
     }),
     buildImage: async (
       _context: NodeJS.ReadableStream,
-      opts: object,
+      opts: BuildImageOptions,
     ): Promise<NodeJS.ReadableStream> => {
       buildImageCalls.push({ opts })
       return Readable.from([])
     },
-    createContainer: async (opts: object): Promise<ContainerLike> => {
+    createContainer: async (opts: ContainerCreateOptions): Promise<ContainerLike> => {
       createContainerCalls.push({ opts })
       lastContainer = makeContainerFake(config.containerConfig)
       return lastContainer

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test"
+import { afterEach, beforeEach, describe, expect, it, type Mock, spyOn } from "bun:test"
 import {
   chmodSync,
   existsSync,
@@ -57,22 +57,21 @@ describe("establishWorkDir", () => {
   describe("stale session cleanup", () => {
     const STALE_DATE = new Date(Date.now() - 49 * 60 * 60 * 1000)
     const RECENT_DATE = new Date(Date.now() - 1 * 60 * 60 * 1000)
-    const origStderrWrite = process.stderr.write.bind(process.stderr)
-    let stderrOutput: string[]
+    let stderrWrite: Mock<typeof process.stderr.write>
 
     beforeEach(() => {
-      stderrOutput = []
-      process.stderr.write = ((chunk: string | Uint8Array) => {
-        if (typeof chunk === "string") {
-          stderrOutput.push(chunk)
-        }
-        return origStderrWrite(chunk as string)
-      }) as unknown as typeof process.stderr.write
+      stderrWrite = spyOn(process.stderr, "write")
     })
 
     afterEach(() => {
-      process.stderr.write = origStderrWrite
+      stderrWrite.mockRestore()
     })
+
+    function stderrText(): string {
+      return stderrWrite.mock.calls
+        .map(([chunk]) => (typeof chunk === "string" ? chunk : ""))
+        .join("")
+    }
 
     function makeSession(baseDir: string, name: string): string {
       const dir = join(baseDir, name)
@@ -119,13 +118,13 @@ describe("establishWorkDir", () => {
 
       await establishWorkDir()
 
-      expect(stderrOutput.join("")).toContain("cleaned up 1 stale empty sessions")
+      expect(stderrText()).toContain("cleaned up 1 stale empty sessions")
     })
 
     it("writes no cleanup message when nothing is cleaned up", async () => {
       await establishWorkDir()
 
-      expect(stderrOutput.join("")).not.toContain("stale empty sessions")
+      expect(stderrText()).not.toContain("stale empty sessions")
     })
   })
 

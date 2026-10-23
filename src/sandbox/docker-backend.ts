@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
+import type { ContainerCreateOptions } from "dockerode"
 import { pack as packTar } from "tar-fs"
 import { version as packageVersion } from "../../package.json"
 import {
@@ -45,7 +46,7 @@ export interface DockerClientLike {
     context: NodeJS.ReadableStream,
     opts: { t: string; labels: Record<string, string> },
   ): Promise<NodeJS.ReadableStream>
-  createContainer(opts: object): Promise<ContainerLike>
+  createContainer(opts: ContainerCreateOptions): Promise<ContainerLike>
 }
 
 export type BuildContextFactory = () => Promise<NodeJS.ReadableStream & AsyncDisposable>

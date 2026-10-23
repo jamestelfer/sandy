@@ -90,7 +90,7 @@ describe("stageBootstrapFiles", () => {
     await using tmpDir = await makeTmpDir("bootstrap-staging-content-")
     await stageBootstrapFiles(tmpDir.path, noopLogger)
     const memfs = await getEmbeddedFS()
-    const embeddedInit = memfs.readFileSync("/bootstrap/init.sh", "utf-8") as string
+    const embeddedInit = memfs.readFileSync("/bootstrap/init.sh", "utf-8").toString()
     const stagedInit = await fs.readFile(path.join(tmpDir.path, "init.sh"), "utf-8")
     expect(stagedInit).toBe(embeddedInit)
   })

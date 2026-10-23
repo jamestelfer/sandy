@@ -8,11 +8,11 @@ const packageJsonPath = join(repoRoot, "package.json")
 
 describe("embedded pack step", () => {
   test("has prebuild hook for pack script", () => {
-    const pkg = JSON.parse(readFileSync(packageJsonPath, "utf-8")) as {
-      scripts?: Record<string, string>
-    }
+    const pkg: unknown = JSON.parse(readFileSync(packageJsonPath, "utf-8"))
 
-    expect(pkg.scripts?.prebuild).toContain("scripts/pack-embedded.ts")
+    expect(pkg).toMatchObject({
+      scripts: { prebuild: expect.stringContaining("scripts/pack-embedded.ts") },
+    })
   })
 
   test("pack script creates embedded.tar containing skill roots", () => {

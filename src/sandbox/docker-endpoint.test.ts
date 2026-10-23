@@ -144,8 +144,7 @@ describe("resolveDockerOptions", () => {
     expect(options?.port).toBe(2376)
     expect(options?.protocol).toBe("https")
     expect(options?.ca).toBeUndefined()
-    const agent = (options as { agent?: { options?: { rejectUnauthorized?: boolean } } })?.agent
-    expect(agent?.options?.rejectUnauthorized).toBe(false)
+    expect(options?.agent?.options.rejectUnauthorized).toBe(false)
   })
 
   it("defaults a portless plain tcp endpoint to docker's port 2375", async () => {
@@ -188,8 +187,7 @@ describe("resolveDockerOptions", () => {
 
     expect(options?.cert).toBe("CERT-PEM")
     expect(options?.key).toBe("KEY-PEM")
-    const agent = (options as { agent?: { options?: { rejectUnauthorized?: boolean } } })?.agent
-    expect(agent?.options?.rejectUnauthorized).toBe(false)
+    expect(options?.agent?.options.rejectUnauthorized).toBe(false)
   })
 
   it("strips brackets from IPv6 tcp hosts", async () => {

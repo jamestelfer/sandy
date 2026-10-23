@@ -38,7 +38,10 @@ export interface SandySessionResult {
 }
 
 export const handlerProgressCallback = (
-  handlerContext: RequestHandlerExtra<ServerRequest, ServerNotification>,
+  handlerContext: Pick<
+    RequestHandlerExtra<ServerRequest, ServerNotification>,
+    "_meta" | "sendNotification"
+  >,
 ): ProgressCallback => {
   const token = handlerContext._meta?.progressToken
   if (token === undefined) {

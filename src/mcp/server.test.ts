@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
+import type { ServerNotification } from "@modelcontextprotocol/sdk/types"
 import type { RunOptions } from "../core"
 import { createLogger } from "../logging"
 import { listEmbeddedResourceUris, readEmbeddedResource } from "../resources"
@@ -366,10 +367,10 @@ describe("progress", () => {
 
 // Fake RequestHandlerExtra with just the fields handlerProgressCallback uses.
 function makeHandlerContext(progressToken?: string | number) {
-  const sent: { method: string; params: object }[] = []
-  const ctx = {
+  const sent: ServerNotification[] = []
+  const ctx: Parameters<typeof handlerProgressCallback>[0] = {
     _meta: progressToken !== undefined ? { progressToken } : {},
-    sendNotification: async (n: { method: string; params: object }) => {
+    sendNotification: async (n) => {
       sent.push(n)
     },
   }
@@ -379,7 +380,7 @@ function makeHandlerContext(progressToken?: string | number) {
 describe("handlerProgressCallback", () => {
   test("returns a no-op when no progressToken", async () => {
     const { ctx, sent } = makeHandlerContext()
-    const cb = handlerProgressCallback(ctx as Parameters<typeof handlerProgressCallback>[0])
+    const cb = handlerProgressCallback(ctx)
 
     await cb("ignored message")
 
@@ -388,7 +389,7 @@ describe("handlerProgressCallback", () => {
 
   test("sends notifications/progress with the token and message", async () => {
     const { ctx, sent } = makeHandlerContext("my-token")
-    const cb = handlerProgressCallback(ctx as Parameters<typeof handlerProgressCallback>[0])
+    const cb = handlerProgressCallback(ctx)
 
     await cb("step one")
 
@@ -401,18 +402,21 @@ describe("handlerProgressCallback", () => {
 
   test("increments the progress counter on each call", async () => {
     const { ctx, sent } = makeHandlerContext("tok")
-    const cb = handlerProgressCallback(ctx as Parameters<typeof handlerProgressCallback>[0])
+    const cb = handlerProgressCallback(ctx)
 
     await cb("a")
     await cb("b")
     await cb("c")
 
-    expect(sent.map((n) => (n.params as { progress: number }).progress)).toEqual([1, 2, 3])
+    const progress = sent.map((n) =>
+      n.method === "notifications/progress" ? n.params.progress : -1,
+    )
+    expect(progress).toEqual([1, 2, 3])
   })
 
   test("numeric progressToken is preserved in notifications", async () => {
     const { ctx, sent } = makeHandlerContext(42)
-    const cb = handlerProgressCallback(ctx as Parameters<typeof handlerProgressCallback>[0])
+    const cb = handlerProgressCallback(ctx)
 
     await cb("msg")
 
