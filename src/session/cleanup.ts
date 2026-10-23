@@ -1,3 +1,4 @@
+import type { Dirent } from "node:fs"
 import { lstat, readdir, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { SESSION_NAME_RE } from "./session"
@@ -8,7 +9,7 @@ async function hasFiles(dir: string, depth = 4): Promise<boolean> {
   if (depth === 0) {
     return false
   }
-  let entries: Awaited<ReturnType<typeof readdir>>
+  let entries: Dirent[]
   try {
     entries = await readdir(dir, { withFileTypes: true })
   } catch {
@@ -26,7 +27,7 @@ async function hasFiles(dir: string, depth = 4): Promise<boolean> {
 }
 
 export async function cleanupStaleSessions(baseDir: string): Promise<number> {
-  let entries: Awaited<ReturnType<typeof readdir>>
+  let entries: Dirent[]
   try {
     entries = await readdir(baseDir, { withFileTypes: true })
   } catch {

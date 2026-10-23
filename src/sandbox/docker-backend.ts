@@ -22,7 +22,7 @@ export interface ImageLike {
 export interface ContainerLike {
   id: string
   start(): Promise<void>
-  logs(opts: { follow: boolean; stdout: boolean; stderr: boolean }): Promise<NodeJS.ReadableStream>
+  logs(opts: { follow: true; stdout: boolean; stderr: boolean }): Promise<NodeJS.ReadableStream>
   wait(): Promise<{ StatusCode: number }>
   remove(): Promise<void>
 }

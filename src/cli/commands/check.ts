@@ -27,7 +27,7 @@ async function runCheck(
   }
   const imageExists = await backend.imageExists(handler)
   if (!imageExists) {
-    const exe = basename(process.argv[1])
+    const exe = basename(process.argv[1] ?? "sandy")
     handler.stderrLine(`sandy: no image found — run '${exe} image create' first`)
     process.exitCode = 1
     return

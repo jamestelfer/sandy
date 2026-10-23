@@ -44,10 +44,21 @@ function isBuffer(value: string | Buffer): value is Buffer {
   return Buffer.isBuffer(value)
 }
 
-function assertStringName(entry: { name: string | Buffer }): asserts entry is { name: string } {
-  if (typeof entry.name !== "string") {
-    throw new Error("expected string directory entry name")
-  }
+interface NamedDirent {
+  name: string
+  isDirectory(): boolean
+}
+
+// memfs types readdirSync({ withFileTypes: true }) as Dirent[] | (string | Buffer)[].
+function isNamedDirent(entry: unknown): entry is NamedDirent {
+  return (
+    typeof entry === "object" &&
+    entry !== null &&
+    "name" in entry &&
+    typeof entry.name === "string" &&
+    "isDirectory" in entry &&
+    typeof entry.isDirectory === "function"
+  )
 }
 
 function memoize<T>(factory: () => T): () => T {
@@ -215,7 +226,9 @@ function listFilesRecursive(fs: MemFs, currentPath: string): string[] {
   const files: string[] = []
 
   for (const entry of entries) {
-    assertStringName(entry)
+    if (!isNamedDirent(entry)) {
+      throw new Error("expected directory entry with a string name")
+    }
     const entryPath = currentPath === "/" ? `/${entry.name}` : `${currentPath}/${entry.name}`
     if (entry.isDirectory()) {
       files.push(...listFilesRecursive(fs, entryPath))
@@ -261,7 +274,9 @@ export async function copyDirectoryRecursive(
   const entries = sourceFs.readdirSync(sourcePath, { withFileTypes: true })
 
   for (const entry of entries) {
-    assertStringName(entry)
+    if (!isNamedDirent(entry)) {
+      throw new Error("expected directory entry with a string name")
+    }
     const srcEntry = sourcePath === "/" ? `/${entry.name}` : `${sourcePath}/${entry.name}`
     const destEntry = `${destPath}/${entry.name}`
 
