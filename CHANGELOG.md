@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.12.1](https://github.com/jamestelfer/sandy/compare/v0.12.0...v0.12.1) (2026-10-23)
+
+
+### Bug Fixes
+
+* **deps:** update dependency bun to v1.4.3 ([#72](https://github.com/jamestelfer/sandy/issues/72)) ([62ad5d6](https://github.com/jamestelfer/sandy/commit/62ad5d627f917309472d9c16421f93381f8e9aaa))
+* **deps:** update dependency bun to v1.4.4 ([#79](https://github.com/jamestelfer/sandy/issues/79)) ([a084e92](https://github.com/jamestelfer/sandy/commit/a084e926c52b328b83dcfe98d02d0fd16a71bcb7))
+* **deps:** update dependency go to v1.27.2 ([#69](https://github.com/jamestelfer/sandy/issues/69)) ([7a5b2f0](https://github.com/jamestelfer/sandy/commit/7a5b2f06b3d0c4a58b641695c5662ea92cecc198))
+* **deps:** update dependency go to v1.27.3 ([#80](https://github.com/jamestelfer/sandy/issues/80)) ([0fb5e23](https://github.com/jamestelfer/sandy/commit/0fb5e239c00f4b9480db3de9726673fa04068697))
+* **deps:** update dependency goreleaser to v2.18.3 ([#70](https://github.com/jamestelfer/sandy/issues/70)) ([a7450a2](https://github.com/jamestelfer/sandy/commit/a7450a26fa3d013a0c15fc8b2a770383c9d0e9e2))
+* **deps:** update dependency goreleaser to v2.19.0 ([#81](https://github.com/jamestelfer/sandy/issues/81)) ([b510bac](https://github.com/jamestelfer/sandy/commit/b510bac147c3396debc7219412293cef55952e2a))
+* **deps:** update jamestelfer/.github digest to 89f97c2 ([#78](https://github.com/jamestelfer/sandy/issues/78)) ([cd3e057](https://github.com/jamestelfer/sandy/commit/cd3e057f2ccda8dc062e685174dc41cf3c5bce78))
+
 ## [0.12.0](https://github.com/jamestelfer/sandy/compare/v0.11.0...v0.12.0) (2026-10-20)
 
 
