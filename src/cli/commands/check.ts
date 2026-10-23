@@ -1,10 +1,10 @@
 import { basename, join } from "node:path"
-import type { CommandModule } from "yargs"
 import { DEFAULT_REGION, type ProgressCallback } from "../../core"
 import { OutputHandler } from "../../output"
 import { extractEmbeddedChecks } from "../../resources"
 import type { Backend } from "../../sandbox"
 import { establishWorkDir, Session } from "../../session"
+import { defineCommand } from "./define"
 
 export interface ConnectArgs {
   imdsPort: number
@@ -27,7 +27,7 @@ async function runCheck(
   }
   const imageExists = await backend.imageExists(handler)
   if (!imageExists) {
-    const exe = basename(process.argv[1])
+    const exe = basename(process.argv[1] ?? "sandy")
     handler.stderrLine(`sandy: no image found — run '${exe} image create' first`)
     process.exitCode = 1
     return
@@ -64,8 +64,8 @@ export async function runConnect(
   await runCheck(backend, onProgress, "connect", argv.imdsPort, argv.region, "connect")
 }
 
-export function makeCheckCommand(backend: Backend, onProgress: ProgressCallback): CommandModule {
-  return {
+export function makeCheckCommand(backend: Backend, onProgress: ProgressCallback) {
+  return defineCommand({
     command: "check",
     describe: "Run sandbox health checks (baseline executes a script; connect verifies IMDS)",
     builder: (y) =>
@@ -96,9 +96,9 @@ export function makeCheckCommand(backend: Backend, onProgress: ProgressCallback)
                 "$0 check connect --imds-port 8080 --region ap-southeast-2",
                 "Override the default region",
               ),
-          async (argv) => runConnect(argv as unknown as ConnectArgs, backend, onProgress),
+          async (argv) => runConnect(argv, backend, onProgress),
         )
         .demandCommand(1),
     handler: () => {},
-  }
+  })
 }

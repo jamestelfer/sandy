@@ -1,9 +1,9 @@
-import type { CommandModule } from "yargs"
 import { readConfig, writeConfig } from "../../core"
+import { defineCommand } from "./define"
 
 export interface ConfigArgs {
-  docker: boolean
-  shuru: boolean
+  docker?: boolean
+  shuru?: boolean
 }
 
 export async function runConfig(
@@ -24,7 +24,7 @@ export async function runConfig(
   print(`backend: ${config.backend}`)
 }
 
-const configCommand: CommandModule = {
+const configCommand = defineCommand({
   command: "config",
   describe: "Show or set the sandbox backend (shuru microVM or Docker)",
   builder: (y) =>
@@ -35,6 +35,6 @@ const configCommand: CommandModule = {
       .example("$0 config", "Print the current backend")
       .example("$0 config --docker", "Switch to the Docker backend")
       .example("$0 config --shuru", "Switch to the Shuru microVM backend"),
-  handler: async (argv) => runConfig(argv as unknown as ConfigArgs),
-}
+  handler: async (argv) => runConfig(argv),
+})
 export default configCommand

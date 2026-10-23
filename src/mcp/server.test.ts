@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
+import type { ServerNotification } from "@modelcontextprotocol/sdk/types"
 import type { RunOptions } from "../core"
 import { createLogger } from "../logging"
 import { listEmbeddedResourceUris, readEmbeddedResource } from "../resources"
@@ -321,7 +322,9 @@ describe("progress", () => {
 
     await server.handleSandyRun(
       { session: session.name, script: "foo.ts", imdsPort: 9001 },
-      (msg) => received.push(msg),
+      (msg) => {
+        received.push(msg)
+      },
     )
 
     expect(received).toEqual(["loading resources", "querying ec2"])
@@ -332,7 +335,9 @@ describe("progress", () => {
     backend.progressLines = ["checking IMDS"]
     const received: string[] = []
 
-    await server.handleSandyCheck((msg) => received.push(msg), "baseline")
+    await server.handleSandyCheck((msg) => {
+      received.push(msg)
+    }, "baseline")
 
     expect(received).toEqual(["checking IMDS"])
   })
@@ -341,7 +346,9 @@ describe("progress", () => {
     backend.progressLines = ["pulling base image", "installing node"]
     const received: string[] = []
 
-    await server.handleSandyImage((msg) => received.push(msg), "create")
+    await server.handleSandyImage((msg) => {
+      received.push(msg)
+    }, "create")
 
     expect(received).toEqual(["pulling base image", "installing node"])
   })
@@ -350,7 +357,9 @@ describe("progress", () => {
     backend.progressLines = ["removing image"]
     const received: string[] = []
 
-    await server.handleSandyImage((msg) => received.push(msg), "delete")
+    await server.handleSandyImage((msg) => {
+      received.push(msg)
+    }, "delete")
 
     expect(received).toEqual(["removing image"])
   })
@@ -358,10 +367,10 @@ describe("progress", () => {
 
 // Fake RequestHandlerExtra with just the fields handlerProgressCallback uses.
 function makeHandlerContext(progressToken?: string | number) {
-  const sent: { method: string; params: object }[] = []
-  const ctx = {
+  const sent: ServerNotification[] = []
+  const ctx: Parameters<typeof handlerProgressCallback>[0] = {
     _meta: progressToken !== undefined ? { progressToken } : {},
-    sendNotification: async (n: { method: string; params: object }) => {
+    sendNotification: async (n) => {
       sent.push(n)
     },
   }
@@ -371,7 +380,7 @@ function makeHandlerContext(progressToken?: string | number) {
 describe("handlerProgressCallback", () => {
   test("returns a no-op when no progressToken", async () => {
     const { ctx, sent } = makeHandlerContext()
-    const cb = handlerProgressCallback(ctx as Parameters<typeof handlerProgressCallback>[0])
+    const cb = handlerProgressCallback(ctx)
 
     await cb("ignored message")
 
@@ -380,7 +389,7 @@ describe("handlerProgressCallback", () => {
 
   test("sends notifications/progress with the token and message", async () => {
     const { ctx, sent } = makeHandlerContext("my-token")
-    const cb = handlerProgressCallback(ctx as Parameters<typeof handlerProgressCallback>[0])
+    const cb = handlerProgressCallback(ctx)
 
     await cb("step one")
 
@@ -393,18 +402,21 @@ describe("handlerProgressCallback", () => {
 
   test("increments the progress counter on each call", async () => {
     const { ctx, sent } = makeHandlerContext("tok")
-    const cb = handlerProgressCallback(ctx as Parameters<typeof handlerProgressCallback>[0])
+    const cb = handlerProgressCallback(ctx)
 
     await cb("a")
     await cb("b")
     await cb("c")
 
-    expect(sent.map((n) => (n.params as { progress: number }).progress)).toEqual([1, 2, 3])
+    const progress = sent.map((n) =>
+      n.method === "notifications/progress" ? n.params.progress : -1,
+    )
+    expect(progress).toEqual([1, 2, 3])
   })
 
   test("numeric progressToken is preserved in notifications", async () => {
     const { ctx, sent } = makeHandlerContext(42)
-    const cb = handlerProgressCallback(ctx as Parameters<typeof handlerProgressCallback>[0])
+    const cb = handlerProgressCallback(ctx)
 
     await cb("msg")
 
@@ -438,10 +450,10 @@ describe("logging", () => {
         continue
       }
       const match = LOG_LINE_RE.exec(line)
-      if (!match?.groups) {
+      const { timestamp, level, rest } = match?.groups ?? {}
+      if (timestamp === undefined || level === undefined || rest === undefined) {
         continue
       }
-      const { timestamp, level, rest } = match.groups
       // rest = "<msg> [k=v k=v ...]"
       const fields: Record<string, string> = {}
       const tokens: string[] = []
@@ -457,10 +469,10 @@ describe("logging", () => {
       const msg = remaining
       for (const tok of tokens) {
         const kv = tok.match(/ ([A-Za-z_][A-Za-z0-9_]*)=(.*)$/)
-        if (!kv) {
+        const [, k, vRaw] = kv ?? []
+        if (k === undefined || vRaw === undefined) {
           continue
         }
-        const [, k, vRaw] = kv
         let v = vRaw
         if (v.startsWith(`"`) && v.endsWith(`"`)) {
           try {
@@ -471,8 +483,9 @@ describe("logging", () => {
         }
         fields[k] = v
       }
-      current = { timestamp, level: level.trim(), msg, fields, stack: [] }
-      records.push(current)
+      const record: LogRecord = { timestamp, level: level.trim(), msg, fields, stack: [] }
+      records.push(record)
+      current = record
     }
     return records
   }

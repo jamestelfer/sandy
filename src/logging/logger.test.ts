@@ -29,11 +29,11 @@ function findLogFiles(): string[] {
 }
 
 function readLog(): string[] {
-  const files = findLogFiles()
-  if (files.length === 0) {
+  const [first] = findLogFiles()
+  if (first === undefined) {
     return []
   }
-  const logFile = join(stateDir(), files[0])
+  const logFile = join(stateDir(), first)
   return readFileSync(logFile, "utf8")
     .split("\n")
     .filter((l) => l.length > 0)
@@ -275,7 +275,7 @@ describe("field formatting", () => {
   test("fields appear in insertion order", () => {
     const logger = createLogger()
     logger.info({ a: 1, b: 2, c: 3 }, "m")
-    const line = readLog()[0]
+    const line = readLog()[0] ?? ""
     const idxA = line.indexOf("a=1")
     const idxB = line.indexOf("b=2")
     const idxC = line.indexOf("c=3")
@@ -327,7 +327,7 @@ describe("child() bindings", () => {
     const logger = createLogger()
     const child = logger.child({ a: 1 })
     child.info({ b: 2 }, "m")
-    const line = readLog()[0]
+    const line = readLog()[0] ?? ""
     const idxA = line.indexOf("a=1")
     const idxB = line.indexOf("b=2")
     expect(idxA).toBeGreaterThan(-1)

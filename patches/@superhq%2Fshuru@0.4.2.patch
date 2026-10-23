@@ -1,0 +1,21 @@
+diff --git a/src/process-handle.ts b/src/process-handle.ts
+index 85e4c103495413c0135ffb167b5b0a58f39e3a2c..5d724a26bcb187a0724e0ad002d4beb6c5fa2ee7 100644
+--- a/src/process-handle.ts
++++ b/src/process-handle.ts
+@@ -10,11 +10,11 @@ export class SandboxProcess {
+ 	readonly pid: string;
+ 	readonly exited: Promise<number>;
+ 	private proc: ShuruProcess;
+-	private listeners: {
+-		stdout: ((data: Buffer) => void)[];
+-		stderr: ((data: Buffer) => void)[];
+-		exit: ((code: number) => void)[];
+-	} = { stdout: [], stderr: [], exit: [] };
++	private listeners: { [K in keyof EventMap]: EventMap[K][] } = {
++		stdout: [],
++		stderr: [],
++		exit: [],
++	};
+ 
+ 	constructor(proc: ShuruProcess, pid: string) {
+ 		this.proc = proc;

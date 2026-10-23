@@ -6,7 +6,7 @@ import { listDirIfPresent, readFileIfPresent } from "../core"
 
 export interface ResolvedDockerEndpoint {
   /** Options for `new Docker(options)`; undefined defers to dockerode's own resolution. */
-  options: DockerOptions | undefined
+  options: DockerAgentOptions | undefined
   /** Human-readable description of how the endpoint was resolved. */
   source: string
 }
@@ -17,7 +17,7 @@ interface ResolveDeps {
 }
 
 // docker-modem accepts an `agent` option at runtime; @types/dockerode omits it.
-interface DockerAgentOptions extends DockerOptions {
+export interface DockerAgentOptions extends DockerOptions {
   agent?: Agent
 }
 

@@ -61,13 +61,14 @@ function parseArgs(
   bindings: Record<string, unknown>,
   args: unknown[],
 ): { msg: string; fields: Record<string, unknown> } {
-  if (args.length >= 2 && typeof args[0] === "object" && args[0] !== null) {
+  const [first, second] = args
+  if (args.length >= 2 && typeof first === "object" && first !== null) {
     return {
-      msg: String(args[1] ?? ""),
-      fields: { ...bindings, ...(args[0] as Record<string, unknown>) },
+      msg: String(second ?? ""),
+      fields: { ...bindings, ...first },
     }
   }
-  return { msg: String(args[0] ?? ""), fields: { ...bindings } }
+  return { msg: String(first ?? ""), fields: { ...bindings } }
 }
 
 function formatLine(level: Level, bindings: Record<string, unknown>, args: unknown[]): string {

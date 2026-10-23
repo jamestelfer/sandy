@@ -1,7 +1,7 @@
-import type { CommandModule } from "yargs"
 import type { ProgressCallback } from "../../core"
 import { OutputHandler } from "../../output"
 import type { Backend } from "../../sandbox"
+import { defineCommand } from "./define"
 
 export interface ImageArgs {
   action: "create" | "delete" | "current"
@@ -43,8 +43,8 @@ export async function runImage(
   }
 }
 
-export function makeImageCommand(backend: Backend, onProgress: ProgressCallback): CommandModule {
-  return {
+export function makeImageCommand(backend: Backend, onProgress: ProgressCallback) {
+  return defineCommand({
     command: ["image <action>", "snapshot <action>"],
     describe: "Create, delete, or describe the sandbox image used by run and check",
     builder: (y) =>
@@ -64,6 +64,6 @@ export function makeImageCommand(backend: Backend, onProgress: ProgressCallback)
         .example("$0 image delete", "Remove the sandbox image")
         .example("$0 image delete --force", "Remove all cached layers")
         .example("$0 image current", "Show the Sandy version and creation time of the image"),
-    handler: async (argv) => runImage(argv as unknown as ImageArgs, backend, onProgress),
-  }
+    handler: async (argv) => runImage(argv, backend, onProgress),
+  })
 }

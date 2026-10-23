@@ -1,8 +1,8 @@
-import type { CommandModule } from "yargs"
 import { DEFAULT_REGION, type ProgressCallback } from "../../core"
 import { OutputHandler } from "../../output"
 import type { Backend } from "../../sandbox"
 import { establishWorkDir, Session } from "../../session"
+import { defineCommand } from "./define"
 
 export interface RunArgs {
   script: string
@@ -42,8 +42,8 @@ export async function runRun(
   }
 }
 
-export function makeRunCommand(backend: Backend, onProgress: ProgressCallback): CommandModule {
-  return {
+export function makeRunCommand(backend: Backend, onProgress: ProgressCallback) {
+  return defineCommand({
     command: "run",
     describe: "Execute a TypeScript script from <session>/scripts/ inside the sandbox",
     builder: (y) =>
@@ -85,6 +85,6 @@ export function makeRunCommand(backend: Backend, onProgress: ProgressCallback): 
           "Forward arguments after -- to the script",
         )
         .epilogue("Arguments after -- are forwarded to the script as process.argv."),
-    handler: async (argv) => runRun(argv as unknown as RunArgs, backend, onProgress),
-  }
+    handler: async (argv) => runRun(argv, backend, onProgress),
+  })
 }

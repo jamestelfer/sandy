@@ -3,10 +3,16 @@ import * as fs from "node:fs/promises"
 import { join } from "node:path"
 import { Readable } from "node:stream"
 import { extract as extractTar } from "tar-stream"
+import type { RunOptions } from "../core"
 import { OutputHandler } from "../output"
 import { makeTmpDir } from "../resources"
 import { captureStderr, fakeBuildContext, makeDockerFake } from "../test-support"
-import { DockerBackend, type DockerClientLike, defaultBuildContextFactory } from "."
+import {
+  type BuildContextFactory,
+  DockerBackend,
+  type DockerClientLike,
+  defaultBuildContextFactory,
+} from "."
 
 describe("defaultBuildContextFactory", () => {
   test("produces a tar stream containing all bootstrap files and Dockerfile", async () => {
@@ -54,7 +60,13 @@ describe("DockerBackend.imageCreate", () => {
     const backend = new DockerBackend(errorDocker, { buildContext: fakeBuildContext })
 
     const progress: string[] = []
-    await backend.imageCreate(new OutputHandler((msg) => progress.push(msg))).catch(() => {})
+    await backend
+      .imageCreate(
+        new OutputHandler((msg) => {
+          progress.push(msg)
+        }),
+      )
+      .catch(() => {})
 
     expect(progress).toHaveLength(0)
   })
@@ -64,14 +76,14 @@ describe("DockerBackend.imageCreate", () => {
     const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     await backend.imageCreate(new OutputHandler(() => {}))
     expect(buildImageCalls.length).toBe(1)
-    expect((buildImageCalls[0]?.opts as { t?: string })?.t).toBe("sandy:latest")
+    expect(buildImageCalls[0]?.opts.t).toBe("sandy:latest")
   })
 
   test("labels the image with the Sandy version", async () => {
     const { docker, buildImageCalls } = makeDockerFake()
     const backend = new DockerBackend(docker, { buildContext: fakeBuildContext, version: "1.2.3" })
     await backend.imageCreate(new OutputHandler(() => {}))
-    expect((buildImageCalls[0]?.opts as { labels?: object })?.labels).toEqual({
+    expect(buildImageCalls[0]?.opts.labels).toEqual({
       "sandy.version": "1.2.3",
     })
   })
@@ -100,7 +112,11 @@ describe("DockerBackend.imageCreate", () => {
     }
     const backend = new DockerBackend(progressDocker, { buildContext: fakeContextWithProgress })
     const progress: string[] = []
-    await backend.imageCreate(new OutputHandler((msg) => progress.push(msg)))
+    await backend.imageCreate(
+      new OutputHandler((msg) => {
+        progress.push(msg)
+      }),
+    )
     expect(progress).toContain("building layer")
   })
 })
@@ -169,20 +185,12 @@ describe("DockerBackend.imageDelete", () => {
   })
 })
 
-const baseRunOpts = {
+const baseRunOpts: RunOptions = {
   scriptPath: "/home/user/.sandy/test-session/scripts/hello.ts",
   imdsPort: 9001,
   session: "test-session",
   sessionDir: "/home/user/.sandy/test-session",
-  scriptArgs: [] as string[],
-}
-
-type ContainerOpts = {
-  Image?: string
-  Entrypoint?: string[]
-  Cmd?: string[]
-  Env?: string[]
-  HostConfig?: { Binds?: string[]; ExtraHosts?: string[] }
+  scriptArgs: [],
 }
 
 describe("DockerBackend.run", () => {
@@ -190,7 +198,7 @@ describe("DockerBackend.run", () => {
     const { docker, createContainerCalls } = makeDockerFake()
     const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     await backend.run(baseRunOpts, new OutputHandler(() => {}))
-    const opts = createContainerCalls[0]?.opts as ContainerOpts
+    const opts = createContainerCalls[0]?.opts
     expect(opts?.Cmd).toEqual(["/workspace/dist/scripts/hello.js"])
     expect(opts?.Entrypoint).toBeUndefined()
   })
@@ -200,14 +208,14 @@ describe("DockerBackend.run", () => {
     const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     await backend.run(baseRunOpts, new OutputHandler(() => {}))
     expect(createContainerCalls.length).toBe(1)
-    expect((createContainerCalls[0]?.opts as ContainerOpts)?.Image).toBe("sandy:latest")
+    expect(createContainerCalls[0]?.opts.Image).toBe("sandy:latest")
   })
 
   test("sets IMDS endpoint to http://host.docker.internal:<port>", async () => {
     const { docker, createContainerCalls } = makeDockerFake()
     const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     await backend.run({ ...baseRunOpts, imdsPort: 9001 }, new OutputHandler(() => {}))
-    const env = (createContainerCalls[0]?.opts as ContainerOpts)?.Env ?? []
+    const env = createContainerCalls[0]?.opts.Env ?? []
     expect(env).toContain("AWS_EC2_METADATA_SERVICE_ENDPOINT=http://host.docker.internal:9001")
   })
 
@@ -215,7 +223,7 @@ describe("DockerBackend.run", () => {
     const { docker, createContainerCalls } = makeDockerFake()
     const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     await backend.run({ ...baseRunOpts, region: "ap-southeast-2" }, new OutputHandler(() => {}))
-    const env = (createContainerCalls[0]?.opts as ContainerOpts)?.Env ?? []
+    const env = createContainerCalls[0]?.opts.Env ?? []
     expect(env).toContain("AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE=IPv4")
     expect(env).toContain("AWS_EC2_METADATA_V1_DISABLED=true")
     expect(env).toContain("AWS_REGION=ap-southeast-2")
@@ -226,7 +234,7 @@ describe("DockerBackend.run", () => {
     const { docker, createContainerCalls } = makeDockerFake()
     const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     await backend.run({ ...baseRunOpts, region: undefined }, new OutputHandler(() => {}))
-    const env = (createContainerCalls[0]?.opts as ContainerOpts)?.Env ?? []
+    const env = createContainerCalls[0]?.opts.Env ?? []
     expect(env).toContain("AWS_REGION=us-west-2")
   })
 
@@ -234,7 +242,7 @@ describe("DockerBackend.run", () => {
     const { docker, createContainerCalls } = makeDockerFake()
     const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     await backend.run(baseRunOpts, new OutputHandler(() => {}))
-    const binds = (createContainerCalls[0]?.opts as ContainerOpts)?.HostConfig?.Binds ?? []
+    const binds = createContainerCalls[0]?.opts.HostConfig?.Binds ?? []
     expect(binds).toContain("/home/user/.sandy/test-session/scripts:/workspace/scripts:ro")
     expect(binds).toContain("/home/user/.sandy/test-session/output:/workspace/output:rw")
   })
@@ -249,7 +257,7 @@ describe("DockerBackend.run", () => {
     } finally {
       Object.defineProperty(process, "platform", { value: originalPlatform })
     }
-    const extraHosts = (createContainerCalls[0]?.opts as ContainerOpts)?.HostConfig?.ExtraHosts
+    const extraHosts = createContainerCalls[0]?.opts.HostConfig?.ExtraHosts
     expect(extraHosts).toEqual(["host.docker.internal:host-gateway"])
   })
 
@@ -263,7 +271,7 @@ describe("DockerBackend.run", () => {
     } finally {
       Object.defineProperty(process, "platform", { value: originalPlatform })
     }
-    const extraHosts = (createContainerCalls[0]?.opts as ContainerOpts)?.HostConfig?.ExtraHosts
+    const extraHosts = createContainerCalls[0]?.opts.HostConfig?.ExtraHosts
     expect(extraHosts).toEqual([])
   })
 
@@ -273,7 +281,12 @@ describe("DockerBackend.run", () => {
     })
     const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     const progress: string[] = []
-    await backend.run(baseRunOpts, new OutputHandler((msg) => progress.push(msg)))
+    await backend.run(
+      baseRunOpts,
+      new OutputHandler((msg) => {
+        progress.push(msg)
+      }),
+    )
     expect(progress).toContain("compiling...")
     expect(progress.join("\n")).not.toContain("normal output line")
   })

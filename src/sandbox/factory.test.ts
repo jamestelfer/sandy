@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test"
 import { OutputHandler } from "../output"
+import { makeDockerFake } from "../test-support"
 import { createBackend } from "./factory"
 
 const baseRunOpts = {
@@ -18,17 +19,18 @@ describe("createBackend", () => {
     expect(backend.constructor.name).toBe("ShuruBackend")
   })
 
-  it("returns a DockerBackend when backend is docker", async () => {
-    const dockerClient = { marker: "docker-client" }
+  it("returns a DockerBackend wired to the factory's docker client", async () => {
+    const { docker, removedImages } = makeDockerFake()
 
     const backend = await createBackend({
       readConfig: async () => ({ backend: "docker" }),
-      dockerFactory: () => dockerClient,
+      dockerFactory: () => docker,
       resolveEndpoint: () => ({ options: undefined, source: "test" }),
     })
 
     expect(backend.constructor.name).toBe("DockerBackend")
-    expect((backend as unknown as { docker: unknown }).docker).toBe(dockerClient)
+    await backend.imageDelete(new OutputHandler(() => {}))
+    expect(removedImages).toEqual(["sandy:latest"])
   })
 
   it("constructs the docker client from the resolved endpoint and exposes its source", async () => {
@@ -38,7 +40,7 @@ describe("createBackend", () => {
       readConfig: async () => ({ backend: "docker" }),
       dockerFactory: (options) => {
         received.push(options)
-        return { marker: "docker-client" }
+        return makeDockerFake().docker
       },
       resolveEndpoint: () => ({
         options: { socketPath: "/resolved/docker.sock" },

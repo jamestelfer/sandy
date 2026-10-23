@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import * as fs from "node:fs/promises"
 import { join } from "node:path"
+import type { StartOptions } from "@superhq/shuru"
 import type { RunOptions } from "../core"
 import { OutputHandler } from "../output"
 import { makeTmpDir } from "../resources"
@@ -101,7 +102,12 @@ describe("ShuruBackend.run", () => {
     const backend = new ShuruBackend(undefined, factory)
 
     const progress: string[] = []
-    await backend.run(baseRunOpts, new OutputHandler((msg) => progress.push(msg)))
+    await backend.run(
+      baseRunOpts,
+      new OutputHandler((msg) => {
+        progress.push(msg)
+      }),
+    )
 
     expect(progress).toContain("compiling...")
     expect(progress.join("\n")).not.toContain("normal output line")
@@ -226,7 +232,7 @@ describe("ShuruBackend.imageCreate", () => {
     const backend = new ShuruBackend(executor)
     await backend.imageCreate(new OutputHandler(() => {}))
 
-    const cmd = calls[0]
+    const cmd = calls[0] ?? []
     expect(cmd.slice(0, 4)).toEqual(["shuru", "checkpoint", "create", "sandy"])
     expect(cmd).toContain("--allow-net")
 
@@ -243,7 +249,11 @@ describe("ShuruBackend.imageCreate", () => {
     const { executor } = makeExecutor({}, ["[-->  checkpoint step 1", "normal line"])
     const backend = new ShuruBackend(executor)
     const progress: string[] = []
-    await backend.imageCreate(new OutputHandler((msg) => progress.push(msg)))
+    await backend.imageCreate(
+      new OutputHandler((msg) => {
+        progress.push(msg)
+      }),
+    )
     expect(progress).toContain("checkpoint step 1")
     expect(progress.join("\n")).not.toContain("normal line")
   })
@@ -253,7 +263,7 @@ describe("ShuruBackend.imageDelete", () => {
   test("calls shuru checkpoint delete sandy", async () => {
     const { executor, calls } = makeExecutor()
     const backend = new ShuruBackend(executor)
-    await backend.imageDelete(() => {})
+    await backend.imageDelete(new OutputHandler(() => {}))
     expect(calls[0]).toEqual(["shuru", "checkpoint", "delete", "sandy"])
   })
 
@@ -261,7 +271,11 @@ describe("ShuruBackend.imageDelete", () => {
     const { executor } = makeExecutor({}, ["[-->  deleting checkpoint"])
     const backend = new ShuruBackend(executor)
     const progress: string[] = []
-    await backend.imageDelete(new OutputHandler((msg) => progress.push(msg)))
+    await backend.imageDelete(
+      new OutputHandler((msg) => {
+        progress.push(msg)
+      }),
+    )
     expect(progress).toContain("deleting checkpoint")
   })
 })
@@ -276,7 +290,7 @@ describe("ShuruBackend.imageExists", () => {
       },
     })
     const backend = new ShuruBackend(executor)
-    expect(await backend.imageExists(() => {})).toBe(false)
+    expect(await backend.imageExists(new OutputHandler(() => {}))).toBe(false)
   })
 
   test("returns false when sandy is absent from the list", async () => {
@@ -284,7 +298,7 @@ describe("ShuruBackend.imageExists", () => {
       "shuru checkpoint list": { stdout: "other-checkpoint 2024-01-02\n", stderr: "", exitCode: 0 },
     })
     const backend = new ShuruBackend(executor)
-    expect(await backend.imageExists(() => {})).toBe(false)
+    expect(await backend.imageExists(new OutputHandler(() => {}))).toBe(false)
   })
 
   test("returns false when checkpoint list is empty", async () => {
@@ -292,7 +306,7 @@ describe("ShuruBackend.imageExists", () => {
       "shuru checkpoint list": { stdout: "", stderr: "", exitCode: 0 },
     })
     const backend = new ShuruBackend(executor)
-    expect(await backend.imageExists(() => {})).toBe(false)
+    expect(await backend.imageExists(new OutputHandler(() => {}))).toBe(false)
   })
 
   test("calls shuru checkpoint list and returns true when sandy is present", async () => {
@@ -304,7 +318,7 @@ describe("ShuruBackend.imageExists", () => {
       },
     })
     const backend = new ShuruBackend(executor)
-    expect(await backend.imageExists(() => {})).toBe(true)
+    expect(await backend.imageExists(new OutputHandler(() => {}))).toBe(true)
     expect(calls[0]).toEqual(["shuru", "checkpoint", "list"])
   })
 })

@@ -85,10 +85,10 @@ describe("CLI resource", () => {
       output += line
     })
 
-    const parsed = JSON.parse(output) as string[]
-    expect(parsed.length).toBeGreaterThan(0)
-    expect(parsed).toContain("sandy://skills/cli/SKILL.md")
-    expect(parsed).toContain("sandy://skills/mcp/SKILL.md")
+    const parsed: unknown = JSON.parse(output)
+    expect(parsed).toEqual(
+      expect.arrayContaining(["sandy://skills/cli/SKILL.md", "sandy://skills/mcp/SKILL.md"]),
+    )
   })
 
   it("prints resource content when URL is provided", async () => {

@@ -51,7 +51,8 @@ Unit tests (`*.test.ts`) sit alongside source. Integration tests (`*.integration
 
 ```bash
 bun run fix                 # apply lint and format fixes
-bun run verify              # non-mutating quality gate: biome check + build + unit tests + Docker integration test
+bun run verify              # non-mutating quality gate: biome check + type check + build + unit tests + Docker integration test
+bun run typecheck           # type check with bun check (host code only; the sandbox workspace uses tsc)
 bun test                    # unit tests only
 bun run integration:docker  # Docker integration test
 bun run build               # compile binary to dist/sandy
@@ -69,6 +70,20 @@ Use the fix/verify workflow for commit readiness. `verify` must pass without int
 ## Code Style (Biome)
 
 2-space indent, no semicolons, double quotes, trailing commas, mandatory curly braces, line width 100. Config: `biome.json`.
+
+## Type Safety
+
+Do not use type assertions (`x as T`, `<T>x`, `as unknown as T`), `any`, non-null `!`, or `@ts-ignore`. They silence the checker instead of proving the type. `as const` is fine.
+
+Fix the type instead:
+
+- Narrow with control flow: `typeof`, `instanceof`, `in`, `Array.isArray`, discriminant checks.
+- Write a type predicate (`value is T`) for repeated or structural checks. See `errorCode()` and `errorStatusCode()` in `src/core/errors.ts`.
+- Type `JSON.parse` results as `unknown` and narrow field by field.
+- Fix a loose declaration at its source. Type an interface or fake precisely rather than casting at each use.
+- Let inference work. Use `defineCommand` for yargs commands so `argv` is inferred from the builder.
+- Declare missing third-party types in a `.d.ts` module augmentation (see `src/tar-fs.d.ts`).
+- In tests, assert shape with `toMatchObject` or `arrayContaining`, and use `spyOn` rather than reassigning methods.
 
 ## Architecture
 

@@ -81,7 +81,9 @@ describe("CLI image", () => {
     const backend = new DummyBackend()
     backend.progressLines = ["step one"]
     const received: string[] = []
-    await runImage({ action: "create" }, backend, (msg) => received.push(msg))
+    await runImage({ action: "create" }, backend, (msg) => {
+      received.push(msg)
+    })
     expect(received).toEqual(["step one"])
   })
 
@@ -89,7 +91,9 @@ describe("CLI image", () => {
     const backend = new DummyBackend()
     backend.progressLines = ["step one"]
     const received: string[] = []
-    await runImage({ action: "delete" }, backend, (msg) => received.push(msg))
+    await runImage({ action: "delete" }, backend, (msg) => {
+      received.push(msg)
+    })
     expect(received).toEqual(["step one"])
   })
 
@@ -281,7 +285,9 @@ describe("CLI check", () => {
     backend.imageExistsResult = true
     backend.progressLines = ["checking baseline"]
     const received: string[] = []
-    await runBaseline(backend, (msg) => received.push(msg))
+    await runBaseline(backend, (msg) => {
+      received.push(msg)
+    })
     expect(received).toEqual(["checking baseline"])
   })
 
@@ -290,7 +296,9 @@ describe("CLI check", () => {
     backend.imageExistsResult = true
     backend.progressLines = ["checking connect"]
     const received: string[] = []
-    await runConnect({ imdsPort: 9001, region: "us-west-2" }, backend, (msg) => received.push(msg))
+    await runConnect({ imdsPort: 9001, region: "us-west-2" }, backend, (msg) => {
+      received.push(msg)
+    })
     expect(received).toEqual(["checking connect"])
   })
 
@@ -361,7 +369,9 @@ describe("CLI run", () => {
     await runRun(
       { script: "foo.ts", imdsPort: 9001, region: "us-west-2", session: session.name },
       backend,
-      (msg) => received.push(msg),
+      (msg) => {
+        received.push(msg)
+      },
     )
 
     expect(received).toEqual(["compiling..."])
@@ -534,9 +544,10 @@ describe("makeCli version", () => {
   it("--version reports the package version", async () => {
     const { version } = await import("../../package.json")
     let out = ""
-    await makeCli(new DummyBackend(), () => {}, ["--version"])
+    const args = ["--version"]
+    await makeCli(new DummyBackend(), () => {}, args)
       .exitProcess(false)
-      .parseAsync(undefined, {}, (_err, _argv, output) => {
+      .parseAsync(args, {}, (_err, _argv, output) => {
         out += output
       })
     expect(out.trim()).toBe(version)
