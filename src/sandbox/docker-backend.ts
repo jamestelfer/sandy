@@ -3,7 +3,13 @@ import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import { pack as packTar } from "tar-fs"
 import { version as packageVersion } from "../../package.json"
-import { type RunOptions, type RunResult, VM_OUTPUT_DIR, VM_SCRIPTS_DIR } from "../core"
+import {
+  errorStatusCode,
+  type RunOptions,
+  type RunResult,
+  VM_OUTPUT_DIR,
+  VM_SCRIPTS_DIR,
+} from "../core"
 // Dockerfile — embedded in binary by Bun at build time
 import dockerfilePath from "../docker/Dockerfile" with { type: "file" }
 import { buildRunEnv, OutputTracker } from "../execution"
@@ -13,8 +19,13 @@ import type { Backend, ImageInfo } from "./backend"
 
 const DOCKERFILE = readFileSync(dockerfilePath, "utf-8")
 
+export interface ImageInspect {
+  Created?: string
+  Config?: { Labels?: Record<string, string> | null }
+}
+
 export interface ImageLike {
-  inspect(): Promise<unknown>
+  inspect(): Promise<ImageInspect>
   remove(): Promise<unknown>
   tag(opts: { repo: string; tag: string }): Promise<void>
 }
@@ -43,11 +54,6 @@ const IMAGE_NAME = "sandy:latest"
 const LAYER_RETENTION_IMAGE = "sandy:layer-retention"
 export const VERSION_LABEL = "sandy.version"
 
-interface ImageInspect {
-  Created?: string
-  Config?: { Labels?: Record<string, string> | null }
-}
-
 export async function defaultBuildContextFactory(): Promise<
   NodeJS.ReadableStream & AsyncDisposable
 > {
@@ -62,6 +68,24 @@ export async function defaultBuildContextFactory(): Promise<
   // Docker finishes reading — no need to buffer the tar in memory.
   const tarStream = packTar(staging.path)
   return Object.assign(tarStream, { [Symbol.asyncDispose]: () => staging[Symbol.asyncDispose]() })
+}
+
+interface BuildMessage {
+  stream?: string
+  error?: string
+}
+
+// Parse one line of Docker's JSON build output. Throws on non-JSON input;
+// ignores fields that are not strings.
+function parseBuildMessage(line: string): BuildMessage {
+  const parsed: unknown = JSON.parse(line)
+  if (typeof parsed !== "object" || parsed === null) {
+    return {}
+  }
+  return {
+    stream: "stream" in parsed && typeof parsed.stream === "string" ? parsed.stream : undefined,
+    error: "error" in parsed && typeof parsed.error === "string" ? parsed.error : undefined,
+  }
 }
 
 // Parse Docker's multiplexed log stream format and route frames to OutputHandler.
@@ -149,9 +173,9 @@ export class DockerBackend implements Backend {
     await this.ensureReachable()
     let inspect: ImageInspect
     try {
-      inspect = (await this.docker.getImage(IMAGE_NAME).inspect()) as ImageInspect
+      inspect = await this.docker.getImage(IMAGE_NAME).inspect()
     } catch (error) {
-      if ((error as { statusCode?: number }).statusCode === 404) {
+      if (errorStatusCode(error) === 404) {
         return undefined
       }
       throw error
@@ -186,7 +210,7 @@ export class DockerBackend implements Backend {
             continue
           }
           try {
-            const msg = JSON.parse(line) as { stream?: string; error?: string }
+            const msg = parseBuildMessage(line)
             if (msg.stream) {
               handler.feedStdout(Buffer.from(msg.stream))
             }

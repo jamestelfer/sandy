@@ -9,6 +9,7 @@ import type {
   BuildContextFactory,
   ContainerLike,
   DockerClientLike,
+  ImageInspect,
   ImageLike,
   SandboxFactory,
   ShellExecutor,
@@ -20,7 +21,7 @@ export const fakeBuildContext: BuildContextFactory = async () =>
   Object.assign(Readable.from([]), { [Symbol.asyncDispose]: async () => {} })
 
 export function makeImageFake(
-  config: { inspectThrows?: boolean; inspectError?: Error; inspectResult?: object } = {},
+  config: { inspectThrows?: boolean; inspectError?: Error; inspectResult?: ImageInspect } = {},
 ): {
   image: ImageLike
   removeCalls: string[]
@@ -74,7 +75,7 @@ export function makeContainerFake(
 
 export function makeDockerFake(
   config: {
-    imageConfig?: { inspectThrows?: boolean; inspectError?: Error; inspectResult?: object }
+    imageConfig?: { inspectThrows?: boolean; inspectError?: Error; inspectResult?: ImageInspect }
     containerConfig?: { exitCode?: number; stdoutLines?: string[]; stderrLines?: string[] }
     pingRejects?: boolean
   } = {},

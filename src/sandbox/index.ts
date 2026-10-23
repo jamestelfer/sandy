@@ -5,6 +5,7 @@ export {
   DockerBackend,
   type DockerClientLike,
   defaultBuildContextFactory,
+  type ImageInspect,
   type ImageLike,
 } from "./docker-backend"
 export { createBackend } from "./factory"

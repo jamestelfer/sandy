@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs"
 import * as nodeFs from "node:fs/promises"
 import { Readable } from "node:stream"
 import { createFsFromVolume, Volume } from "memfs"
-import type { ExtractOptions } from "tar-fs"
 import tar from "tar-fs"
 import tarPath from "../../embedded.tar" with { type: "file" }
 import { errorCode } from "../core"
@@ -29,11 +28,12 @@ const TAR_EXTRACT_FS_METHODS = [
 type TarExtractFs = Pick<typeof nodeFsTypes, (typeof TAR_EXTRACT_FS_METHODS)[number]>
 
 function isTarExtractFs(candidate: unknown): candidate is TarExtractFs {
-  if (candidate === null || candidate === undefined || typeof candidate !== "object") {
+  if (candidate === null || typeof candidate !== "object") {
     return false
   }
-  const obj: Record<string, unknown> = candidate as Record<string, unknown>
-  return TAR_EXTRACT_FS_METHODS.every((fn) => typeof obj[fn] === "function")
+  return TAR_EXTRACT_FS_METHODS.every(
+    (fn) => fn in candidate && typeof Reflect.get(candidate, fn) === "function",
+  )
 }
 
 function isString(value: string | Buffer): value is string {
@@ -85,6 +85,16 @@ async function initEmbeddedFS(): Promise<MemFs> {
 // Wrap the destination fs in a Proxy that tracks every in-flight operation
 // tar-fs triggers, so extraction can wait for them all to settle before
 // handing back the volume.
+interface StreamLike {
+  on(event: string, listener: () => void): unknown
+}
+
+function isStreamLike(value: unknown): value is StreamLike {
+  return (
+    typeof value === "object" && value !== null && "on" in value && typeof value.on === "function"
+  )
+}
+
 function withDrainTracking(fs: TarExtractFs): {
   fs: TarExtractFs
   whenDrained: () => Promise<void>
@@ -138,7 +148,7 @@ function withDrainTracking(fs: TarExtractFs): {
   // the time "finish" fires, and callers only ever read file content off the
   // returned volume, never permissions or timestamps. Don't reorder settle()
   // to run after metadata completion without re-verifying that still holds.
-  function trackWriteStream(stream: nodeFsTypes.WriteStream): nodeFsTypes.WriteStream {
+  function trackWriteStream(stream: StreamLike): void {
     let settled = false
     const settleOnce = () => {
       if (settled) {
@@ -150,31 +160,32 @@ function withDrainTracking(fs: TarExtractFs): {
     stream.on("finish", settleOnce)
     stream.on("close", settleOnce)
     stream.on("error", settleOnce)
-    return stream
   }
 
   const tracked = new Proxy(fs, {
     get(target, prop, receiver) {
-      const value = Reflect.get(target, prop, receiver)
+      const value: unknown = Reflect.get(target, prop, receiver)
       if (typeof value !== "function") {
         return value
       }
 
-      const method = value as (...args: unknown[]) => unknown
-
-      return (...args: unknown[]) => {
+      return (...args: unknown[]): unknown => {
         if (prop === "createWriteStream") {
-          pending += 1
-          return trackWriteStream(method.apply(target, args) as nodeFsTypes.WriteStream)
+          const stream: unknown = Reflect.apply(value, target, args)
+          if (isStreamLike(stream)) {
+            pending += 1
+            trackWriteStream(stream)
+          }
+          return stream
         }
 
         const callback = args[args.length - 1]
         if (!isCallback(callback)) {
-          return method.apply(target, args)
+          return Reflect.apply(value, target, args)
         }
 
         pending += 1
-        return method.apply(target, trackCallbackStyle(args, callback))
+        return Reflect.apply(value, target, trackCallbackStyle(args, callback))
       }
     },
   })
@@ -194,7 +205,7 @@ export async function extractTarBufferToMemfs(tarBuffer: Buffer): Promise<MemFs>
 
   await new Promise<void>((resolve, reject) => {
     Readable.from(tarBuffer)
-      .pipe(tar.extract("/", { fs: trackedFs } as ExtractOptions & { fs: TarExtractFs }))
+      .pipe(tar.extract("/", { fs: trackedFs }))
       .on("finish", resolve)
       .on("error", reject)
   })

@@ -50,11 +50,11 @@ export class Session {
 
   static async ephemeral(opts: { baseDir?: string } = {}): Promise<EphemeralSession> {
     const session = await Session.create(opts)
-    const disposable = session as EphemeralSession
-    disposable[Symbol.asyncDispose] = async () => {
-      await session.delete()
-    }
-    return disposable
+    return Object.assign(session, {
+      [Symbol.asyncDispose]: async () => {
+        await session.delete()
+      },
+    })
   }
 
   static async resume(name: string, opts: { baseDir?: string } = {}): Promise<Session> {

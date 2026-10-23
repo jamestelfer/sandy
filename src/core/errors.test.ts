@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { describeError, errorCode } from "./errors"
+import { describeError, errorCode, errorStatusCode } from "./errors"
 
 describe("errorCode", () => {
   it("extracts the code from an errno-style error", () => {
@@ -16,6 +16,23 @@ describe("errorCode", () => {
     expect(errorCode("ENOENT")).toBeUndefined()
     expect(errorCode(undefined)).toBeUndefined()
     expect(errorCode({ code: "ENOENT" })).toBeUndefined()
+  })
+})
+
+describe("errorStatusCode", () => {
+  it("extracts the status code from an HTTP client error", () => {
+    const err = Object.assign(new Error("(HTTP code 404) no such image"), { statusCode: 404 })
+    expect(errorStatusCode(err)).toBe(404)
+  })
+
+  it("returns undefined for errors without a numeric statusCode", () => {
+    expect(errorStatusCode(new Error("plain"))).toBeUndefined()
+    expect(errorStatusCode(Object.assign(new Error("text"), { statusCode: "404" }))).toBeUndefined()
+  })
+
+  it("returns undefined for non-Error values", () => {
+    expect(errorStatusCode({ statusCode: 404 })).toBeUndefined()
+    expect(errorStatusCode(null)).toBeUndefined()
   })
 })
 
