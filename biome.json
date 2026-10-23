@@ -24,14 +24,16 @@
         "noUnusedImports": "error"
       },
       "style": {
-        "noNonNullAssertion": "warn",
+        "noNonNullAssertion": "error",
         "useBlockStatements": "error"
       },
       "suspicious": {
         "noDoubleEquals": {
           "level": "error",
           "options": { "ignoreNull": false }
-        }
+        },
+        "noExplicitAny": "error",
+        "noTsIgnore": "error"
       }
     }
   }
