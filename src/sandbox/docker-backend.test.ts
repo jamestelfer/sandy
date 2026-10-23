@@ -6,7 +6,12 @@ import { extract as extractTar } from "tar-stream"
 import { OutputHandler } from "../output"
 import { makeTmpDir } from "../resources"
 import { captureStderr, fakeBuildContext, makeDockerFake } from "../test-support"
-import { DockerBackend, type DockerClientLike, defaultBuildContextFactory } from "."
+import {
+  type BuildContextFactory,
+  DockerBackend,
+  type DockerClientLike,
+  defaultBuildContextFactory,
+} from "."
 
 describe("defaultBuildContextFactory", () => {
   test("produces a tar stream containing all bootstrap files and Dockerfile", async () => {
@@ -54,7 +59,13 @@ describe("DockerBackend.imageCreate", () => {
     const backend = new DockerBackend(errorDocker, { buildContext: fakeBuildContext })
 
     const progress: string[] = []
-    await backend.imageCreate(new OutputHandler((msg) => progress.push(msg))).catch(() => {})
+    await backend
+      .imageCreate(
+        new OutputHandler((msg) => {
+          progress.push(msg)
+        }),
+      )
+      .catch(() => {})
 
     expect(progress).toHaveLength(0)
   })
@@ -100,7 +111,11 @@ describe("DockerBackend.imageCreate", () => {
     }
     const backend = new DockerBackend(progressDocker, { buildContext: fakeContextWithProgress })
     const progress: string[] = []
-    await backend.imageCreate(new OutputHandler((msg) => progress.push(msg)))
+    await backend.imageCreate(
+      new OutputHandler((msg) => {
+        progress.push(msg)
+      }),
+    )
     expect(progress).toContain("building layer")
   })
 })
@@ -273,7 +288,12 @@ describe("DockerBackend.run", () => {
     })
     const backend = new DockerBackend(docker, { buildContext: fakeBuildContext })
     const progress: string[] = []
-    await backend.run(baseRunOpts, new OutputHandler((msg) => progress.push(msg)))
+    await backend.run(
+      baseRunOpts,
+      new OutputHandler((msg) => {
+        progress.push(msg)
+      }),
+    )
     expect(progress).toContain("compiling...")
     expect(progress.join("\n")).not.toContain("normal output line")
   })

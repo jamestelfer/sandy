@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test"
 import { OutputHandler } from "../output"
+import { makeDockerFake } from "../test-support"
 import { createBackend } from "./factory"
 
 const baseRunOpts = {
@@ -19,7 +20,7 @@ describe("createBackend", () => {
   })
 
   it("returns a DockerBackend when backend is docker", async () => {
-    const dockerClient = { marker: "docker-client" }
+    const dockerClient = makeDockerFake().docker
 
     const backend = await createBackend({
       readConfig: async () => ({ backend: "docker" }),
@@ -38,7 +39,7 @@ describe("createBackend", () => {
       readConfig: async () => ({ backend: "docker" }),
       dockerFactory: (options) => {
         received.push(options)
-        return { marker: "docker-client" }
+        return makeDockerFake().docker
       },
       resolveEndpoint: () => ({
         options: { socketPath: "/resolved/docker.sock" },

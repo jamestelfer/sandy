@@ -321,7 +321,9 @@ describe("progress", () => {
 
     await server.handleSandyRun(
       { session: session.name, script: "foo.ts", imdsPort: 9001 },
-      (msg) => received.push(msg),
+      (msg) => {
+        received.push(msg)
+      },
     )
 
     expect(received).toEqual(["loading resources", "querying ec2"])
@@ -332,7 +334,9 @@ describe("progress", () => {
     backend.progressLines = ["checking IMDS"]
     const received: string[] = []
 
-    await server.handleSandyCheck((msg) => received.push(msg), "baseline")
+    await server.handleSandyCheck((msg) => {
+      received.push(msg)
+    }, "baseline")
 
     expect(received).toEqual(["checking IMDS"])
   })
@@ -341,7 +345,9 @@ describe("progress", () => {
     backend.progressLines = ["pulling base image", "installing node"]
     const received: string[] = []
 
-    await server.handleSandyImage((msg) => received.push(msg), "create")
+    await server.handleSandyImage((msg) => {
+      received.push(msg)
+    }, "create")
 
     expect(received).toEqual(["pulling base image", "installing node"])
   })
@@ -350,7 +356,9 @@ describe("progress", () => {
     backend.progressLines = ["removing image"]
     const received: string[] = []
 
-    await server.handleSandyImage((msg) => received.push(msg), "delete")
+    await server.handleSandyImage((msg) => {
+      received.push(msg)
+    }, "delete")
 
     expect(received).toEqual(["removing image"])
   })
@@ -438,10 +446,10 @@ describe("logging", () => {
         continue
       }
       const match = LOG_LINE_RE.exec(line)
-      if (!match?.groups) {
+      const { timestamp, level, rest } = match?.groups ?? {}
+      if (timestamp === undefined || level === undefined || rest === undefined) {
         continue
       }
-      const { timestamp, level, rest } = match.groups
       // rest = "<msg> [k=v k=v ...]"
       const fields: Record<string, string> = {}
       const tokens: string[] = []
@@ -457,10 +465,10 @@ describe("logging", () => {
       const msg = remaining
       for (const tok of tokens) {
         const kv = tok.match(/ ([A-Za-z_][A-Za-z0-9_]*)=(.*)$/)
-        if (!kv) {
+        const [, k, vRaw] = kv ?? []
+        if (k === undefined || vRaw === undefined) {
           continue
         }
-        const [, k, vRaw] = kv
         let v = vRaw
         if (v.startsWith(`"`) && v.endsWith(`"`)) {
           try {
@@ -471,8 +479,9 @@ describe("logging", () => {
         }
         fields[k] = v
       }
-      current = { timestamp, level: level.trim(), msg, fields, stack: [] }
-      records.push(current)
+      const record: LogRecord = { timestamp, level: level.trim(), msg, fields, stack: [] }
+      records.push(record)
+      current = record
     }
     return records
   }

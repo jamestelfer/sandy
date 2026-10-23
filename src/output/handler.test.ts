@@ -16,14 +16,18 @@ describe("OutputHandler", () => {
 
   test("[-->] stdout line fires onProgress with extracted message", () => {
     const messages: string[] = []
-    const handler = new OutputHandler((msg) => messages.push(msg))
+    const handler = new OutputHandler((msg) => {
+      messages.push(msg)
+    })
     handler.stdoutLine("[-->  compiling...")
     expect(messages).toEqual(["compiling..."])
   })
 
   test("non-progress stdout line does not fire onProgress", () => {
     const messages: string[] = []
-    const handler = new OutputHandler((msg) => messages.push(msg))
+    const handler = new OutputHandler((msg) => {
+      messages.push(msg)
+    })
     handler.stdoutLine("normal output")
     expect(messages).toEqual([])
   })
@@ -62,7 +66,7 @@ describe("OutputHandler", () => {
     const handler = new OutputHandler(() => {})
     const w = handler.stdoutWriter
     expect(w).toBeInstanceOf(LineWriter)
-    await new Promise<void>((resolve) => w.write(Buffer.from("written\n"), resolve))
+    await new Promise<void>((resolve) => w.write(Buffer.from("written\n"), () => resolve()))
     expect(handler.output).toBe("written\n")
   })
 
@@ -75,7 +79,7 @@ describe("OutputHandler", () => {
     const handler = new OutputHandler(() => {})
     const w = handler.stderrWriter
     expect(w).toBeInstanceOf(LineWriter)
-    await new Promise<void>((resolve) => w.write(Buffer.from("oops\n"), resolve))
+    await new Promise<void>((resolve) => w.write(Buffer.from("oops\n"), () => resolve()))
     expect(handler.output).toBe("[err] oops\n")
   })
 
@@ -120,7 +124,9 @@ describe("OutputHandler", () => {
 
   test("feedStdout fires onProgress for [-->-prefixed lines", () => {
     const messages: string[] = []
-    const handler = new OutputHandler((msg) => messages.push(msg))
+    const handler = new OutputHandler((msg) => {
+      messages.push(msg)
+    })
     handler.feedStdout(Buffer.from("[-->  compiling...\n"))
     expect(messages).toEqual(["compiling..."])
   })

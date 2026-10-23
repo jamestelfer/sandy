@@ -50,7 +50,11 @@ describe("DummyBackend", () => {
     const backend = new DummyBackend()
     backend.progressLines = ["line 1", "line 2"]
     const received: string[] = []
-    await backend.imageCreate(new OutputHandler((msg) => received.push(msg)))
+    await backend.imageCreate(
+      new OutputHandler((msg) => {
+        received.push(msg)
+      }),
+    )
     expect(received).toEqual(["line 1", "line 2"])
   })
 
@@ -58,7 +62,11 @@ describe("DummyBackend", () => {
     const backend = new DummyBackend()
     backend.progressLines = ["line 1", "line 2"]
     const received: string[] = []
-    await backend.imageDelete(new OutputHandler((msg) => received.push(msg)))
+    await backend.imageDelete(
+      new OutputHandler((msg) => {
+        received.push(msg)
+      }),
+    )
     expect(received).toEqual(["line 1", "line 2"])
   })
 
@@ -66,7 +74,11 @@ describe("DummyBackend", () => {
     const backend = new DummyBackend()
     backend.progressLines = ["line 1", "line 2"]
     const received: string[] = []
-    await backend.imageExists(new OutputHandler((msg) => received.push(msg)))
+    await backend.imageExists(
+      new OutputHandler((msg) => {
+        received.push(msg)
+      }),
+    )
     expect(received).toEqual([])
   })
 
@@ -74,7 +86,12 @@ describe("DummyBackend", () => {
     const backend = new DummyBackend()
     backend.progressLines = ["line 1", "line 2"]
     const received: string[] = []
-    await backend.run(testOpts, new OutputHandler((msg) => received.push(msg)))
+    await backend.run(
+      testOpts,
+      new OutputHandler((msg) => {
+        received.push(msg)
+      }),
+    )
     expect(received).toEqual(["line 1", "line 2"])
   })
 
@@ -88,7 +105,7 @@ describe("DummyBackend", () => {
   it("each instance starts with empty calls", async () => {
     const a = new DummyBackend()
     const b = new DummyBackend()
-    await a.imageCreate(() => {})
+    await a.imageCreate(new OutputHandler(() => {}))
     expect(b.calls).toEqual([])
   })
 })

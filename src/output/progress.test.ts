@@ -4,8 +4,7 @@ import { parseProgressLine } from "."
 describe("parseProgressLine", () => {
   it("detects a progress line", () => {
     const result = parseProgressLine("[-->  hello world")
-    expect(result.isProgress).toBe(true)
-    expect(result.message).toBe("hello world")
+    expect(result).toEqual({ isProgress: true, message: "hello world" })
   })
 
   it("passes through normal output", () => {
@@ -15,14 +14,12 @@ describe("parseProgressLine", () => {
 
   it("handles bare prefix with no message", () => {
     const result = parseProgressLine("[-->")
-    expect(result.isProgress).toBe(true)
-    expect(result.message).toBe("")
+    expect(result).toEqual({ isProgress: true, message: "" })
   })
 
   it("handles prefix with only whitespace after it", () => {
     const result = parseProgressLine("[-->   ")
-    expect(result.isProgress).toBe(true)
-    expect(result.message).toBe("")
+    expect(result).toEqual({ isProgress: true, message: "" })
   })
 
   it("does not match prefix mid-line", () => {
