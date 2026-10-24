@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
+import { shape } from "../core/shape"
 
 export type Level = "debug" | "info" | "warn" | "error"
 type Threshold = Level | "silent"
@@ -62,7 +63,7 @@ function parseArgs(
   args: unknown[],
 ): { msg: string; fields: Record<string, unknown> } {
   const [first, second] = args
-  if (args.length >= 2 && typeof first === "object" && first !== null) {
+  if (args.length >= 2 && shape.isObject(first)) {
     return {
       msg: String(second ?? ""),
       fields: { ...bindings, ...first },
