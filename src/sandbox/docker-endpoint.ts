@@ -2,7 +2,7 @@ import { Agent } from "node:https"
 import * as os from "node:os"
 import * as path from "node:path"
 import type { DockerOptions } from "dockerode"
-import { listDirIfPresent, readFileIfPresent } from "../core"
+import { listDirIfPresent, readFileIfPresent, shape } from "../core"
 
 export interface ResolvedDockerEndpoint {
   /** Options for `new Docker(options)`; undefined defers to dockerode's own resolution. */
@@ -28,10 +28,6 @@ interface ContextEndpoint {
   storeDir: string
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null
-}
-
 // JSON cannot encode undefined, so undefined unambiguously means "unparseable".
 function parseJson(raw: string): unknown {
   try {
@@ -54,8 +50,7 @@ function readCurrentContext(configDir: string): string | undefined {
         `Fix it, or set DOCKER_HOST to bypass context resolution.`,
     )
   }
-  const current = isRecord(config) ? config.currentContext : undefined
-  return typeof current === "string" ? current : undefined
+  return shape.get(config, "currentContext", "string")
 }
 
 function findContextEndpoint(configDir: string, name: string): ContextEndpoint | undefined {
@@ -65,16 +60,13 @@ function findContextEndpoint(configDir: string, name: string): ContextEndpoint |
     const raw = readFileIfPresent(metaPath, "Docker context metadata")
     // Unparseable meta.json is treated as not-found; the caller's error covers it.
     const meta = raw === undefined ? undefined : parseJson(raw)
-    if (!isRecord(meta) || meta.Name !== name) {
+    if (shape.get(meta, "Name", "string") !== name) {
       continue
     }
-    const docker =
-      isRecord(meta.Endpoints) && isRecord(meta.Endpoints.docker)
-        ? meta.Endpoints.docker
-        : undefined
+    const docker = shape.get(shape.get(meta, "Endpoints", "object"), "docker", "object")
     return {
-      host: typeof docker?.Host === "string" ? docker.Host : undefined,
-      skipTlsVerify: docker?.SkipTLSVerify === true,
+      host: shape.get(docker, "Host", "string"),
+      skipTlsVerify: shape.get(docker, "SkipTLSVerify", "boolean") === true,
       storeDir,
     }
   }
