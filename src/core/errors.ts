@@ -1,11 +1,11 @@
+import { shape } from "./shape"
+
 /**
  * Extracts the errno code (e.g. "ENOENT", "EACCES") from a thrown value.
  * Returns undefined for non-Error values and Errors without a string code.
  */
 export function errorCode(error: unknown): string | undefined {
-  return error instanceof Error && "code" in error && typeof error.code === "string"
-    ? error.code
-    : undefined
+  return error instanceof Error ? shape.get(error, "code", "string") : undefined
 }
 
 /**
@@ -14,9 +14,7 @@ export function errorCode(error: unknown): string | undefined {
  * Errors without a numeric statusCode.
  */
 export function errorStatusCode(error: unknown): number | undefined {
-  return error instanceof Error && "statusCode" in error && typeof error.statusCode === "number"
-    ? error.statusCode
-    : undefined
+  return error instanceof Error ? shape.get(error, "statusCode", "number") : undefined
 }
 
 /**

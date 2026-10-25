@@ -8,6 +8,7 @@ import {
   errorStatusCode,
   type RunOptions,
   type RunResult,
+  shape,
   VM_OUTPUT_DIR,
   VM_SCRIPTS_DIR,
 } from "../core"
@@ -80,12 +81,9 @@ interface BuildMessage {
 // ignores fields that are not strings.
 function parseBuildMessage(line: string): BuildMessage {
   const parsed: unknown = JSON.parse(line)
-  if (typeof parsed !== "object" || parsed === null) {
-    return {}
-  }
   return {
-    stream: "stream" in parsed && typeof parsed.stream === "string" ? parsed.stream : undefined,
-    error: "error" in parsed && typeof parsed.error === "string" ? parsed.error : undefined,
+    stream: shape.get(parsed, "stream", "string"),
+    error: shape.get(parsed, "error", "string"),
   }
 }
 

@@ -5,7 +5,7 @@ import { Readable } from "node:stream"
 import { createFsFromVolume, Volume } from "memfs"
 import tar from "tar-fs"
 import tarPath from "../../embedded.tar" with { type: "file" }
-import { errorCode } from "../core"
+import { errorCode, shape } from "../core"
 
 type MemFs = ReturnType<typeof createFsFromVolume>
 
@@ -28,12 +28,7 @@ const TAR_EXTRACT_FS_METHODS = [
 type TarExtractFs = Pick<typeof nodeFsTypes, (typeof TAR_EXTRACT_FS_METHODS)[number]>
 
 function isTarExtractFs(candidate: unknown): candidate is TarExtractFs {
-  if (candidate === null || typeof candidate !== "object") {
-    return false
-  }
-  return TAR_EXTRACT_FS_METHODS.every(
-    (fn) => fn in candidate && typeof Reflect.get(candidate, fn) === "function",
-  )
+  return TAR_EXTRACT_FS_METHODS.every((fn) => shape.has(candidate, fn, "function"))
 }
 
 function isString(value: string | Buffer): value is string {
@@ -44,22 +39,8 @@ function isBuffer(value: string | Buffer): value is Buffer {
   return Buffer.isBuffer(value)
 }
 
-interface NamedDirent {
-  name: string
-  isDirectory(): boolean
-}
-
 // memfs types readdirSync({ withFileTypes: true }) as Dirent[] | (string | Buffer)[].
-function isNamedDirent(entry: unknown): entry is NamedDirent {
-  return (
-    typeof entry === "object" &&
-    entry !== null &&
-    "name" in entry &&
-    typeof entry.name === "string" &&
-    "isDirectory" in entry &&
-    typeof entry.isDirectory === "function"
-  )
-}
+const isNamedDirent = shape.of({ name: "string", isDirectory: "function" })
 
 function memoize<T>(factory: () => T): () => T {
   let cached: T | undefined
@@ -89,11 +70,7 @@ interface StreamLike {
   on(event: string, listener: () => void): unknown
 }
 
-function isStreamLike(value: unknown): value is StreamLike {
-  return (
-    typeof value === "object" && value !== null && "on" in value && typeof value.on === "function"
-  )
-}
+const isStreamLike = shape.of({ on: "function" })
 
 function withDrainTracking(fs: TarExtractFs): {
   fs: TarExtractFs
