@@ -18,7 +18,6 @@ describe("stageBootstrapFiles", () => {
       "workspace/tsconfig.json",
       "workspace/entrypoint",
       "workspace/sandy.ts",
-      "workspace/jstat.d.ts",
     ]
     for (const name of expected) {
       const stat = await fs.stat(path.join(tmpDir.path, name))
@@ -46,7 +45,6 @@ describe("stageBootstrapFiles", () => {
       ".runtime-config",
       "aube-workspace.yaml",
       "entrypoint",
-      "jstat.d.ts",
       "package.json",
       "sandy.ts",
       "tsconfig.json",

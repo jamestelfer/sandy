@@ -3,8 +3,9 @@ import { Table } from "console-table-printer"
 import { format } from "@fast-csv/format"
 import { plot } from "simple-ascii-chart"
 import { tTestTwoSample } from "simple-statistics"
-import jStat from "jstat"
-import seedrandom from "seedrandom"
+import randu from "@stdlib/random-base-randu"
+import randomNormal from "@stdlib/random-base-normal"
+import ttest2 from "@stdlib/stats-ttest2"
 import { writeFileSync } from "node:fs"
 import { Writable } from "node:stream"
 import { progress } from "../sandy.js"
@@ -86,12 +87,12 @@ const chartOutput = plot(
 )
 console.log(chartOutput)
 
-// Verify simple-statistics, jstat, and seedrandom work together
-jStat.setRandom(seedrandom("sandy-baseline"))
-const groupA = Array.from({ length: 30 }, () => jStat.normal.sample(10, 2))
-const groupB = Array.from({ length: 30 }, () => jStat.normal.sample(12, 2))
+// Verify simple-statistics and stdlib work together on a seeded generator
+const normal = randomNormal.factory({ prng: randu.factory({ seed: 1234 }) })
+const groupA = Array.from({ length: 30 }, () => normal(10, 2))
+const groupB = Array.from({ length: 30 }, () => normal(12, 2))
 const tStat = tTestTwoSample(groupA, groupB) ?? 0
-const pValue = 2 * jStat.studentt.cdf(-Math.abs(tStat), groupA.length + groupB.length - 2)
+const { pValue } = ttest2(groupA, groupB, { variance: "equal" })
 console.log(`Seeded t-test: t=${tStat.toFixed(3)} p=${pValue.toExponential(3)}`)
 
 progress("Baseline checks complete.")
