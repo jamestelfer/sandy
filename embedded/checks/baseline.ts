@@ -2,6 +2,9 @@ import { search } from "jmespath"
 import { Table } from "console-table-printer"
 import { format } from "@fast-csv/format"
 import { plot } from "simple-ascii-chart"
+import { tTestTwoSample } from "simple-statistics"
+import jStat from "jstat"
+import seedrandom from "seedrandom"
 import { writeFileSync } from "node:fs"
 import { Writable } from "node:stream"
 import { progress } from "../sandy.js"
@@ -82,5 +85,13 @@ const chartOutput = plot(
   { title: "Baseline chart check" },
 )
 console.log(chartOutput)
+
+// Verify simple-statistics, jstat, and seedrandom work together
+jStat.setRandom(seedrandom("sandy-baseline"))
+const groupA = Array.from({ length: 30 }, () => jStat.normal.sample(10, 2))
+const groupB = Array.from({ length: 30 }, () => jStat.normal.sample(12, 2))
+const tStat = tTestTwoSample(groupA, groupB) ?? 0
+const pValue = 2 * jStat.studentt.cdf(-Math.abs(tStat), groupA.length + groupB.length - 2)
+console.log(`Seeded t-test: t=${tStat.toFixed(3)} p=${pValue.toExponential(3)}`)
 
 progress("Baseline checks complete.")

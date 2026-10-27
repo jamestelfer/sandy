@@ -188,10 +188,14 @@
     "@fast-csv/format": "latest",
     "@types/jmespath": "latest",
     "@types/node": "latest",
+    "@types/seedrandom": "latest",
     "console-table-printer": "latest",
     "jmespath": "latest",
+    "jstat": "latest",
     "nanoid": "latest",
+    "seedrandom": "latest",
     "simple-ascii-chart": "latest",
+    "simple-statistics": "latest",
     "typescript": "latest",
     "yaml": "latest"
   }
