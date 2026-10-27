@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/jamestelfer/sandy/compare/v0.13.0...v0.14.0) (2026-10-27)
+
+
+### Features
+
+* **image:** replace jstat and seedrandom with stdlib statistics packages ([#84](https://github.com/jamestelfer/sandy/issues/84)) ([4d13698](https://github.com/jamestelfer/sandy/commit/4d13698d2219ab601e04b6cc671889e4bdb10dae))
+
 ## [0.13.0](https://github.com/jamestelfer/sandy/compare/v0.12.0...v0.13.0) (2026-10-27)
 
 
