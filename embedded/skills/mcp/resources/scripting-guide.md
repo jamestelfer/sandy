@@ -16,6 +16,9 @@ Sandy runs TypeScript scripts in sandboxed microVMs with AWS SDK access via IMDS
 
 - ~175 `@aws-sdk/client-*` packages covering common investigation targets (compute, storage, data, messaging, identity, security, observability, cost). Run `aube list --depth=0` inside a session to see the exact set; if a client is missing, fall back to the AWS CLI via the host or request it be added
 - `arquero` — dplyr-style dataframes for JS. Use to group, join, filter, derive, and summarise records collected from paginated AWS responses. Reach for it when the answer involves counts per group, joins across clients (e.g. instances × tags), or sorting/top-N analysis
+- `simple-statistics` — descriptive statistics, regression, t statistics, and permutation tests over plain `number[]`
+- `jstat` — probability distributions (pdf, cdf, inverse) and p-value tests. Typed by the workspace's `jstat.d.ts`
+- `seedrandom` — seeded random number generators for reproducible sampling, bootstraps, and permutation tests
 - `simple-ascii-chart` — ASCII line and bar charts for terminal output
 - `console-table-printer` — table output
 - `@fast-csv/format` — CSV generation
@@ -27,7 +30,7 @@ Sandy runs TypeScript scripts in sandboxed microVMs with AWS SDK access via IMDS
 Query these before writing scripts — they substantially outperform training knowledge on specifics:
 
 - **AWS Knowledge Base MCP** (`awskb`) — service API behaviour, parameter enums, pagination shapes, filter value strings, date-range constraints, and quotas. Consult it for any service you are about to use; training knowledge misfires on exact enum values, per-API restrictions, and service-specific edge cases.
-- **context7** — current library docs. Use before writing non-trivial arquero, fast-csv, jmespath, or yaml code. IDs are in the Library documentation section below.
+- **context7** — current library docs. Use before writing non-trivial arquero, simple-statistics, jstat, seedrandom, fast-csv, jmespath, or yaml code. IDs are in the Library documentation section below.
 
 ## Library usage
 
@@ -50,6 +53,27 @@ aq.from(rows)
 **Skip it for:** single totals (`rows.reduce`), simple filter-and-sort (plain JS), type-preserving transforms (plain `.map` keeps your TS type; arquero loses it).
 
 **Pitfalls:** empty tables have no columns — guard `if (rows.length === 0) return` before any derivation. `aq.escape` inside `aq.op.*` aggregators throws at evaluation — derive the column first, then aggregate by name. `.object()` / `.objects()` return untyped `object` — cast inline at every call site.
+
+### simple-statistics, jstat, seedrandom
+
+Arquero stays the data layer: shape, group, and describe there. Extract a numeric column with `.array("col")` and hand it to these libraries when the answer needs inference — significance, confidence intervals, regression, or a probability.
+
+- **simple-statistics** — regression, z-scores, t statistics, permutation tests, k-means (`ckmeans`).
+- **jstat** — distribution CDFs and inverses, p-values (`ttest`, `ztest`, `anovaftest`, `tukeyhsd`), confidence intervals (`tci`, `normalci`).
+- **seedrandom** — pass a seeded generator anywhere randomness enters, so reruns give the same answer.
+
+```typescript
+import { tTestTwoSample, permutationTest } from "simple-statistics"
+import jStat from "jstat"
+import seedrandom from "seedrandom"
+
+const t = tTestTwoSample(before, after) ?? Number.NaN
+const p = 2 * jStat.studentt.cdf(-Math.abs(t), before.length + after.length - 2)
+const pPerm = permutationTest(before, after, "two_side", 10_000, seedrandom("run-1"))
+jStat.setRandom(seedrandom("run-1")) // seeds every jStat.*.sample call
+```
+
+**Pitfalls:** `tTest` / `tTestTwoSample` return the t statistic, not a p-value — convert with `jStat.studentt.cdf`. `tTestTwoSample` returns `null` for empty samples. `jStat.stdev` / `jStat.variance` default to the population denominator — pass `true` for the sample estimate; simple-statistics names them `sampleStandardDeviation` / `sampleVariance`. `jStat.ttest(value, arr)` is a one-sample test; there is no two-sample overload. Unseeded `Math.random` makes permutation and bootstrap p-values drift between runs.
 
 ### simple-ascii-chart
 
@@ -134,6 +158,9 @@ Fetch current docs with context7:
 | Library | context7 ID |
 |---------|------------|
 | arquero | `/uwdata/arquero` |
+| simple-statistics | `/simple-statistics/simple-statistics` |
+| jstat | `/jstat/jstat` |
+| seedrandom | `/davidbau/seedrandom` |
 | simple-ascii-chart | `/gtktsc/ascii-chart` |
 | AWS SDK JS v3 | `/aws/aws-sdk-js-v3` |
 | fast-csv | `/c2fo/fast-csv` |
