@@ -1,4 +1,4 @@
-FROM node:24-slim
+FROM node:26-slim
 COPY bootstrap/ /tmp/bootstrap/
 ENV NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
     AWS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
