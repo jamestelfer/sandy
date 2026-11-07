@@ -25,7 +25,7 @@ jobs:
         with:
           persist-credentials: false # no pushes from CI; drop the stored token
       # Bun version comes from mise.toml; install only bun, not the release toolchain.
-      - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
+      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
         with:
           install_args: bun
       - run: bun install
