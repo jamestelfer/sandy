@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.14.1](https://github.com/jamestelfer/sandy/compare/v0.14.0...v0.14.1) (2026-11-12)
+
+
+### Bug Fixes
+
+* **deps:** update dependency go to v1.27.4 ([#93](https://github.com/jamestelfer/sandy/issues/93)) ([d276b3b](https://github.com/jamestelfer/sandy/commit/d276b3b4bb2ea35c2ec26e60b904bd60193fed38))
+* **deps:** update dependency goreleaser to v2.20.0 ([#91](https://github.com/jamestelfer/sandy/issues/91)) ([75cea1c](https://github.com/jamestelfer/sandy/commit/75cea1cc8f47f2670af61dbe67ac830c9ab92c13))
+* **deps:** update github actions ([#87](https://github.com/jamestelfer/sandy/issues/87)) ([d362ab8](https://github.com/jamestelfer/sandy/commit/d362ab84dd5ecdc957c9fce3f09faab5556f13c8))
+* **deps:** update node.js to v26 ([#86](https://github.com/jamestelfer/sandy/issues/86)) ([00d0b88](https://github.com/jamestelfer/sandy/commit/00d0b8825bfe300d817a407e1c37dddf06b2f289))
+* **deps:** update node.js to v26 ([#89](https://github.com/jamestelfer/sandy/issues/89)) ([7b9f91b](https://github.com/jamestelfer/sandy/commit/7b9f91bb467d69af493f43c59943ba2033c3fbc0))
+
 ## [0.14.0](https://github.com/jamestelfer/sandy/compare/v0.13.0...v0.14.0) (2026-10-27)
 
 
