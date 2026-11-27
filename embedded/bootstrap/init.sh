@@ -40,7 +40,7 @@ certificates() {
 
 nodejs() {
   echo "[--> install Node.js"
-  readonly NODE_VERSION=v24.14.1
+  readonly NODE_VERSION=v26.13.1
   readonly NODE_ARCH=linux-arm64
   readonly NODE_URL="https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-${NODE_ARCH}.tar.xz"
   echo "Installing Node.js ${NODE_VERSION}..."
