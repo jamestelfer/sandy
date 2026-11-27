@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test"
 import Docker from "dockerode"
 import { OutputHandler } from "../output"
 import { establishWorkDir, Session } from "../session"
-import { useTestCwdIsolation } from "../test-support"
+import {
+  EGRESS_PROBE_PATH,
+  EGRESS_PROBE_SCRIPT,
+  startEgressProbe,
+  useTestCwdIsolation,
+} from "../test-support"
 import { DockerBackend } from "."
 import { resolveDockerOptions } from "./docker-endpoint"
 
@@ -57,6 +62,34 @@ describe("DockerBackend integration", () => {
         noop,
       )
       expect(result.exitCode).toBe(0)
+    },
+    TIMEOUT,
+  )
+
+  test.skipIf(SKIP)(
+    "run allows a script to reach the host IMDS endpoint",
+    async () => {
+      const { backend } = createDockerBackend()
+      if (!(await backend.imageExists(noop))) {
+        await backend.imageCreate(noop)
+      }
+
+      await establishWorkDir()
+      await using session = await Session.ephemeral()
+      await using probe = startEgressProbe()
+      const scriptPath = await session.writeScript("egress.ts", EGRESS_PROBE_SCRIPT)
+
+      const result = await backend.run(
+        {
+          scriptPath,
+          imdsPort: probe.port,
+          session: session.name,
+          sessionDir: session.dir,
+        },
+        noop,
+      )
+      expect(result.exitCode).toBe(0)
+      expect(probe.requests).toContain(EGRESS_PROBE_PATH)
     },
     TIMEOUT,
   )
