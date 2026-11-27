@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.2](https://github.com/jamestelfer/sandy/compare/v0.14.1...v0.14.2) (2026-11-27)
+
+
+### Bug Fixes
+
+* **sandbox:** allow network access for scripts under Node 26 permission model ([#96](https://github.com/jamestelfer/sandy/issues/96)) ([7391c82](https://github.com/jamestelfer/sandy/commit/7391c8246e26065d6bb04f40246251b2da746731))
+
 ## [0.14.1](https://github.com/jamestelfer/sandy/compare/v0.14.0...v0.14.1) (2026-11-12)
 
 
